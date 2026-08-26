@@ -63,6 +63,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-26 — Filter Nets by Org, Add a User to a Second Org (v2.7.1, issue #1 follow-up)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The Reassign tab's "Move a Net" list can now be <strong>filtered by the net's current organization</strong> — helps on instances with a lot of nets spread across several orgs.</li>
+              <li>New <strong>"Add User to Another Organization"</strong> action, alongside Move a User — adds a user to an additional org without touching any of their existing memberships, for an operator who legitimately needs to work across more than one org. (Move a User is still a wholesale move — it removes every other membership — this is the non-destructive alternative.)</li>
+              <li>The registration tab now reminds new users to check their <strong>spam/junk folder</strong> for the confirmation email.</li>
+              <li>No database migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-26 — Add Operators &amp; Reassign Organizations (v2.7.0, issue #1 follow-up)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Org admins (and super admins) can now <strong>add an operator directly</strong> from the Operators tab — useful for seeding an organization with existing operators without a self-registration/approval round trip. The new account is approved immediately and gets an email with a link to set its own password (requires email to be configured first).</li>

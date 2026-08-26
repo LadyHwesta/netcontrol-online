@@ -347,7 +347,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.7.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.7.1", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -2689,6 +2689,50 @@ def admin_reassign_user_org(user_id: int, data: OrgReassignUser, admin: User = D
         org_name=org.name,
         org_website_url=org.website_url,
     )
+
+
+class OrgAddMembership(BaseModel):
+    org_id: int
+    role: Literal["member", "admin"] = "member"
+
+
+class AddMembershipResult(BaseModel):
+    user_id: int
+    org_id: int
+    org_name: str
+    role: str
+
+
+@app.post("/admin/users/{user_id}/orgs", response_model=AddMembershipResult, status_code=201)
+def admin_add_user_to_org(user_id: int, data: OrgAddMembership, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Add a user to an ADDITIONAL organization without touching their
+    existing memberships — distinct from the wholesale move above (issue #1
+    follow-up). For an operator who legitimately needs to work across more
+    than one org (e.g. a regional coordinator), not for splitting a
+    single-tenant deployment apart. If the user already has a pending
+    membership in the target org (e.g. a self-service /orgs/join request),
+    this approves it in place rather than erroring."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    org = db.query(Organization).filter(Organization.id == data.org_id).first()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+
+    membership = db.query(OrganizationMembership).filter(
+        OrganizationMembership.org_id == org.id, OrganizationMembership.user_id == user.id,
+    ).first()
+    if membership and membership.approved:
+        raise HTTPException(400, "User is already a member of this organization")
+    if membership:
+        membership.role = data.role
+        membership.approved = True
+    else:
+        db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
+    user.is_active = True
+    db.commit()
+
+    return AddMembershipResult(user_id=user.id, org_id=org.id, org_name=org.name, role=data.role)
 
 
 class OrgReassignNet(BaseModel):

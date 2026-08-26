@@ -218,6 +218,84 @@ class TestReassignUser:
         assert resp.status_code == 404
 
 
+class TestAddMembership:
+    def test_super_admin_adds_second_org_without_touching_first(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, _ = _create_org(client, super_token, "W1A", "orga", "Org A")
+        org_b_id, _ = _create_org(client, super_token, "W2B", "orgb", "Org B")
+        users = client.get("/admin/users", headers=auth(super_token)).json()
+        user_a = next(u for u in users if u["callsign"] == "W1A")
+
+        resp = client.post(f"/admin/users/{user_a['id']}/orgs", headers=auth(super_token), json={
+            "org_id": org_b_id, "role": "member",
+        })
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["org_id"] == org_b_id
+        assert data["role"] == "member"
+
+        # Original Org A membership (as admin) is untouched, current_org_id unchanged
+        me = login(client, "W1A")
+        current = client.get("/auth/me", headers=auth(me)).json()
+        assert current["current_org_id"] == org_a_id
+
+        mine = client.get("/orgs/mine", headers=auth(me)).json()
+        roles_by_org = {o["id"]: o["role"] for o in mine}
+        assert roles_by_org == {org_a_id: "admin", org_b_id: "member"}
+
+    def test_approves_existing_pending_membership_in_place(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, admin_a_token = _create_org(client, super_token, "W1A", "orga", "Org A")
+        org_b_id, _ = _create_org(client, super_token, "W2B", "orgb", "Org B")
+
+        # W1A self-service requests to join Org B (pending, since it's an existing org)
+        join = client.post("/orgs/join", headers=auth(admin_a_token), json={"org_slug": "orgb"})
+        assert join.status_code == 201, join.text
+
+        users = client.get("/admin/users", headers=auth(super_token)).json()
+        user_a = next(u for u in users if u["callsign"] == "W1A")
+        resp = client.post(f"/admin/users/{user_a['id']}/orgs", headers=auth(super_token), json={
+            "org_id": org_b_id, "role": "admin",
+        })
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["role"] == "admin"
+
+        mine = client.get("/orgs/mine", headers=auth(admin_a_token)).json()
+        org_b_membership = next(o for o in mine if o["id"] == org_b_id)
+        assert org_b_membership["role"] == "admin"
+
+    def test_already_approved_member_rejected(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, _ = _create_org(client, super_token, "W1A", "orga", "Org A")
+        users = client.get("/admin/users", headers=auth(super_token)).json()
+        user_a = next(u for u in users if u["callsign"] == "W1A")
+        resp = client.post(f"/admin/users/{user_a['id']}/orgs", headers=auth(super_token), json={
+            "org_id": org_a_id,
+        })
+        assert resp.status_code == 400
+
+    def test_non_super_admin_forbidden(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, admin_a_token = _create_org(client, super_token, "W1A", "orga", "Org A")
+        org_b_id, _ = _create_org(client, super_token, "W2B", "orgb", "Org B")
+        users = client.get("/admin/users", headers=auth(super_token)).json()
+        user_b = next(u for u in users if u["callsign"] == "W2B")
+        resp = client.post(f"/admin/users/{user_b['id']}/orgs", headers=auth(admin_a_token), json={
+            "org_id": org_a_id,
+        })
+        assert resp.status_code == 403
+
+    def test_unknown_org_404(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, _ = _create_org(client, super_token, "W1A", "orga", "Org A")
+        users = client.get("/admin/users", headers=auth(super_token)).json()
+        user_a = next(u for u in users if u["callsign"] == "W1A")
+        resp = client.post(f"/admin/users/{user_a['id']}/orgs", headers=auth(super_token), json={
+            "org_id": 999999,
+        })
+        assert resp.status_code == 404
+
+
 class TestReassignNet:
     def test_super_admin_moves_net(self, client):
         super_token = _bootstrap_super_admin(client)

@@ -344,23 +344,46 @@ async function orgRejectMember(orgId, userId, callsign) {
 // after the fact, without users re-registering or nets losing history
 // (issue #1 follow-up).
 // ============================================================
+let _reassignNets = [];
+let _reassignOrgsById = {};
+
 async function loadReassignTab() {
+  const previousFilter = document.getElementById('reassign-net-org-filter').value;
   const [users, nets, orgs] = await Promise.all([
     apiFetch('/admin/users').catch(e => { toast(e.message, 'error'); return []; }),
     apiFetch('/nets').catch(e => { toast(e.message, 'error'); return []; }),
     apiFetch('/orgs').catch(e => { toast(e.message, 'error'); return []; }),
   ]);
+  _reassignNets = nets;
+  _reassignOrgsById = Object.fromEntries(orgs.map(o => [o.id, o.name]));
 
   const orgOptions = orgs.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('');
   document.getElementById('reassign-user-org-select').innerHTML = orgOptions;
   document.getElementById('reassign-net-org-select').innerHTML = orgOptions;
+  document.getElementById('addmembership-org-select').innerHTML = orgOptions;
+  document.getElementById('reassign-net-org-filter').innerHTML =
+    `<option value="">All Organizations</option>` + orgOptions;
+  document.getElementById('reassign-net-org-filter').value = previousFilter;
 
-  document.getElementById('reassign-user-select').innerHTML = users.map(u =>
+  const userOptions = users.map(u =>
     `<option value="${u.id}">${esc(u.callsign)} — ${esc(u.name)} (currently: ${esc(u.org_name || 'no org')})</option>`
   ).join('');
+  document.getElementById('reassign-user-select').innerHTML = userOptions;
+  document.getElementById('addmembership-user-select').innerHTML = userOptions;
 
-  document.getElementById('reassign-net-select').innerHTML = nets.map(n =>
-    `<option value="${n.id}">${esc(n.name)} (owner ${esc(n.owner_callsign || '?')})</option>`
+  filterReassignNets();
+}
+
+// Nets aren't refetched here -- just re-rendered from the already-loaded
+// _reassignNets against whichever org the filter dropdown is set to (super
+// admins can see nets across every org, which gets long fast).
+function filterReassignNets() {
+  const orgFilter = document.getElementById('reassign-net-org-filter').value;
+  const filtered = orgFilter
+    ? _reassignNets.filter(n => String(n.org_id) === orgFilter)
+    : _reassignNets;
+  document.getElementById('reassign-net-select').innerHTML = filtered.map(n =>
+    `<option value="${n.id}">${esc(n.name)} — ${esc(_reassignOrgsById[n.org_id] || 'unknown org')} (owner ${esc(n.owner_callsign || '?')})</option>`
   ).join('');
 }
 
@@ -381,6 +404,31 @@ async function submitReassignUser(btn) {
       body: JSON.stringify({ org_id: Number(orgId), role }),
     });
     toast('User moved', 'success');
+    loadReassignTab();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
+}
+
+// Additive, not destructive (unlike Move User above) -- no confirm() needed,
+// same as the other non-destructive admin actions on this page.
+async function submitAddMembership(btn) {
+  const userSelect = document.getElementById('addmembership-user-select');
+  const orgSelect = document.getElementById('addmembership-org-select');
+  const role = document.getElementById('addmembership-role-select').value;
+  const userId = userSelect.value;
+  const orgId = orgSelect.value;
+  if (!userId || !orgId) return toast('Select a user and an organization', 'error');
+  const userLabel = userSelect.selectedOptions[0]?.textContent.split(' — ')[0] || 'User';
+  btnLoading(btn, true);
+  try {
+    const result = await apiFetch(`/admin/users/${userId}/orgs`, {
+      method: 'POST',
+      body: JSON.stringify({ org_id: Number(orgId), role }),
+    });
+    toast(`${userLabel} added to ${result.org_name}`, 'success');
     loadReassignTab();
   } catch (e) {
     toast(e.message, 'error');

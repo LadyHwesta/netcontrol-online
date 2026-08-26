@@ -279,11 +279,40 @@
           <button class="btn btn-primary btn-sm" onclick="submitReassignUser(this)">Move User</button>
         </div>
 
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">ADD USER TO ANOTHER ORGANIZATION</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+            Adds a user to an additional organization without touching their existing memberships — for an operator who legitimately needs to work across more than one org.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>User</label>
+              <select class="form-control" id="addmembership-user-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Organization To Add</label>
+              <select class="form-control" id="addmembership-org-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <select class="form-control" id="addmembership-role-select">
+                <option value="member">Member</option>
+                <option value="admin">Org Admin</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="submitAddMembership(this)">Add to Organization</button>
+        </div>
+
         <div class="card">
           <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">MOVE A NET</h3>
           <p class="text-muted" style="font-size:12px;margin:0 0 12px">
             Moves a net (with its sessions and history) into a different organization. Ownership and sharing are left unchanged.
           </p>
+          <div class="form-group">
+            <label>Filter By Current Organization</label>
+            <select class="form-control" id="reassign-net-org-filter" onchange="filterReassignNets()"></select>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label>Net</label>
@@ -303,10 +332,10 @@
 </div>
 <script src="/static/js/state.js?v=9"></script>
 <script src="/static/js/utils.js?v=8"></script>
-<script src="/static/js/auth.js?v=13"></script>
+<script src="/static/js/auth.js?v=14"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/branding.js?v=9"></script>
-<script src="/static/js/admin.js?v=13"></script>
+<script src="/static/js/admin.js?v=15"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {

@@ -130,7 +130,8 @@ async function doRegister(btn) {
           <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 16px">
             Your account request for <strong>${callsign}</strong> has been received.<br>
             An admin will review it and you will receive an email at<br>
-            <strong>${email}</strong> once your account has been approved.
+            <strong>${email}</strong> once your account has been approved.<br>
+            <span style="font-size:11px">Don't see it? Check your spam/junk folder.</span>
           </p>
           <button class="btn btn-ghost btn-sm" onclick="switchAuthTab('login')">← Back to Login</button>
         </div>`;
