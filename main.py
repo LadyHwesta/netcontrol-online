@@ -120,6 +120,7 @@ SMTP_TIMEOUT_SECONDS = int(os.getenv("SMTP_TIMEOUT_SECONDS", "10"))
 ADMIN_CONTACT_EMAIL = os.getenv("ADMIN_CONTACT_EMAIL", "")  # shown in approval emails as human contact
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")    # e.g. https://netcontrol.example.org — used for links in emails
 VERIFICATION_TOKEN_TTL_DAYS = 7
+PASSWORD_SET_TOKEN_TTL_DAYS = 14   # admin-created accounts' invite link (issue #1 follow-up) — longer than email verification since an operator may not check email daily
 
 _email_log = logging.getLogger("ham_net_tracker.email")
 
@@ -346,7 +347,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.6.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.7.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -1293,6 +1294,41 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     return RedirectResponse(url="/?verified=1")
 
 
+class SetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.post("/auth/set-password", response_model=Token)
+@limiter.limit("10/minute")
+def set_password(request: Request, data: SetPasswordRequest, db: Session = Depends(get_db)):
+    """Redeems the invite link from an admin-created account's "set your
+    password" email (issue #1 follow-up) — the account already exists and is
+    active, but hashed_password is an unusable random placeholder until this
+    runs. Logs the user straight in on success, same response shape as
+    /auth/login, since they have no password to log in with beforehand."""
+    if len(data.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    token_hash = hashlib.sha256(data.token.encode()).hexdigest()
+    user = db.query(User).filter(User.password_set_token == token_hash).first()
+    if not user:
+        raise HTTPException(400, "This link is invalid or has already been used.")
+    if user.password_set_sent_at:
+        sent_at = user.password_set_sent_at
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) - sent_at > timedelta(days=PASSWORD_SET_TOKEN_TTL_DAYS):
+            raise HTTPException(400, "This link has expired. Contact your organization admin for a new invite.")
+    user.hashed_password = hash_password(data.password)
+    user.password_set_token = None
+    user.password_set_sent_at = None
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token({"sub": str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
 @app.post("/auth/login", response_model=Token)
 @limiter.limit("10/minute")
 def login(
@@ -1600,6 +1636,89 @@ def reject_org_member(org_id: int, user_id: int, admin: User = Depends(require_o
         raise HTTPException(400, "Cannot reject an already-approved membership — remove them from the org instead")
     db.delete(membership)
     db.commit()
+
+
+class OrgUserCreate(BaseModel):
+    callsign: str
+    name: str
+    email: EmailStr
+    gmrs_callsign: Optional[str] = None
+    role: Literal["member", "admin"] = "member"
+
+    @field_validator("callsign")
+    @classmethod
+    def callsign_upper(cls, v):
+        return v.upper().strip()
+
+
+@app.post("/orgs/{org_id}/users", response_model=AdminUserOut, status_code=201)
+def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
+    """Admin-seeds an operator account directly — for bringing existing
+    operators onto the org without a self-registration/approval round trip
+    (issue #1 follow-up). Auto-approved (the admin creating it IS the
+    approval): is_active is already True, but hashed_password is an unusable
+    random placeholder, so login is impossible until the operator follows
+    the emailed link to set their own password. Requires SMTP to be
+    configured — otherwise the account would be created with no way to ever
+    become usable."""
+    if not _smtp_configured():
+        raise HTTPException(400, "Email must be configured (Admin → Email) before creating operator accounts this way — the invite link is sent by email.")
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    if db.query(User).filter(User.callsign == data.callsign).first():
+        raise HTTPException(400, "Callsign already registered")
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(400, "Email already registered")
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+    user = User(
+        callsign=data.callsign,
+        name=data.name,
+        email=data.email,
+        gmrs_callsign=(data.gmrs_callsign or "").strip().upper() or None,
+        hashed_password=hash_password(secrets.token_urlsafe(32)),
+        is_active=True,
+        is_admin=False,
+        email_verified=True,   # vouched for by the org admin who entered it
+        current_org_id=org.id,
+        password_set_token=token_hash,
+        password_set_sent_at=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
+    db.commit()
+
+    set_link = _app_url(f"/?setpw={raw_token}")
+    send_email(
+        to=[user.email],
+        subject=f"[NetControl Online] You've Been Added to {org.name}",
+        body_html=f"""<div style="font-family:sans-serif;max-width:520px">
+  <h2 style="color:#FF9900">Welcome to {html.escape(org.name)}</h2>
+  <p>Hello <strong>{user.name}</strong> ({user.callsign}),</p>
+  <p>An administrator has created an account for you on NetControl Online, part of <strong>{html.escape(org.name)}</strong>. Set a password to get started:</p>
+  {f'<p style="margin-top:16px"><a href="{set_link}" style="background:#FF9900;color:#000;padding:10px 20px;text-decoration:none;border-radius:20px;font-weight:bold;display:inline-block">Set Your Password</a></p>' if set_link else '<p>Contact your administrator for a link to set your password.</p>'}
+  <p style="color:#888;font-size:12px">If you weren't expecting this, please disregard this message.</p>
+</div>""",
+        body_text=(
+            f"Hello {user.name} ({user.callsign}),\n\n"
+            f"An administrator has created an account for you on NetControl Online, part of {org.name}. "
+            f"Set a password to get started:\n\n"
+            + (f"{set_link}\n\n" if set_link else "Contact your administrator for a link to set your password.\n\n")
+            + "If you weren't expecting this, please disregard this message."
+        ),
+    )
+
+    return AdminUserOut(
+        **UserOut.model_validate(user).model_dump(),
+        org_name=org.name,
+        org_website_url=org.website_url,
+    )
 
 
 @app.get("/stats")
@@ -2533,6 +2652,81 @@ def admin_toggle_notify(user_id: int, admin: User = Depends(require_admin), db: 
     db.commit()
     db.refresh(user)
     return user
+
+
+class OrgReassignUser(BaseModel):
+    org_id: int
+    role: Literal["member", "admin"] = "member"
+
+
+@app.patch("/admin/users/{user_id}/org", response_model=AdminUserOut)
+def admin_reassign_user_org(user_id: int, data: OrgReassignUser, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Move a user wholesale into a different organization — removes every
+    other org membership they hold and switches current_org_id to the
+    target, so a deployment that started single-tenant can be split into
+    per-region orgs after the fact (issue #1 follow-up). Super-admin only,
+    since it crosses tenant boundaries by definition; existing nets they own
+    are NOT moved along with them — reassign those separately below."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    org = db.query(Organization).filter(Organization.id == data.org_id).first()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+
+    old_org_ids = {r[0] for r in db.query(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id).all()}
+    db.query(OrganizationMembership).filter(OrganizationMembership.user_id == user.id).delete()
+    db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
+    user.current_org_id = org.id
+    user.is_active = True
+    db.flush()
+    _delete_orphaned_orgs(old_org_ids - {org.id}, db)
+    db.commit()
+    db.refresh(user)
+
+    return AdminUserOut(
+        **UserOut.model_validate(user).model_dump(),
+        org_name=org.name,
+        org_website_url=org.website_url,
+    )
+
+
+class OrgReassignNet(BaseModel):
+    org_id: int
+
+
+class NetReassignResult(BaseModel):
+    id: int
+    org_id: int
+    org_name: str
+    owner_not_member: bool
+
+
+@app.patch("/admin/nets/{net_id}/org", response_model=NetReassignResult)
+def admin_reassign_net_org(net_id: int, data: OrgReassignNet, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Move a net into a different organization (issue #1 follow-up). Does
+    not touch ownership or sharing — if the net's owner isn't a member of
+    the target org, owner_not_member comes back True so the admin panel can
+    flag it (the owner will need to be added to the target org, or ownership
+    transferred, before they can manage it themselves again); super admins
+    can always reach it regardless."""
+    net = db.query(Net).filter(Net.id == net_id).first()
+    if not net:
+        raise HTTPException(404, "Net not found")
+    org = db.query(Organization).filter(Organization.id == data.org_id).first()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+
+    net.org_id = org.id
+    db.commit()
+
+    owner_is_member = db.query(OrganizationMembership).filter(
+        OrganizationMembership.org_id == org.id,
+        OrganizationMembership.user_id == net.owner_id,
+        OrganizationMembership.approved == True,
+    ).first() is not None
+
+    return NetReassignResult(id=net.id, org_id=org.id, org_name=org.name, owner_not_member=not owner_is_member)
 
 
 @app.get("/admin/email-status")

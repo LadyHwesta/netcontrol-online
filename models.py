@@ -50,6 +50,11 @@ class User(Base):
     email_verified = Column(Boolean, default=True, nullable=False)  # False only when SMTP is configured and a verification email was actually sent
     verification_token = Column(String(64), nullable=True)
     verification_sent_at = Column(UTCDateTime, nullable=True)
+    # Set-password invite (admin-created accounts, issue #1 follow-up). Same
+    # hash-only-stored pattern as verification_token above. hashed_password is
+    # an unusable random placeholder until this is redeemed via /auth/set-password.
+    password_set_token = Column(String(64), nullable=True)
+    password_set_sent_at = Column(UTCDateTime, nullable=True)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
     # Multi-tenancy (issue #1). is_admin above is the *super admin* tier — unchanged,
     # still bypasses org scoping everywhere. current_org_id is which org this user is

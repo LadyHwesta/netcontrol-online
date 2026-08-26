@@ -58,8 +58,24 @@ function restoreNetControlMode() {
   }
 }
 
+// ============================================================
+// SET PASSWORD (admin-created account invite link, issue #1 follow-up)
+// Landed here from the "set your password" email (?setpw=TOKEN) -- replaces
+// the login/register tabs with a one-time password-set form. Checked before
+// the auto-login below so the invite flow always shows its own form instead
+// of silently dropping into whatever account happens to already be logged
+// in on this browser.
+// ============================================================
+window._setpwToken = new URLSearchParams(window.location.search).get('setpw');
+if (window._setpwToken) {
+  document.getElementById('auth-tabs').style.display = 'none';
+  document.getElementById('tab-login').style.display = 'none';
+  document.getElementById('tab-register').style.display = 'none';
+  document.getElementById('tab-setpassword').style.display = '';
+}
+
 // Auto-login if token stored
-if (token) enterApp();
+if (token && !window._setpwToken) enterApp();
 
 // Cloudflare Turnstile (issue #1 follow-up) — no-op if not configured
 initTurnstile();
@@ -68,6 +84,7 @@ initTurnstile();
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 onEnter(['reg-call', 'reg-name', 'reg-email', 'reg-pass'], () => doRegister(document.querySelector('#tab-register button.btn-primary')));
+onEnter(['setpw-pass', 'setpw-pass2'], () => doSetPassword(document.querySelector('#tab-setpassword button.btn-primary')));
 
 // ============================================================
 // KEYBOARD SHORTCUT  /  → focus callsign input

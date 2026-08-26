@@ -59,6 +59,7 @@
         <button class="tab-btn" id="admin-tab-branding"   onclick="switchAdminTab('branding')">🎨 Branding</button>
         <button class="tab-btn" id="admin-tab-email"      onclick="switchAdminTab('email')">📧 Email</button>
         <button class="tab-btn" id="admin-tab-netrepo"    onclick="switchAdminTab('netrepo')">🌐 Net Repository</button>
+        <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')">🔀 Reassign</button>
       </div>
 
       <!-- ── Operators panel ───────────────────────────────────── -->
@@ -78,6 +79,43 @@
             </div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()">Save Organization</button>
+        </div>
+
+        <!-- Add operator directly (issue #1 follow-up) -->
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">ADD OPERATOR</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+            Create an account directly — useful for seeding your organization with existing operators.
+            They're approved immediately and receive an email with a link to set their own password.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Callsign</label>
+              <input class="form-control" id="addop-callsign" placeholder="W1AW" style="text-transform:uppercase" />
+            </div>
+            <div class="form-group">
+              <label>Name</label>
+              <input class="form-control" id="addop-name" placeholder="Operator name" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Email</label>
+              <input class="form-control" id="addop-email" type="email" placeholder="you@example.com" />
+            </div>
+            <div class="form-group">
+              <label>GMRS Callsign <span class="text-muted" style="font-size:11px">(optional)</span></label>
+              <input class="form-control" id="addop-gmrs" placeholder="WRXX123" style="text-transform:uppercase" />
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <select class="form-control" id="addop-role">
+                <option value="member">Member</option>
+                <option value="admin">Org Admin</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="addOperator(this)">+ Add Operator</button>
         </div>
 
         <!-- Pending approvals -->
@@ -214,24 +252,71 @@
         </div>
       </div><!-- /admin-panel-netrepo -->
 
+      <!-- ── Reassign panel (super admin only, issue #1 follow-up) ─── -->
+      <div id="admin-panel-reassign" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">MOVE A USER</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+            Moves a user into a different organization — removes their membership in every other organization they belong to.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>User</label>
+              <select class="form-control" id="reassign-user-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Target Organization</label>
+              <select class="form-control" id="reassign-user-org-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Role</label>
+              <select class="form-control" id="reassign-user-role-select">
+                <option value="member">Member</option>
+                <option value="admin">Org Admin</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="submitReassignUser(this)">Move User</button>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">MOVE A NET</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+            Moves a net (with its sessions and history) into a different organization. Ownership and sharing are left unchanged.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Net</label>
+              <select class="form-control" id="reassign-net-select"></select>
+            </div>
+            <div class="form-group">
+              <label>Target Organization</label>
+              <select class="form-control" id="reassign-net-org-select"></select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="submitReassignNet(this)">Move Net</button>
+        </div>
+      </div><!-- /admin-panel-reassign -->
+
     </div><!-- /content -->
   </main>
 </div>
 <script src="/static/js/state.js?v=9"></script>
 <script src="/static/js/utils.js?v=8"></script>
-<script src="/static/js/auth.js?v=12"></script>
+<script src="/static/js/auth.js?v=13"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/branding.js?v=9"></script>
-<script src="/static/js/admin.js?v=12"></script>
+<script src="/static/js/admin.js?v=13"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {
-    ['operators', 'branding', 'email', 'netrepo'].forEach(t => {
+    ['operators', 'branding', 'email', 'netrepo', 'reassign'].forEach(t => {
       document.getElementById('admin-panel-' + t).style.display = t === tab ? '' : 'none';
       document.getElementById('admin-tab-' + t).classList.toggle('active', t === tab);
     });
     if (tab === 'email') loadAdminUsers(); // refreshes email status card
     if (tab === 'netrepo') loadNetRepoStatus();
+    if (tab === 'reassign') loadReassignTab();
   }
 
   async function initPage() {
@@ -262,8 +347,8 @@
     loadOrgEditForm();   // fire-and-forget; non-blocking — shown for org admins and super admins alike
 
     if (orgAdminOnly) {
-      // Branding/Email/Net Repository are super-admin-only, instance-wide concerns
-      ['branding', 'email', 'netrepo'].forEach(t => {
+      // Branding/Email/Net Repository/Reassign are super-admin-only, instance-wide concerns
+      ['branding', 'email', 'netrepo', 'reassign'].forEach(t => {
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
       document.querySelector('#content h2.section-title').textContent = 'Organization Admin';

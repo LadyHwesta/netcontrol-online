@@ -34,6 +34,38 @@ async function saveOrgEdit() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+// ============================================================
+// ADD OPERATOR (issue #1 follow-up) — admin-created accounts, seeded
+// directly into the admin's own current org, auto-approved. Shown to org
+// admins and super admins alike (both act on their own current org here).
+// ============================================================
+async function addOperator(btn) {
+  const callsign = document.getElementById('addop-callsign').value.trim().toUpperCase();
+  const name = document.getElementById('addop-name').value.trim();
+  const email = document.getElementById('addop-email').value.trim();
+  const gmrs_callsign = document.getElementById('addop-gmrs').value.trim().toUpperCase() || null;
+  const role = document.getElementById('addop-role').value;
+  if (!callsign || !name || !email) return toast('Fill in callsign, name, and email', 'error');
+  btnLoading(btn, true);
+  try {
+    await apiFetch(`/orgs/${currentUser.current_org_id}/users`, {
+      method: 'POST',
+      body: JSON.stringify({ callsign, name, email, gmrs_callsign, role }),
+    });
+    toast(`${callsign} added — they'll receive an email to set their password`, 'success');
+    document.getElementById('addop-callsign').value = '';
+    document.getElementById('addop-name').value = '';
+    document.getElementById('addop-email').value = '';
+    document.getElementById('addop-gmrs').value = '';
+    document.getElementById('addop-role').value = 'member';
+    if (window.isOrgAdminOnly) loadOrgOperators(); else loadAdminUsers();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
+}
+
 async function loadAdminUsers() {
   // Load email status and users in parallel
   const [users, emailStatus] = await Promise.all([
@@ -304,6 +336,83 @@ async function orgRejectMember(orgId, userId, callsign) {
     toast('Request rejected');
     loadOrgOperators();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================================
+// REASSIGN — move a user or net into a different org (super admin only).
+// Lets a deployment that started single-tenant split into per-region orgs
+// after the fact, without users re-registering or nets losing history
+// (issue #1 follow-up).
+// ============================================================
+async function loadReassignTab() {
+  const [users, nets, orgs] = await Promise.all([
+    apiFetch('/admin/users').catch(e => { toast(e.message, 'error'); return []; }),
+    apiFetch('/nets').catch(e => { toast(e.message, 'error'); return []; }),
+    apiFetch('/orgs').catch(e => { toast(e.message, 'error'); return []; }),
+  ]);
+
+  const orgOptions = orgs.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+  document.getElementById('reassign-user-org-select').innerHTML = orgOptions;
+  document.getElementById('reassign-net-org-select').innerHTML = orgOptions;
+
+  document.getElementById('reassign-user-select').innerHTML = users.map(u =>
+    `<option value="${u.id}">${esc(u.callsign)} — ${esc(u.name)} (currently: ${esc(u.org_name || 'no org')})</option>`
+  ).join('');
+
+  document.getElementById('reassign-net-select').innerHTML = nets.map(n =>
+    `<option value="${n.id}">${esc(n.name)} (owner ${esc(n.owner_callsign || '?')})</option>`
+  ).join('');
+}
+
+async function submitReassignUser(btn) {
+  const userSelect = document.getElementById('reassign-user-select');
+  const orgSelect = document.getElementById('reassign-user-org-select');
+  const role = document.getElementById('reassign-user-role-select').value;
+  const userId = userSelect.value;
+  const orgId = orgSelect.value;
+  if (!userId || !orgId) return toast('Select a user and target organization', 'error');
+  const userLabel = userSelect.selectedOptions[0]?.textContent || 'this user';
+  const orgLabel = orgSelect.selectedOptions[0]?.textContent || 'the selected organization';
+  if (!confirm(`Move ${userLabel} to ${orgLabel}? They will be removed from every other organization they belong to.`)) return;
+  btnLoading(btn, true);
+  try {
+    await apiFetch(`/admin/users/${userId}/org`, {
+      method: 'PATCH',
+      body: JSON.stringify({ org_id: Number(orgId), role }),
+    });
+    toast('User moved', 'success');
+    loadReassignTab();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
+}
+
+async function submitReassignNet(btn) {
+  const netSelect = document.getElementById('reassign-net-select');
+  const orgSelect = document.getElementById('reassign-net-org-select');
+  const netId = netSelect.value;
+  const orgId = orgSelect.value;
+  if (!netId || !orgId) return toast('Select a net and target organization', 'error');
+  const netLabel = netSelect.selectedOptions[0]?.textContent || 'this net';
+  const orgLabel = orgSelect.selectedOptions[0]?.textContent || 'the selected organization';
+  if (!confirm(`Move ${netLabel} to ${orgLabel}?`)) return;
+  btnLoading(btn, true);
+  try {
+    const result = await apiFetch(`/admin/nets/${netId}/org`, {
+      method: 'PATCH',
+      body: JSON.stringify({ org_id: Number(orgId) }),
+    });
+    toast(result.owner_not_member
+      ? `Net moved — its owner isn't a member of ${result.org_name}, so they won't be able to manage it themselves until added`
+      : 'Net moved', 'success');
+    loadReassignTab();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
 }
 
 // ============================================================

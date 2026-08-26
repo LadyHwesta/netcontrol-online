@@ -403,6 +403,13 @@ MIGRATIONS = [
     # for any org created from here on is enforced in main.py.
     ("organizations: website URL",
      "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS website_url VARCHAR(300)"),
+
+    # ── Admin-created operator accounts (issue #1 follow-up) ──
+    # Set-password invite token, redeemed via /auth/set-password.
+    ("users: password-set invite token",
+     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_token VARCHAR(64)"),
+    ("users: password-set invite sent-at",
+     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_sent_at TIMESTAMPTZ"),
 ]
 
 # ---------------------------------------------------------------------------

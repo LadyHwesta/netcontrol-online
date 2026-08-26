@@ -146,6 +146,36 @@ async function doRegister(btn) {
   }
 }
 
+// Admin-created account invite link (issue #1 follow-up) -- redeems the
+// token from window._setpwToken (set in app.js from ?setpw=) and logs
+// straight in, same as a normal login.
+async function doSetPassword(btn) {
+  clearAuthError();
+  const pass = document.getElementById('setpw-pass').value;
+  const pass2 = document.getElementById('setpw-pass2').value;
+  if (!pass || !pass2) return showAuthError('Fill in both password fields');
+  if (pass !== pass2) return showAuthError('Passwords do not match');
+  if (pass.length < 8) return showAuthError('Password must be at least 8 characters');
+  btnLoading(btn, true);
+  try {
+    const res = await fetch(API + '/auth/set-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: window._setpwToken, password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not set password');
+    token = data.access_token;
+    currentUser = data.user;
+    localStorage.setItem('nt_token', token);
+    toast('Password set — welcome!', 'success');
+    enterApp();
+  } catch (e) {
+    showAuthError(e.message);
+    btnLoading(btn, false);
+  }
+}
+
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
   el.textContent = msg;
