@@ -11,12 +11,27 @@ file), none of this code path is exercised at all -- registration and login
 behave exactly as before. Exactly one provider is active at a time.
 """
 
-import base64
-import json
+import pytest
 
-import altcha
 import main
 from helpers import register, login
+
+# altcha is an OPTIONAL runtime dependency (see requirements.txt / main.py's
+# lazy import) -- a deployment using only turnstile/recaptcha (or no
+# CAPTCHA_PROVIDER at all) may not have it installed. Importing it at module
+# level unconditionally would make pytest fail to even COLLECT this whole
+# file -- and since a collection error aborts the entire run, every other
+# test file in the suite too -- on such a deployment. Degrade gracefully
+# instead: only the handful of tests that need to actually solve a real
+# challenge client-side (requires_altcha below) are skipped.
+try:
+    import altcha
+except ImportError:
+    altcha = None
+
+requires_altcha = pytest.mark.skipif(
+    altcha is None, reason="altcha package not installed — optional dependency, see requirements.txt"
+)
 
 
 class TestTurnstileVerifyHelper:
@@ -123,12 +138,14 @@ class TestAltchaVerifyHelper:
     def test_garbage_token_fails(self, altcha_configured):
         assert main._verify_altcha("not-a-real-payload", "1.2.3.4") is False
 
+    @requires_altcha
     def test_real_solved_challenge_passes(self, client, altcha_configured):
         resp = client.get("/captcha/altcha-challenge")
         assert resp.status_code == 200, resp.text
         token = _solve_altcha_challenge(resp.json())
         assert main._verify_altcha(token, "1.2.3.4") is True
 
+    @requires_altcha
     def test_token_from_wrong_hmac_key_fails(self, client, altcha_configured, monkeypatch):
         resp = client.get("/captcha/altcha-challenge")
         token = _solve_altcha_challenge(resp.json())
@@ -222,6 +239,7 @@ class TestRegistrationCaptcha:
         })
         assert resp.status_code == 400
 
+    @requires_altcha
     def test_registration_succeeds_with_solved_altcha(self, client, altcha_configured):
         challenge = client.get("/captcha/altcha-challenge").json()
         token = _solve_altcha_challenge(challenge)
@@ -266,6 +284,7 @@ class TestLoginCaptcha:
         assert resp.status_code == 200, resp.text
         assert resp.json()["access_token"]
 
+    @requires_altcha
     def test_login_succeeds_with_solved_altcha(self, client, altcha_configured):
         # Registration is ALSO gated while altcha_configured is active --
         # needs its own solved challenge before login's.
