@@ -57,7 +57,11 @@ from pathlib import Path
 from typing import Optional, Literal
 
 import httpx
-import altcha
+# altcha is imported lazily (inside _verify_altcha/altcha_challenge below),
+# not here -- it's the one bot-protection dependency that isn't already a
+# transitive dependency of something else this app requires regardless, so a
+# deployment that only ever uses Turnstile/reCAPTCHA (or no CAPTCHA_PROVIDER
+# at all) can skip installing it entirely without the app failing to start.
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
@@ -211,10 +215,14 @@ def _verify_altcha(token: Optional[str], remote_ip: Optional[str]) -> bool:
     if not token:
         return False
     try:
+        import altcha
         ok, err = altcha.verify_solution_v1(token, ALTCHA_HMAC_KEY, check_expires=True)
         if not ok:
             _captcha_log.info("ALTCHA verification failed: %s", err)
         return bool(ok)
+    except ImportError:
+        _captcha_log.error("CAPTCHA_PROVIDER=altcha but the altcha package isn't installed — pip install altcha")
+        return False
     except Exception as exc:
         _captcha_log.warning("ALTCHA verification error: %s", exc)
         return False
@@ -1468,6 +1476,11 @@ def altcha_challenge(request: Request):
     external network call is involved on either side."""
     if CAPTCHA_PROVIDER != "altcha":
         raise HTTPException(404, "ALTCHA is not the active CAPTCHA provider")
+    try:
+        import altcha
+    except ImportError:
+        _captcha_log.error("CAPTCHA_PROVIDER=altcha but the altcha package isn't installed — pip install altcha")
+        raise HTTPException(500, "ALTCHA is misconfigured on this server — the altcha package isn't installed")
     challenge = altcha.create_challenge_v1(
         hmac_key=ALTCHA_HMAC_KEY,
         max_number=100_000,

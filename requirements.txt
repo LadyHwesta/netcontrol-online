@@ -9,4 +9,7 @@ pydantic[email]==2.10.3
 python-dotenv==1.0.1
 httpx==0.28.1
 slowapi==0.1.9
+# Only needed if you set CAPTCHA_PROVIDER=altcha — safe to remove this line
+# if you're using turnstile/recaptcha or no bot protection at all; the app
+# imports it lazily and only when that code path actually runs.
 altcha==2.1.0
