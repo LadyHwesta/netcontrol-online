@@ -347,7 +347,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.7.1", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.7.2", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -2193,18 +2193,26 @@ def create_support_ticket(
 # ---------------------------------------------------------------------------
 
 @app.get("/users", response_model=list[UserPublicOut])
-def list_users(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Return active users in the caller's current org (for share-with-user UI).
-    Org-scoped (issue #1) — sharing a net with someone outside its own org would
-    be meaningless, since _get_net_for_user rejects cross-org access anyway.
-    Excludes the calling user."""
+def list_users(net_id: Optional[int] = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return active users in scope for a share/assignment picker (issue #1).
+    Defaults to the caller's own current org. Pass net_id to scope to THAT
+    net's org instead — necessary once a super admin can edit any net
+    regardless of their own current_org_id, and once Reassign (issue #1
+    follow-up) can move a net (or its shared/assigned users) to an org other
+    than whichever one the caller happens to be working as right now; without
+    this, already-shared users from the net's actual org would silently not
+    even appear as selectable in the sharing/schedule pickers."""
+    org_id = current_user.current_org_id
+    if net_id is not None:
+        org_id = _get_owned_net(net_id, current_user, db).org_id
+
     users = (
         db.query(User)
         .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
         .filter(
             User.is_active == True,
             User.id != current_user.id,
-            OrganizationMembership.org_id == current_user.current_org_id,
+            OrganizationMembership.org_id == org_id,
             OrganizationMembership.approved == True,
         )
         .order_by(User.callsign)

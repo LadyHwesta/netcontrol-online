@@ -481,7 +481,12 @@ function switchSubTab(tab) {
 let registeredUsers = [];
 
 async function loadRegisteredUsers() {
-  try { registeredUsers = await apiFetch('/users'); }
+  // Only ever called from the schedule view (schedules.js), always with a net
+  // open -- scope to that net's own org, not the viewer's current_org_id
+  // (issue #1 follow-up: matters once a net has been moved to a different
+  // org than the one the caller happens to be working as right now).
+  const q = currentNetId ? `?net_id=${currentNetId}` : '';
+  try { registeredUsers = await apiFetch('/users' + q); }
   catch { registeredUsers = []; }
 }
 

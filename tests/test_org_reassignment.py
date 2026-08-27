@@ -338,3 +338,57 @@ class TestReassignNet:
         net = client.post("/nets", headers=auth(admin_a_token), json={"name": "Test Net"}).json()
         resp = client.patch(f"/admin/nets/{net['id']}/org", headers=auth(admin_a_token), json={"org_id": org_b_id})
         assert resp.status_code == 403
+
+
+class TestUsersPickerNetScoping:
+    """GET /users?net_id=... -- a moved net's sharing/schedule pickers must
+    show that net's OWN org's members, not just whichever org the caller
+    happens to be "working as" right now. Regression coverage for a bug
+    reported after Reassign shipped: editing a net that (along with its
+    previously-shared users) had been moved to a different org showed an
+    incomplete/empty user picker, because /users ignored the net entirely
+    and only ever looked at the caller's own current_org_id."""
+
+    def test_net_id_scopes_to_the_nets_org_not_callers_current_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, admin_a_token = _create_org(client, super_token, "W1A", "orga", "Org A")
+        org_b_id, admin_b_token = _create_org(client, super_token, "W2B", "orgb", "Org B")
+
+        # W3 joins and is approved into Org A, then gets moved to Org B --
+        # same "net + its shared users both moved together" scenario reported.
+        join = client.post("/auth/register", json={
+            "callsign": "W3C", "name": "W3C", "email": "w3c@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        assert join.status_code == 201, join.text
+        w3_id = join.json()["id"]
+        client.patch(f"/orgs/{org_a_id}/members/{w3_id}/approve", headers=auth(admin_a_token))
+        client.patch(f"/admin/users/{w3_id}/org", headers=auth(super_token), json={"org_id": org_b_id})
+
+        net = client.post("/nets", headers=auth(admin_a_token), json={"name": "Test Net"}).json()
+        client.patch(f"/admin/nets/{net['id']}/org", headers=auth(super_token), json={"org_id": org_b_id})
+
+        # Super admin's own current_org_id is still whatever it was at
+        # bootstrap (the default org) -- nothing to do with Org B -- yet the
+        # picker for this specific net must reflect Org B's membership.
+        resp = client.get(f"/users?net_id={net['id']}", headers=auth(super_token))
+        assert resp.status_code == 200, resp.text
+        callsigns = {u["callsign"] for u in resp.json()}
+        assert "W3C" in callsigns
+        assert "W1A" not in callsigns  # W1A never moved -- still only in Org A
+
+    def test_without_net_id_still_scopes_to_callers_current_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, admin_a_token = _create_org(client, super_token, "W1A", "orga", "Org A")
+        resp = client.get("/users", headers=auth(admin_a_token))
+        assert resp.status_code == 200
+        assert resp.json() == []  # only member of Org A is W1A itself, excluded from its own picker
+
+    def test_net_id_404_for_a_net_the_caller_cannot_access(self, client):
+        super_token = _bootstrap_super_admin(client)
+        _, admin_a_token = _create_org(client, super_token, "W1A", "orga", "Org A")
+        org_b_id, admin_b_token = _create_org(client, super_token, "W2B", "orgb", "Org B")
+        net = client.post("/nets", headers=auth(admin_b_token), json={"name": "Org B Net"}).json()
+
+        resp = client.get(f"/users?net_id={net['id']}", headers=auth(admin_a_token))
+        assert resp.status_code == 404

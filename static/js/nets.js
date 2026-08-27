@@ -329,7 +329,7 @@ async function loadSharesForNet(netId) {
     // Load users and current shares in parallel
     const [shares, users] = await Promise.all([
       apiFetch(`/nets/${netId}/shares`),
-      apiFetch('/users'),
+      apiFetch(`/users?net_id=${netId}`),
     ]);
     allUsers = users;
     shareState = {
