@@ -63,6 +63,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-27 — Choice of Bot Protection Provider (v2.8.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Bot protection on registration/login is no longer Cloudflare Turnstile only — pick a provider with the new <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">CAPTCHA_PROVIDER</code> setting: <strong>Turnstile</strong>, <strong>Google reCAPTCHA</strong> (v2 checkbox), or <strong>ALTCHA</strong>.</li>
+              <li>ALTCHA is a genuine open-source option (MIT-licensed, self-contained) — no third-party account or verification service at all; this instance issues and checks its own proof-of-work challenges. The widget is self-hosted here too, so there's zero external network dependency for it.</li>
+              <li>Exactly one provider is active at a time; leave <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">CAPTCHA_PROVIDER</code> unset to disable entirely, same as before.</li>
+              <li>No database migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-26 — Fix Sharing Picker on a Moved Net (v2.7.2, issue #1 follow-up)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Editing a net's sharing (or its Net Control shift assignments) after that net — and its shared/assigned operators — had been moved to a different organization no longer showed an incomplete list. The picker was always scoped to the viewer's own current organization rather than the net's actual one, so already-shared operators from the net's real org silently didn't even appear as selectable, most noticeably for a super admin editing a net across orgs.</li>

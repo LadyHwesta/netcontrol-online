@@ -41,7 +41,7 @@ A public demo is available at **[demo.netcontrol.online](https://demo.netcontrol
 - **Net Repository integration** — optionally push publicly-listed nets to a central, community-run directory ([Net Repository](https://github.com/LadyHwesta/Net-Repository)) so they're discoverable beyond this instance; request an API key self-service from Admin, no manual key exchange needed
 - **In-app problem reporting** — users can submit bug reports and enhancement requests directly to the administrator
 - **User management** — registration with org-admin approval, email verification (when SMTP is configured), email notifications, admin panel
-- **Bot protection (optional)** — Cloudflare Turnstile on registration and login, off by default; set `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` to enable
+- **Bot protection (optional)** — Cloudflare Turnstile, Google reCAPTCHA, or ALTCHA (open source, self-contained — no third-party service) on registration and login, off by default; set `CAPTCHA_PROVIDER` plus that provider's keys to enable
 - **Configurable branding** — set organization name, tagline, website URL, and logo from the Admin panel
 - **Theme engine** — per-account color theme (LCARS, Dark, Light, High Contrast, or System/OS-matched), persisted server-side so it follows you across devices
 - **DMR hotspot integration** — connect a net to a WPSD, Pi-Star, or BrandMeister talk group; see a live "last heard" panel during the session, quick-check-in heard stations, and log Talk Group + Region per check-in

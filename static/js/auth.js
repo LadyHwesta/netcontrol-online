@@ -35,30 +35,101 @@ function updateRegOrgChoice() {
 }
 
 // ============================================================
-// CLOUDFLARE TURNSTILE (bot protection on login/register)
+// BOT PROTECTION (Cloudflare Turnstile / Google reCAPTCHA / ALTCHA)
 // ============================================================
-// Opt-in server-side (see /auth/config) — the widgets stay hidden and no
-// script is ever loaded from Cloudflare unless an admin has actually
-// configured TURNSTILE_SITE_KEY/SECRET_KEY.
+// Opt-in server-side (see /auth/config) — the widget containers stay hidden
+// and no extra script is ever loaded unless an admin has actually
+// configured CAPTCHA_PROVIDER (and, for Turnstile/reCAPTCHA, that
+// provider's site/secret keys). Exactly one provider is active at a time.
+let captchaProvider = null;
 let turnstileLoginWidgetId = null;
 let turnstileRegWidgetId = null;
+let recaptchaLoginWidgetId = null;
+let recaptchaRegWidgetId = null;
+let altchaLoginToken = null;
+let altchaRegToken = null;
 
-async function initTurnstile() {
+async function initCaptcha() {
   let config;
   try { config = await apiFetch('/auth/config'); } catch { return; }
-  if (!config.turnstile_enabled) return;
+  captchaProvider = config.captcha_provider;
+  if (!captchaProvider) return;
 
-  window._onTurnstileLoad = () => {
-    turnstileLoginWidgetId = turnstile.render('#login-turnstile', { sitekey: config.turnstile_site_key });
-    turnstileRegWidgetId = turnstile.render('#reg-turnstile', { sitekey: config.turnstile_site_key });
-    document.getElementById('login-turnstile').style.display = '';
-    document.getElementById('reg-turnstile').style.display = '';
-  };
-  const script = document.createElement('script');
-  script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=_onTurnstileLoad&render=explicit';
-  script.async = true;
-  script.defer = true;
-  document.head.appendChild(script);
+  if (captchaProvider === 'turnstile') {
+    window._onTurnstileLoad = () => {
+      turnstileLoginWidgetId = turnstile.render('#login-captcha', { sitekey: config.captcha_site_key });
+      turnstileRegWidgetId = turnstile.render('#reg-captcha', { sitekey: config.captcha_site_key });
+      document.getElementById('login-captcha').style.display = '';
+      document.getElementById('reg-captcha').style.display = '';
+    };
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=_onTurnstileLoad&render=explicit';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  } else if (captchaProvider === 'recaptcha') {
+    window._onRecaptchaLoad = () => {
+      recaptchaLoginWidgetId = grecaptcha.render('login-captcha', { sitekey: config.captcha_site_key });
+      recaptchaRegWidgetId = grecaptcha.render('reg-captcha', { sitekey: config.captcha_site_key });
+      document.getElementById('login-captcha').style.display = '';
+      document.getElementById('reg-captcha').style.display = '';
+    };
+    const script = document.createElement('script');
+    script.src = 'https://www.google.com/recaptcha/api.js?onload=_onRecaptchaLoad&render=explicit';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  } else if (captchaProvider === 'altcha') {
+    // Self-hosted widget (static/vendor/altcha) -- no third-party script or
+    // verification service at all; it solves a challenge fetched from our
+    // own /captcha/altcha-challenge.
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = '/static/vendor/altcha/altcha.min.js';
+    document.head.appendChild(script);
+
+    ['login', 'reg'].forEach(which => {
+      const container = document.getElementById(`${which}-captcha`);
+      container.innerHTML = '<altcha-widget challengeurl="/captcha/altcha-challenge" hidefooter></altcha-widget>';
+      container.style.display = '';
+      container.querySelector('altcha-widget').addEventListener('statechange', e => {
+        const solvedToken = e.detail.state === 'verified' ? e.detail.payload : null;
+        if (which === 'login') altchaLoginToken = solvedToken;
+        else altchaRegToken = solvedToken;
+      });
+    });
+  }
+}
+
+// Returns the current solved token for whichever provider is active
+// ('login' | 'reg'), or '' if not yet solved / not configured.
+function getCaptchaToken(which) {
+  if (captchaProvider === 'turnstile') {
+    const id = which === 'login' ? turnstileLoginWidgetId : turnstileRegWidgetId;
+    return id !== null ? (turnstile.getResponse(id) || '') : '';
+  }
+  if (captchaProvider === 'recaptcha') {
+    const id = which === 'login' ? recaptchaLoginWidgetId : recaptchaRegWidgetId;
+    return id !== null ? (grecaptcha.getResponse(id) || '') : '';
+  }
+  if (captchaProvider === 'altcha') {
+    return (which === 'login' ? altchaLoginToken : altchaRegToken) || '';
+  }
+  return '';
+}
+
+// Every provider's token is single-use -- must reset before another attempt.
+function resetCaptcha(which) {
+  if (captchaProvider === 'turnstile') {
+    const id = which === 'login' ? turnstileLoginWidgetId : turnstileRegWidgetId;
+    if (id !== null) turnstile.reset(id);
+  } else if (captchaProvider === 'recaptcha') {
+    const id = which === 'login' ? recaptchaLoginWidgetId : recaptchaRegWidgetId;
+    if (id !== null) grecaptcha.reset(id);
+  } else if (captchaProvider === 'altcha') {
+    if (which === 'login') altchaLoginToken = null; else altchaRegToken = null;
+    document.querySelector(`#${which}-captcha altcha-widget`)?.reset?.();
+  }
 }
 
 async function doLogin() {
@@ -68,7 +139,7 @@ async function doLogin() {
   if (!user || !pass) return showAuthError('Fill in all fields');
   try {
     const params = { username: user, password: pass };
-    if (turnstileLoginWidgetId !== null) params.turnstile_token = turnstile.getResponse(turnstileLoginWidgetId) || '';
+    if (captchaProvider) params.captcha_token = getCaptchaToken('login');
     const form = new URLSearchParams(params);
     const res = await fetch(API + '/auth/login', {
       method: 'POST', body: form,
@@ -82,8 +153,7 @@ async function doLogin() {
     enterApp();
   } catch (e) {
     showAuthError(e.message);
-    // Turnstile tokens are single-use -- must reset before another attempt.
-    if (turnstileLoginWidgetId !== null) turnstile.reset(turnstileLoginWidgetId);
+    resetCaptcha('login');
   }
 }
 
@@ -109,7 +179,7 @@ async function doRegister(btn) {
     if (!orgSlug) return showAuthError('Select an organization to join, or switch to "Create new"');
     body.org_slug = orgSlug;
   }
-  if (turnstileRegWidgetId !== null) body.turnstile_token = turnstile.getResponse(turnstileRegWidgetId) || '';
+  if (captchaProvider) body.captcha_token = getCaptchaToken('reg');
   btnLoading(btn, true);
   try {
     const newUser = await apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(body) });
@@ -142,8 +212,7 @@ async function doRegister(btn) {
   } catch (e) {
     showAuthError(e.message);
     btnLoading(btn, false);
-    // Turnstile tokens are single-use -- must reset before another attempt.
-    if (turnstileRegWidgetId !== null) turnstile.reset(turnstileRegWidgetId);
+    resetCaptcha('reg');
   }
 }
 

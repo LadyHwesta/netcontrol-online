@@ -9,3 +9,4 @@ pydantic[email]==2.10.3
 python-dotenv==1.0.1
 httpx==0.28.1
 slowapi==0.1.9
+altcha==2.1.0

@@ -140,14 +140,26 @@ def sent_emails(monkeypatch):
     return calls
 
 
-# ── Cloudflare Turnstile ─────────────────────────────────────────────────────
+# ── Bot protection: Turnstile / reCAPTCHA / ALTCHA ─────────────────────────────
+# One CallList helper shared by the three network-calling providers' *_verify
+# fixtures below (ALTCHA doesn't need one -- it's real local crypto, tests
+# exercise it end-to-end instead of mocking it).
+
+class _CallList(list):
+    """Plain list can't take arbitrary attributes -- subclass so set_result
+    can be attached to the returned calls list (same pattern as
+    pushed_nets_and_stats' CallList elsewhere in this file)."""
+    pass
+
 
 @pytest.fixture
 def turnstile_configured(monkeypatch):
-    """Makes _turnstile_configured() return True, for tests exercising the
-    Turnstile-gated code paths on /auth/register and /auth/login. Pair with
-    turnstile_verify so no real network call is attempted."""
+    """Makes _captcha_configured() return True for Turnstile, for tests
+    exercising the CAPTCHA-gated code paths on /auth/register and
+    /auth/login. Pair with turnstile_verify so no real network call is
+    attempted."""
     import main
+    monkeypatch.setattr(main, "CAPTCHA_PROVIDER", "turnstile")
     monkeypatch.setattr(main, "TURNSTILE_SITE_KEY", "1x00000000000000000000AA")
     monkeypatch.setattr(main, "TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA")
 
@@ -158,14 +170,7 @@ def turnstile_verify(monkeypatch):
     a real call to Cloudflare. Defaults to always passing; call
     calls.set_result(False) to simulate a failed challenge."""
     import main
-
-    class CallList(list):
-        """Plain list can't take arbitrary attributes -- subclass so
-        set_result can be attached to the returned calls list (same pattern
-        as pushed_nets_and_stats' CallList above)."""
-        pass
-
-    calls = CallList()
+    calls = _CallList()
     result = {"ok": True}
 
     def fake_verify(token, remote_ip):
@@ -175,6 +180,44 @@ def turnstile_verify(monkeypatch):
     monkeypatch.setattr(main, "_verify_turnstile", fake_verify)
     calls.set_result = lambda ok: result.update(ok=ok)
     return calls
+
+
+@pytest.fixture
+def recaptcha_configured(monkeypatch):
+    """Makes _captcha_configured() return True for reCAPTCHA. Pair with
+    recaptcha_verify so no real network call is attempted."""
+    import main
+    monkeypatch.setattr(main, "CAPTCHA_PROVIDER", "recaptcha")
+    monkeypatch.setattr(main, "RECAPTCHA_SITE_KEY", "6Lc-test-site-key")
+    monkeypatch.setattr(main, "RECAPTCHA_SECRET_KEY", "6Lc-test-secret-key")
+
+
+@pytest.fixture
+def recaptcha_verify(monkeypatch):
+    """Intercepts main._verify_recaptcha() so tests control pass/fail without
+    a real call to Google. Defaults to always passing; call
+    calls.set_result(False) to simulate a failed challenge."""
+    import main
+    calls = _CallList()
+    result = {"ok": True}
+
+    def fake_verify(token, remote_ip):
+        calls.append({"token": token, "remote_ip": remote_ip})
+        return result["ok"]
+
+    monkeypatch.setattr(main, "_verify_recaptcha", fake_verify)
+    calls.set_result = lambda ok: result.update(ok=ok)
+    return calls
+
+
+@pytest.fixture
+def altcha_configured(monkeypatch):
+    """Makes _captcha_configured() return True for ALTCHA, with a fixed HMAC
+    key so tests can generate/solve/verify real challenges deterministically
+    -- no mocking needed, ALTCHA does no network calls of its own."""
+    import main
+    monkeypatch.setattr(main, "CAPTCHA_PROVIDER", "altcha")
+    monkeypatch.setattr(main, "ALTCHA_HMAC_KEY", "test-hmac-key-for-altcha")
 
 
 # ── Net Repository ───────────────────────────────────────────────────────────

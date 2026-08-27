@@ -77,8 +77,9 @@ if (window._setpwToken) {
 // Auto-login if token stored
 if (token && !window._setpwToken) enterApp();
 
-// Cloudflare Turnstile (issue #1 follow-up) — no-op if not configured
-initTurnstile();
+// Bot protection: Turnstile / reCAPTCHA / ALTCHA (issue #1 follow-up) —
+// no-op if CAPTCHA_PROVIDER isn't configured
+initCaptcha();
 
 // Enter to submit login
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });

@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Optional, Literal
 
 import httpx
+import altcha
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
@@ -125,29 +126,52 @@ PASSWORD_SET_TOKEN_TTL_DAYS = 14   # admin-created accounts' invite link (issue 
 _email_log = logging.getLogger("ham_net_tracker.email")
 
 # ---------------------------------------------------------------------------
-# Cloudflare Turnstile (bot protection on registration/login)
+# Bot protection on registration/login — Cloudflare Turnstile, Google
+# reCAPTCHA, or ALTCHA (open-source, self-contained proof-of-work)
 # ---------------------------------------------------------------------------
-# Opt-in, same "leave blank to disable" convention as SMTP above — with
-# neither var set, the widget never renders and no verification is required,
-# so an existing deployment's registration/login flow is unaffected until
-# an admin deliberately sets these up.
+# Exactly one provider is active at a time, chosen by CAPTCHA_PROVIDER
+# ("turnstile" | "recaptcha" | "altcha"). Opt-in, same "leave blank to
+# disable" convention as SMTP above — with it unset, no widget ever renders
+# and no verification is required, so an existing deployment's
+# registration/login flow is unaffected until an admin deliberately opts in.
+CAPTCHA_PROVIDER = os.getenv("CAPTCHA_PROVIDER", "").strip().lower()
+
 TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "")      # public — safe to expose to the frontend
 TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")  # private — server-side verification only
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-_turnstile_log = logging.getLogger("ham_net_tracker.turnstile")
+RECAPTCHA_SITE_KEY = os.getenv("RECAPTCHA_SITE_KEY", "")      # public
+RECAPTCHA_SECRET_KEY = os.getenv("RECAPTCHA_SECRET_KEY", "")  # private
+RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify"
+
+# ALTCHA (https://altcha.org, MIT-licensed) — a real open-source alternative
+# to the two above: no third-party verification service at all, the app
+# itself issues and checks a proof-of-work challenge with this HMAC key.
+# Auto-generated at startup if not set via env — fine functionally (a
+# restart just invalidates any challenge issued but not yet solved, a
+# negligible race), but set it explicitly for a multi-worker/multi-instance
+# deployment so every process agrees on the same key.
+ALTCHA_HMAC_KEY = os.getenv("ALTCHA_HMAC_KEY", "") or secrets.token_hex(32)
+
+_captcha_log = logging.getLogger("ham_net_tracker.captcha")
 
 
-def _turnstile_configured() -> bool:
-    return bool(TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY)
+def _captcha_configured() -> bool:
+    """Whether bot protection is actually usable right now — the selected
+    provider AND its required credentials (where it needs any) are present."""
+    if CAPTCHA_PROVIDER == "turnstile":
+        return bool(TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY)
+    if CAPTCHA_PROVIDER == "recaptcha":
+        return bool(RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY)
+    if CAPTCHA_PROVIDER == "altcha":
+        return True  # self-contained — ALTCHA_HMAC_KEY always has a value
+    return False
 
 
 def _verify_turnstile(token: Optional[str], remote_ip: Optional[str]) -> bool:
     """Verifies a Turnstile response token with Cloudflare. Fails closed —
     any error (missing token, network failure, Cloudflare rejecting it)
-    returns False, since this only ever runs when Turnstile is actually
-    configured (the caller checks _turnstile_configured() first) and a
-    silent bypass would defeat the point."""
+    returns False, since a silent bypass would defeat the point."""
     if not token:
         return False
     try:
@@ -158,8 +182,55 @@ def _verify_turnstile(token: Optional[str], remote_ip: Optional[str]) -> bool:
         resp.raise_for_status()
         return bool(resp.json().get("success"))
     except Exception as exc:
-        _turnstile_log.warning("Turnstile verification failed: %s", exc)
+        _captcha_log.warning("Turnstile verification failed: %s", exc)
         return False
+
+
+def _verify_recaptcha(token: Optional[str], remote_ip: Optional[str]) -> bool:
+    """Verifies a reCAPTCHA response token with Google. Same fail-closed
+    shape as Turnstile above — the two APIs are near-identical."""
+    if not token:
+        return False
+    try:
+        payload = {"secret": RECAPTCHA_SECRET_KEY, "response": token}
+        if remote_ip:
+            payload["remoteip"] = remote_ip
+        resp = httpx.post(RECAPTCHA_VERIFY_URL, data=payload, timeout=10)
+        resp.raise_for_status()
+        return bool(resp.json().get("success"))
+    except Exception as exc:
+        _captcha_log.warning("reCAPTCHA verification failed: %s", exc)
+        return False
+
+
+def _verify_altcha(token: Optional[str], remote_ip: Optional[str]) -> bool:
+    """Verifies an ALTCHA solution payload against ALTCHA_HMAC_KEY — no
+    network call at all, unlike the two providers above. remote_ip is
+    accepted only so all three verifiers share one call signature; ALTCHA's
+    protocol doesn't use it."""
+    if not token:
+        return False
+    try:
+        ok, err = altcha.verify_solution_v1(token, ALTCHA_HMAC_KEY, check_expires=True)
+        if not ok:
+            _captcha_log.info("ALTCHA verification failed: %s", err)
+        return bool(ok)
+    except Exception as exc:
+        _captcha_log.warning("ALTCHA verification error: %s", exc)
+        return False
+
+
+def _verify_captcha(token: Optional[str], remote_ip: Optional[str]) -> bool:
+    """Dispatches to whichever provider CAPTCHA_PROVIDER selects. Callers
+    already check _captcha_configured() first; this returns False (fail
+    closed) if somehow called with nothing configured."""
+    if CAPTCHA_PROVIDER == "turnstile":
+        return _verify_turnstile(token, remote_ip)
+    if CAPTCHA_PROVIDER == "recaptcha":
+        return _verify_recaptcha(token, remote_ip)
+    if CAPTCHA_PROVIDER == "altcha":
+        return _verify_altcha(token, remote_ip)
+    return False
 
 
 def _smtp_configured() -> bool:
@@ -347,7 +418,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.7.2", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.8.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -503,7 +574,7 @@ class UserCreate(BaseModel):
     org_slug: Optional[str] = None
     org_name: Optional[str] = None
     org_website_url: Optional[str] = None
-    turnstile_token: Optional[str] = None  # Cloudflare Turnstile response, required only if configured
+    captcha_token: Optional[str] = None  # bot-protection widget response, required only if CAPTCHA_PROVIDER is set
 
     @field_validator("callsign")
     @classmethod
@@ -1116,7 +1187,7 @@ def _delete_orphaned_orgs(org_ids: set[int], db: Session) -> None:
 @app.post("/auth/register", response_model=UserOut, status_code=201)
 @limiter.limit("5/minute")
 def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
-    if _turnstile_configured() and not _verify_turnstile(data.turnstile_token, get_remote_address(request)):
+    if _captcha_configured() and not _verify_captcha(data.captcha_token, get_remote_address(request)):
         raise HTTPException(400, "Verification failed — please try again.")
     if db.query(User).filter(User.callsign == data.callsign).first():
         raise HTTPException(400, "Callsign already registered")
@@ -1334,11 +1405,11 @@ def set_password(request: Request, data: SetPasswordRequest, db: Session = Depen
 def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    turnstile_token: Optional[str] = Form(None),
+    captcha_token: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    if _turnstile_configured() and not _verify_turnstile(turnstile_token, get_remote_address(request)):
-        _log_auth_fail(request, f"turnstile_failed username={form_data.username!r}")
+    if _captcha_configured() and not _verify_captcha(captcha_token, get_remote_address(request)):
+        _log_auth_fail(request, f"captcha_failed username={form_data.username!r}")
         raise HTTPException(status_code=400, detail="Verification failed — please try again.")
     # Accept callsign or email as username
     user = (
@@ -1365,12 +1436,44 @@ def login(
 @app.get("/auth/config")
 def auth_config():
     """Public, unauthenticated — tells the login/register page whether to
-    render a Turnstile widget and, if so, which site key to use (the site
-    key is meant to be public; only TURNSTILE_SECRET_KEY is sensitive)."""
+    render a bot-protection widget, and if so which provider and (for
+    Turnstile/reCAPTCHA) which site key to use. Site keys are meant to be
+    public; only the *_SECRET_KEY / ALTCHA_HMAC_KEY values are sensitive.
+    ALTCHA needs no site key at all — its widget instead points at
+    /captcha/altcha-challenge below."""
+    configured = _captcha_configured()
+    site_key = None
+    if configured:
+        if CAPTCHA_PROVIDER == "turnstile":
+            site_key = TURNSTILE_SITE_KEY
+        elif CAPTCHA_PROVIDER == "recaptcha":
+            site_key = RECAPTCHA_SITE_KEY
     return {
-        "turnstile_enabled": _turnstile_configured(),
-        "turnstile_site_key": TURNSTILE_SITE_KEY if _turnstile_configured() else None,
+        "captcha_provider": CAPTCHA_PROVIDER if configured else None,
+        "captcha_site_key": site_key,
+        # Deprecated aliases, kept for any external client still reading the
+        # old shape — TURNSTILE_SITE_KEY doubles as the "enabled" flag's
+        # provider check since Turnstile was the only option before.
+        "turnstile_enabled": configured and CAPTCHA_PROVIDER == "turnstile",
+        "turnstile_site_key": site_key if CAPTCHA_PROVIDER == "turnstile" else None,
     }
+
+
+@app.get("/captcha/altcha-challenge")
+@limiter.limit("30/minute")
+def altcha_challenge(request: Request):
+    """Public, unauthenticated — issues a fresh ALTCHA proof-of-work
+    challenge. The <altcha-widget> on the login/register page fetches this
+    itself (via its challengeurl attribute) and solves it client-side; no
+    external network call is involved on either side."""
+    if CAPTCHA_PROVIDER != "altcha":
+        raise HTTPException(404, "ALTCHA is not the active CAPTCHA provider")
+    challenge = altcha.create_challenge_v1(
+        hmac_key=ALTCHA_HMAC_KEY,
+        max_number=100_000,
+        expires=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    return challenge.to_dict()
 
 
 @app.get("/auth/me", response_model=UserOut)
