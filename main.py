@@ -24,6 +24,8 @@ Net Sessions
 Checkins
   GET    /sessions/{id}/checkins      — list checkins in a session
   POST   /sessions/{id}/checkins      — add a checkin
+  POST   /sessions/{id}/checkins/import — bulk-add checkins from a CSV upload
+  GET    /checkins/import-sample      — downloadable sample CSV showing the expected columns
   DELETE /checkins/{id}               — remove a checkin
 
 History / Stats
@@ -426,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.8.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.9.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -2997,9 +2999,12 @@ def list_checkins(session_id: int, current_user: User = Depends(get_current_user
     return out
 
 
-@app.post("/sessions/{session_id}/checkins", response_model=CheckinOut, status_code=201)
-def add_checkin(session_id: int, data: CheckinCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
+def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate, db: Session) -> Checkin:
+    """Shared per-checkin logic behind both add_checkin (one at a time) and
+    import_checkins_csv (bulk, issue #26) — same validation either way so
+    the two paths can't drift apart. Raises HTTPException on any rejection;
+    caller decides whether that aborts the whole request (add_checkin) or is
+    just recorded and skipped (the CSV importer)."""
     # An offline-entered session (issue #20) is created already "ended" -- at
     # the reported net date/time, not now -- specifically so it can still take
     # checkins after the fact. Its own is_offline_locked flag (set via the same
@@ -3012,18 +3017,17 @@ def add_checkin(session_id: int, data: CheckinCreate, current_user: User = Depen
 
     # Prevent duplicate callsign in the same session — except for GMRS nets where a
     # single family licence is shared among multiple stations.
-    net = db.query(Net).filter(Net.id == session.net_id).first()
     is_gmrs = net and net.net_type == "gmrs"
     if not is_gmrs:
         existing = db.query(Checkin).filter(
-            Checkin.session_id == session_id,
+            Checkin.session_id == session.id,
             Checkin.callsign == data.callsign,
         ).first()
         if existing:
             raise HTTPException(409, f"{data.callsign} has already checked in to this session")
 
     checkin = Checkin(
-        session_id=session_id,
+        session_id=session.id,
         callsign=data.callsign,
         name=data.name,
         signal_report=data.signal_report,
@@ -3054,6 +3058,129 @@ def add_checkin(session_id: int, data: CheckinCreate, current_user: User = Depen
         db.commit()
 
     return checkin
+
+
+@app.post("/sessions/{session_id}/checkins", response_model=CheckinOut, status_code=201)
+def add_checkin(session_id: int, data: CheckinCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = _get_session_for_user(session_id, current_user, db)
+    net = db.query(Net).filter(Net.id == session.net_id).first()
+    return _create_checkin(session, net, data, db)
+
+
+class CheckinImportError(BaseModel):
+    row: int              # 1-indexed as a spreadsheet would show it (header is row 1)
+    callsign: Optional[str] = None
+    reason: str
+
+
+class CheckinImportResult(BaseModel):
+    imported: int
+    skipped: int
+    errors: list[CheckinImportError]
+
+
+# Header matching is deliberately loose -- letters/digits only, case-folded --
+# so "Signal Report", "signal_report", and "SignalReport" all land the same
+# way. Only "callsign" is required; everything else is optional, matching
+# CheckinCreate.
+_CHECKIN_IMPORT_COLUMNS = {
+    "callsign": "callsign",
+    "name": "name",
+    "signalreport": "signal_report",
+    "sigreport": "signal_report",
+    "comments": "comments",
+    "comment": "comments",
+    "notes": "comments",
+    "hastraffic": "has_traffic",
+    "traffic": "has_traffic",
+    "evaczone": "evac_zone",
+    "zone": "evac_zone",
+    "dmrtalkgroup": "dmr_talkgroup",
+    "talkgroup": "dmr_talkgroup",
+    "dmrregion": "dmr_region",
+    "region": "dmr_region",
+}
+
+
+def _normalize_csv_header(header: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", header.lower())
+
+
+@app.post("/sessions/{session_id}/checkins/import", response_model=CheckinImportResult)
+async def import_checkins_csv(
+    session_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Bulk-add checkins from an uploaded CSV (issue #26) -- built mainly for
+    "Log a Net That Already Happened" (issue #20), where re-typing a whole
+    paper roster one row at a time is tedious, but works for any session
+    that can still take checkins (a live one, or an unlocked offline one) --
+    same rules as add_checkin above, via the same _create_checkin helper.
+    Each row is validated and inserted independently; one bad row is
+    recorded in the response and skipped rather than aborting the rest. See
+    GET /checkins/import-sample for the expected column shape."""
+    session = _get_session_for_user(session_id, current_user, db)
+    net = db.query(Net).filter(Net.id == session.net_id).first()
+
+    raw = (await file.read()).decode("utf-8-sig", errors="replace")
+    reader = csv.reader(io.StringIO(raw))
+    try:
+        header_row = next(reader)
+    except StopIteration:
+        raise HTTPException(400, "CSV file is empty")
+
+    columns = [_CHECKIN_IMPORT_COLUMNS.get(_normalize_csv_header(h)) for h in header_row]
+    if "callsign" not in columns:
+        raise HTTPException(400, 'CSV must have a "Callsign" column — download the sample for the expected format')
+
+    imported = 0
+    errors: list[CheckinImportError] = []
+    for row_num, raw_row in enumerate(reader, start=2):  # row 1 is the header
+        if not any(cell.strip() for cell in raw_row):
+            continue  # skip blank rows
+        row = {col: val for col, val in zip(columns, raw_row) if col}
+        callsign = (row.get("callsign") or "").strip().upper()
+        if not callsign:
+            errors.append(CheckinImportError(row=row_num, reason="Missing callsign"))
+            continue
+        try:
+            data = CheckinCreate(
+                callsign=callsign,
+                name=(row.get("name") or "").strip() or None,
+                signal_report=(row.get("signal_report") or "").strip() or None,
+                comments=(row.get("comments") or "").strip() or None,
+                has_traffic=(row.get("has_traffic") or "").strip().lower() in ("1", "true", "yes", "y"),
+                evac_zone=(row.get("evac_zone") or "").strip() or None,
+                dmr_talkgroup=(row.get("dmr_talkgroup") or "").strip() or None,
+                dmr_region=(row.get("dmr_region") or "").strip() or None,
+            )
+            _create_checkin(session, net, data, db)
+            imported += 1
+        except HTTPException as e:
+            errors.append(CheckinImportError(row=row_num, callsign=callsign, reason=str(e.detail)))
+        except Exception as e:
+            errors.append(CheckinImportError(row=row_num, callsign=callsign, reason=str(e)))
+
+    return CheckinImportResult(imported=imported, skipped=len(errors), errors=errors)
+
+
+@app.get("/checkins/import-sample")
+def download_checkin_import_sample(current_user: User = Depends(get_current_user)):
+    """Downloadable template showing exactly the columns import_checkins_csv
+    above expects, with a couple of filled-in example rows."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Callsign", "Name", "Signal Report", "Comments", "Has Traffic", "Evac Zone", "DMR Talkgroup", "DMR Region"])
+    writer.writerow(["W1AW", "Hiram Percy Maxim", "59", "Mobile, first check-in", "no", "", "", ""])
+    writer.writerow(["KJ7ABC", "Jane Doe", "55", "", "yes", "Zone 3", "3120", "Western WA"])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="checkin_import_sample.csv"'},
+    )
 
 
 @app.delete("/checkins/{checkin_id}", status_code=204)

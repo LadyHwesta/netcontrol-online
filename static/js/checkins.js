@@ -1,4 +1,83 @@
 // ============================================================
+// CSV IMPORT (issue #26) — bulk check-ins, mainly for "Log a Net That
+// Already Happened" (issue #20) where re-typing a whole paper roster one
+// row at a time is tedious.
+// ============================================================
+function openCheckinImportModal() {
+  if (!currentSessionId) return;
+  document.getElementById('checkin-import-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'checkin-import-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:2px solid var(--lc-blue);border-radius:10px;padding:24px;max-width:480px;width:100%">
+      <h3 style="margin:0 0 8px;color:var(--lc-blue)">📥 Import Check-ins from CSV</h3>
+      <p style="margin:0 0 14px;font-size:13px;color:var(--text-muted);line-height:1.5">
+        Upload a CSV of check-ins — handy for a long roster from a net logged after the fact.
+        Only <strong>Callsign</strong> is required; every other column is optional.
+      </p>
+      <p style="margin:0 0 14px">
+        <a href="#" onclick="triggerDownload(API + '/checkins/import-sample'); return false;" style="color:var(--lc-orange);font-size:13px">📄 Download a sample CSV</a>
+      </p>
+      <div class="form-group" style="margin-bottom:14px">
+        <input type="file" id="checkin-import-file" accept=".csv,text/csv" class="form-control" />
+      </div>
+      <div id="checkin-import-result"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-ghost" onclick="document.getElementById('checkin-import-modal').remove()">Close</button>
+        <button class="btn btn-primary" onclick="submitCheckinImport(this)">Upload</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function submitCheckinImport(btn) {
+  const fileInput = document.getElementById('checkin-import-file');
+  const file = fileInput.files[0];
+  if (!file) return toast('Choose a CSV file first', 'error');
+  btnLoading(btn, true);
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API}/sessions/${currentSessionId}/checkins/import`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd,
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || 'Import failed');
+    renderCheckinImportResult(result);
+    toast(
+      `Imported ${result.imported} check-in${result.imported === 1 ? '' : 's'}` + (result.skipped ? `, ${result.skipped} skipped` : ''),
+      result.skipped ? 'error' : 'success'
+    );
+    await loadCheckins();
+    renderExpectedList();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
+}
+
+function renderCheckinImportResult(result) {
+  const el = document.getElementById('checkin-import-result');
+  if (!el) return;
+  let html = `<div style="font-size:13px"><strong style="color:var(--lc-green)">${result.imported} imported</strong>`;
+  if (result.skipped > 0) {
+    html += `, <strong style="color:var(--lc-red)">${result.skipped} skipped</strong></div>`;
+    html += `<div style="max-height:160px;overflow-y:auto;margin-top:8px;font-size:12px;border:1px solid var(--lc-border);border-radius:6px;padding:8px">`;
+    html += result.errors.map(e => `<div style="padding:2px 0">Row ${e.row}${e.callsign ? ` (${esc(e.callsign)})` : ''}: ${esc(e.reason)}</div>`).join('');
+    html += `</div>`;
+  } else {
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ============================================================
 // CALLSIGN LOOKUP
 // ============================================================
 const lookupCache = {};  // callsign → result, avoids repeat API calls per session
