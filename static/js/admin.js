@@ -361,6 +361,46 @@ async function orgSetMemberRole(orgId, userId, role, callsign) {
 }
 
 // ============================================================
+// NETS IN YOUR ORG (org-admin-only view) — reassign a net's owner within
+// this org. Super admins have the equivalent, any-org version in the
+// Reassign tab instead (issue follow-up).
+// ============================================================
+async function loadOrgNets() {
+  const orgId = currentUser.current_org_id;
+  const [nets, members] = await Promise.all([
+    apiFetch(`/orgs/${orgId}/nets`).catch(e => { toast(e.message, 'error'); return []; }),
+    apiFetch(`/orgs/${orgId}/members`).catch(() => []),
+  ]);
+  document.getElementById('org-net-select').innerHTML = nets.map(n =>
+    `<option value="${n.id}">${esc(n.name)} (owner ${esc(n.owner_callsign || '?')})</option>`
+  ).join('');
+  document.getElementById('org-net-owner-select').innerHTML = members.map(m =>
+    `<option value="${m.user_id}">${esc(m.callsign)} — ${esc(m.name)}</option>`
+  ).join('');
+}
+
+async function submitOrgNetOwner(btn) {
+  const netSelect = document.getElementById('org-net-select');
+  const ownerSelect = document.getElementById('org-net-owner-select');
+  const netId = netSelect.value;
+  const ownerId = ownerSelect.value;
+  if (!netId || !ownerId) return toast('Select a net and a new owner', 'error');
+  const netLabel = netSelect.selectedOptions[0]?.textContent || 'this net';
+  const ownerLabel = ownerSelect.selectedOptions[0]?.textContent || 'the selected user';
+  if (!confirm(`Change the owner of ${netLabel} to ${ownerLabel}?`)) return;
+  btnLoading(btn, true);
+  try {
+    await apiFetch(`/nets/${netId}/owner`, { method: 'PATCH', body: JSON.stringify({ owner_id: Number(ownerId) }) });
+    toast('Net owner changed', 'success');
+    loadOrgNets();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
+}
+
+// ============================================================
 // REASSIGN — move a user or net into a different org (super admin only).
 // Lets a deployment that started single-tenant split into per-region orgs
 // after the fact, without users re-registering or nets losing history
@@ -371,6 +411,7 @@ let _reassignOrgsById = {};
 
 async function loadReassignTab() {
   const previousFilter = document.getElementById('reassign-net-org-filter').value;
+  const previousOwnerFilter = document.getElementById('reassign-owner-net-org-filter').value;
   const [users, nets, orgs] = await Promise.all([
     apiFetch('/admin/users').catch(e => { toast(e.message, 'error'); return []; }),
     apiFetch('/nets').catch(e => { toast(e.message, 'error'); return []; }),
@@ -386,6 +427,9 @@ async function loadReassignTab() {
   document.getElementById('reassign-net-org-filter').innerHTML =
     `<option value="">All Organizations</option>` + orgOptions;
   document.getElementById('reassign-net-org-filter').value = previousFilter;
+  document.getElementById('reassign-owner-net-org-filter').innerHTML =
+    `<option value="">All Organizations</option>` + orgOptions;
+  document.getElementById('reassign-owner-net-org-filter').value = previousOwnerFilter;
 
   const userOptions = users.map(u =>
     `<option value="${u.id}">${esc(u.callsign)} — ${esc(u.name)} (currently: ${esc(u.org_name || 'no org')})</option>`
@@ -394,6 +438,7 @@ async function loadReassignTab() {
   document.getElementById('addmembership-user-select').innerHTML = userOptions;
 
   filterReassignNets();
+  filterReassignOwnerNets();
 }
 
 // Nets aren't refetched here -- just re-rendered from the already-loaded
@@ -407,6 +452,34 @@ function filterReassignNets() {
   document.getElementById('reassign-net-select').innerHTML = filtered.map(n =>
     `<option value="${n.id}">${esc(n.name)} — ${esc(_reassignOrgsById[n.org_id] || 'unknown org')} (owner ${esc(n.owner_callsign || '?')})</option>`
   ).join('');
+}
+
+function filterReassignOwnerNets() {
+  const orgFilter = document.getElementById('reassign-owner-net-org-filter').value;
+  const filtered = orgFilter
+    ? _reassignNets.filter(n => String(n.org_id) === orgFilter)
+    : _reassignNets;
+  document.getElementById('reassign-owner-net-select').innerHTML = filtered.map(n =>
+    `<option value="${n.id}">${esc(n.name)} — ${esc(_reassignOrgsById[n.org_id] || 'unknown org')} (owner ${esc(n.owner_callsign || '?')})</option>`
+  ).join('');
+  onReassignOwnerNetChange();
+}
+
+// The new-owner picker must be scoped to the SELECTED net's own org (the
+// backend requires the new owner to already be an approved member of it),
+// so it's re-fetched every time the net selection changes.
+async function onReassignOwnerNetChange() {
+  const netId = document.getElementById('reassign-owner-net-select').value;
+  const select = document.getElementById('reassign-owner-user-select');
+  const net = _reassignNets.find(n => n.id === Number(netId));
+  if (!net) { select.innerHTML = ''; return; }
+  try {
+    const members = await apiFetch(`/orgs/${net.org_id}/members`);
+    select.innerHTML = members.map(m => `<option value="${m.user_id}">${esc(m.callsign)} — ${esc(m.name)}</option>`).join('');
+  } catch (e) {
+    select.innerHTML = '';
+    toast(e.message, 'error');
+  }
 }
 
 async function submitReassignUser(btn) {
@@ -477,6 +550,27 @@ async function submitReassignNet(btn) {
     toast(result.owner_not_member
       ? `Net moved — its owner isn't a member of ${result.org_name}, so they won't be able to manage it themselves until added`
       : 'Net moved', 'success');
+    loadReassignTab();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
+}
+
+async function submitReassignNetOwner(btn) {
+  const netSelect = document.getElementById('reassign-owner-net-select');
+  const ownerSelect = document.getElementById('reassign-owner-user-select');
+  const netId = netSelect.value;
+  const ownerId = ownerSelect.value;
+  if (!netId || !ownerId) return toast('Select a net and a new owner', 'error');
+  const netLabel = netSelect.selectedOptions[0]?.textContent || 'this net';
+  const ownerLabel = ownerSelect.selectedOptions[0]?.textContent || 'the selected user';
+  if (!confirm(`Change the owner of ${netLabel} to ${ownerLabel}?`)) return;
+  btnLoading(btn, true);
+  try {
+    await apiFetch(`/nets/${netId}/owner`, { method: 'PATCH', body: JSON.stringify({ owner_id: Number(ownerId) }) });
+    toast('Net owner changed', 'success');
     loadReassignTab();
   } catch (e) {
     toast(e.message, 'error');

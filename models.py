@@ -379,6 +379,11 @@ class NetShare(Base):
     id = Column(Integer, primary_key=True, index=True)
     net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)  # NULL = share with all
+    # Whether this share also grants edit rights (net details, schedule, DMR
+    # config, evac zones, station remarks) rather than just view/check-in
+    # access (issue follow-up). Deleting the net and managing sharing itself
+    # stay owner/admin-only regardless.
+    can_edit = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
     net = relationship("Net", back_populates="shares")

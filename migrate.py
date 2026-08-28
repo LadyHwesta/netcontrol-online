@@ -410,6 +410,11 @@ MIGRATIONS = [
      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_token VARCHAR(64)"),
     ("users: password-set invite sent-at",
      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_set_sent_at TIMESTAMPTZ"),
+
+    # ── Shared users can be granted edit rights, not just view/check-in
+    # access (issue follow-up) ──
+    ("net_shares: can_edit flag",
+     "ALTER TABLE net_shares ADD COLUMN IF NOT EXISTS can_edit BOOLEAN NOT NULL DEFAULT FALSE"),
 ]
 
 # ---------------------------------------------------------------------------

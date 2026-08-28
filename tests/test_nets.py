@@ -188,7 +188,7 @@ class TestNetSharing:
     def test_default_shares_empty(self, client, admin_headers, net):
         resp = client.get(f"/nets/{net['id']}/shares", headers=admin_headers)
         assert resp.status_code == 200
-        assert resp.json() == {"share_with_all": False, "user_ids": []}
+        assert resp.json() == {"share_with_all": False, "can_edit_all": False, "user_ids": [], "editor_user_ids": []}
 
     def test_share_with_specific_user_round_trips(self, client, admin_headers, user_headers, net):
         other_id = self._other_user_id(client, admin_headers)
@@ -198,7 +198,7 @@ class TestNetSharing:
         assert put_resp.status_code == 204
 
         get_resp = client.get(f"/nets/{net['id']}/shares", headers=admin_headers)
-        assert get_resp.json() == {"share_with_all": False, "user_ids": [other_id]}
+        assert get_resp.json() == {"share_with_all": False, "can_edit_all": False, "user_ids": [other_id], "editor_user_ids": []}
 
         # The shared user can now see the net in their own list
         listed = client.get("/nets", headers=user_headers).json()
@@ -222,7 +222,7 @@ class TestNetSharing:
         client.put(f"/nets/{net['id']}/shares", json={"share_with_all": False, "user_ids": []}, headers=admin_headers)
 
         get_resp = client.get(f"/nets/{net['id']}/shares", headers=admin_headers)
-        assert get_resp.json() == {"share_with_all": False, "user_ids": []}
+        assert get_resp.json() == {"share_with_all": False, "can_edit_all": False, "user_ids": [], "editor_user_ids": []}
 
         listed = client.get("/nets", headers=user_headers).json()
         assert net["id"] not in [n["id"] for n in listed]
@@ -232,3 +232,130 @@ class TestNetSharing:
         assert get_resp.status_code in (403, 404)
         put_resp = client.put(f"/nets/{net['id']}/shares", json={"share_with_all": True, "user_ids": []}, headers=user_headers)
         assert put_resp.status_code in (403, 404)
+
+
+class TestNetEditRights:
+    """Sharing previously only ever granted view/check-in access -- no way
+    to let a trusted co-operator also help maintain a net's details,
+    schedule, or DMR config without handing them full ownership (issue
+    follow-up). NetShare.can_edit / editor_user_ids / can_edit_all add that;
+    delete_net and sharing management itself stay owner/admin-only
+    regardless (see _get_owned_net vs _get_editable_net in main.py)."""
+
+    def _other_user_id(self, client, admin_headers):
+        users = client.get("/admin/users", headers=admin_headers).json()
+        return next(u["id"] for u in users if u["callsign"] == "W2USER")
+
+    def test_editor_share_can_edit_net_details(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [other_id],
+        }, headers=admin_headers)
+
+        resp = client.put(f"/nets/{net['id']}", json={"name": "Edited By Editor", "is_ares": False}, headers=user_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["name"] == "Edited By Editor"
+
+    def test_view_only_share_cannot_edit_net_details(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [],
+        }, headers=admin_headers)
+
+        resp = client.put(f"/nets/{net['id']}", json={"name": "Hijacked", "is_ares": False}, headers=user_headers)
+        assert resp.status_code in (403, 404)
+
+    def test_editor_share_cannot_delete_net(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [other_id],
+        }, headers=admin_headers)
+
+        resp = client.delete(f"/nets/{net['id']}", headers=user_headers)
+        assert resp.status_code in (403, 404)
+
+    def test_editor_share_cannot_manage_sharing(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [other_id],
+        }, headers=admin_headers)
+
+        get_resp = client.get(f"/nets/{net['id']}/shares", headers=user_headers)
+        assert get_resp.status_code in (403, 404)
+        put_resp = client.put(f"/nets/{net['id']}/shares", json={"share_with_all": True, "user_ids": []}, headers=user_headers)
+        assert put_resp.status_code in (403, 404)
+
+    def test_editor_share_can_manage_schedule(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [other_id],
+        }, headers=admin_headers)
+
+        resp = client.post(f"/nets/{net['id']}/schedules", json={
+            "day_of_week": 0, "start_time": "19:00", "timezone": "America/Los_Angeles",
+        }, headers=user_headers)
+        assert resp.status_code == 201, resp.text
+
+    def test_can_edit_all_grants_edit_to_everyone_shared(self, client, admin_headers, user_headers, net):
+        client.put(f"/nets/{net['id']}/shares", json={"share_with_all": True, "can_edit_all": True, "user_ids": []}, headers=admin_headers)
+
+        resp = client.put(f"/nets/{net['id']}", json={"name": "Edited Via Share-All", "is_ares": False}, headers=user_headers)
+        assert resp.status_code == 200, resp.text
+
+    def test_share_with_all_without_edit_flag_stays_view_only(self, client, admin_headers, user_headers, net):
+        client.put(f"/nets/{net['id']}/shares", json={"share_with_all": True, "can_edit_all": False, "user_ids": []}, headers=admin_headers)
+
+        resp = client.put(f"/nets/{net['id']}", json={"name": "Hijacked", "is_ares": False}, headers=user_headers)
+        assert resp.status_code in (403, 404)
+
+    def test_removing_share_also_removes_edit_rights(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [other_id],
+        }, headers=admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={"share_with_all": False, "user_ids": [], "editor_user_ids": []}, headers=admin_headers)
+
+        resp = client.put(f"/nets/{net['id']}", json={"name": "Hijacked", "is_ares": False}, headers=user_headers)
+        assert resp.status_code in (403, 404)
+
+    def test_net_out_can_edit_reflects_permissions(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [other_id], "editor_user_ids": [other_id],
+        }, headers=admin_headers)
+
+        owner_view = next(n for n in client.get("/nets", headers=admin_headers).json() if n["id"] == net["id"])
+        assert owner_view["can_edit"] is True
+
+        editor_view = next(n for n in client.get("/nets", headers=user_headers).json() if n["id"] == net["id"])
+        assert editor_view["can_edit"] is True
+        assert editor_view["is_owner"] is False
+        assert editor_view["editor_user_ids"] == [other_id]
+
+
+class TestNetOwnershipTransfer:
+    def _other_user_id(self, client, admin_headers):
+        users = client.get("/admin/users", headers=admin_headers).json()
+        return next(u["id"] for u in users if u["callsign"] == "W2USER")
+
+    def test_owner_can_transfer_to_another_member(self, client, admin_headers, user_headers, net):
+        # admin_headers here is this test DB's super admin (first-ever user)
+        # AND net's current owner -- exercises the "current owner" path since
+        # is_admin would bypass the ownership check regardless.
+        other_id = self._other_user_id(client, admin_headers)
+        resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": other_id}, headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["owner_id"] == other_id
+
+        # New owner can now edit it themselves
+        edit_resp = client.put(f"/nets/{net['id']}", json={"name": "New Owner Edit", "is_ares": False}, headers=user_headers)
+        assert edit_resp.status_code == 200, edit_resp.text
+
+    def test_cannot_transfer_to_unknown_user(self, client, admin_headers, net):
+        resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": 999999}, headers=admin_headers)
+        assert resp.status_code == 404
+
+    def test_non_owner_non_admin_cannot_transfer(self, client, admin_headers, user_headers, net):
+        other_id = self._other_user_id(client, admin_headers)
+        resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": other_id}, headers=user_headers)
+        assert resp.status_code in (403, 404)

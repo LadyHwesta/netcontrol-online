@@ -428,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.10.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.11.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -715,6 +715,9 @@ class NetOut(BaseModel):
     is_owner: bool = True
     shared_with_all: bool = False
     shared_user_ids: list[int] = []
+    can_edit_all: bool = False           # edit rights granted to the "shared with all" grant
+    editor_user_ids: list[int] = []      # subset of shared_user_ids also granted edit rights
+    can_edit: bool = False               # whether the CALLER (owner, admin, or an editor share) can edit this net
     owner_callsign: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -731,7 +734,13 @@ class UserPublicOut(BaseModel):
 
 class NetShareUpdate(BaseModel):
     share_with_all: bool = False
-    user_ids: list[int] = []   # specific user IDs to share with (ignored when share_with_all=True)
+    can_edit_all: bool = False        # edit rights for the "shared with all" grant, only meaningful when share_with_all=True
+    user_ids: list[int] = []          # specific user IDs to share with (ignored when share_with_all=True)
+    editor_user_ids: list[int] = []   # subset of user_ids to also grant edit rights
+
+
+class NetOwnerUpdate(BaseModel):
+    owner_id: int
 
 
 class BrandingOut(BaseModel):
@@ -1701,6 +1710,17 @@ def list_org_members(org_id: int, admin: User = Depends(require_org_admin), db: 
     ]
 
 
+@app.get("/orgs/{org_id}/nets", response_model=list[NetOut])
+def list_org_nets(org_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
+    """Every net in this org, regardless of ownership or sharing — lets an
+    org admin see (and reassign ownership of) every net in their org, not
+    just ones they personally own or are shared on (issue follow-up).
+    list_nets doesn't do this for non-super-admins: org-admin role alone
+    was never a substitute for owning or being shared on a net."""
+    nets = db.query(Net).filter(Net.org_id == org_id).order_by(Net.name).all()
+    return [_net_to_out(n, admin, db) for n in nets]
+
+
 @app.patch("/orgs/{org_id}/members/{user_id}/approve", status_code=204)
 def approve_org_member(org_id: int, user_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
     membership = db.query(OrganizationMembership).filter(
@@ -2357,7 +2377,7 @@ def list_users(net_id: Optional[int] = None, current_user: User = Depends(get_cu
     even appear as selectable in the sharing/schedule pickers."""
     org_id = current_user.current_org_id
     if net_id is not None:
-        org_id = _get_owned_net(net_id, current_user, db).org_id
+        org_id = _get_editable_net(net_id, current_user, db).org_id
 
     users = (
         db.query(User)
@@ -2441,7 +2461,7 @@ def get_net(net_id: int, current_user: User = Depends(get_current_user), db: Ses
 
 @app.put("/nets/{net_id}", response_model=NetOut)
 def update_net(net_id: int, data: NetCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_owned_net(net_id, current_user, db)
+    net = _get_editable_net(net_id, current_user, db)
     net_type = data.net_type if data.net_type in ("ham", "gmrs") else "ham"
     net.name = data.name
     net.frequency = data.frequency
@@ -2464,6 +2484,49 @@ def update_net(net_id: int, data: NetCreate, current_user: User = Depends(get_cu
     db.commit()
     db.refresh(net)
     net_repository.push_net(net, db)
+    return _net_to_out(net, current_user, db)
+
+
+@app.patch("/nets/{net_id}/owner", response_model=NetOut)
+def transfer_net_owner(net_id: int, data: NetOwnerUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Reassign a net's owner — previously the only way to change who
+    controls a net was deleting and recreating it (issue follow-up).
+    Available to the net's current owner (hand off to someone else), an
+    admin of the net's own org, or a super admin. The new owner must
+    already be an approved member of the net's org — unlike Move a Net
+    (which only warns about this, since the admin may fix it in either
+    order), this is a deliberate single assignment so it's enforced
+    outright rather than left as a warning."""
+    net = db.query(Net).filter(Net.id == net_id).first()
+    if not net:
+        raise HTTPException(404, "Net not found")
+    if not current_user.is_admin:
+        if net.org_id != current_user.current_org_id:
+            raise HTTPException(404, "Net not found")
+        is_owner = net.owner_id == current_user.id
+        is_org_admin = db.query(OrganizationMembership).filter(
+            OrganizationMembership.org_id == net.org_id,
+            OrganizationMembership.user_id == current_user.id,
+            OrganizationMembership.role == "admin",
+            OrganizationMembership.approved == True,
+        ).first() is not None
+        if not (is_owner or is_org_admin):
+            raise HTTPException(403, "Not your net")
+
+    new_owner = db.query(User).filter(User.id == data.owner_id).first()
+    if not new_owner:
+        raise HTTPException(404, "User not found")
+    is_member = db.query(OrganizationMembership).filter(
+        OrganizationMembership.org_id == net.org_id,
+        OrganizationMembership.user_id == new_owner.id,
+        OrganizationMembership.approved == True,
+    ).first() is not None
+    if not is_member:
+        raise HTTPException(400, f"{new_owner.callsign} is not a member of this net's organization")
+
+    net.owner_id = new_owner.id
+    db.commit()
+    db.refresh(net)
     return _net_to_out(net, current_user, db)
 
 
@@ -3236,7 +3299,7 @@ def delete_checkin(checkin_id: int, current_user: User = Depends(get_current_use
 @app.get("/nets/{net_id}/evac-zones", response_model=list[EvacZoneOut])
 def list_evac_zones(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Return all known evacuation zones for this net, sorted by zone then callsign."""
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     return (
         db.query(EvacZone)
         .filter(EvacZone.net_id == net_id)
@@ -3254,7 +3317,7 @@ def update_evac_zone(
     db: Session = Depends(get_db),
 ):
     """Manually set or update the evac zone for a callsign on this net."""
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     callsign = callsign.upper().strip()
     existing = db.query(EvacZone).filter(EvacZone.net_id == net_id, EvacZone.callsign == callsign).first()
     if existing:
@@ -3276,7 +3339,7 @@ def delete_evac_zone(
     db: Session = Depends(get_db),
 ):
     """Remove a callsign's evac zone record."""
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     ez = db.query(EvacZone).filter(EvacZone.net_id == net_id, EvacZone.callsign == callsign.upper()).first()
     if ez:
         db.delete(ez)
@@ -3575,7 +3638,7 @@ def expected_stations(
     db: Session = Depends(get_db),
 ):
     """Return callsigns that checked in >= min_checkins times in the past N weeks for this net."""
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
 
     cutoff = datetime.now(timezone.utc) - timedelta(weeks=weeks)
 
@@ -3863,7 +3926,7 @@ def get_station_remark(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     remark = db.query(StationRemark).filter(
         StationRemark.net_id == net_id,
         StationRemark.callsign == callsign.upper(),
@@ -3879,7 +3942,7 @@ def upsert_station_remark(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     cs = callsign.upper().strip()
     remark_text = (body.remark or "").strip() or None
     preferred_name = (body.preferred_name or "").strip() or None
@@ -3923,7 +3986,7 @@ def delete_station_remark(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     remark = db.query(StationRemark).filter(
         StationRemark.net_id == net_id,
         StationRemark.callsign == callsign.upper(),
@@ -3947,7 +4010,7 @@ def net_history(
     """Return checkin counts per callsign across all sessions of a net.
     Also includes recent_checkins: count of checkins in the past 14 days.
     """
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
 
     rows = (
         db.query(
@@ -4648,14 +4711,14 @@ def _schedule_to_out(s: NetSchedule) -> ScheduleOut:
 
 @app.get("/nets/{net_id}/schedules", response_model=list[ScheduleOut])
 def list_schedules(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     schedules = db.query(NetSchedule).filter(NetSchedule.net_id == net_id).order_by(NetSchedule.day_of_week).all()
     return [_schedule_to_out(s) for s in schedules]
 
 
 @app.post("/nets/{net_id}/schedules", response_model=ScheduleOut, status_code=201)
 def create_schedule(net_id: int, data: ScheduleCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     sched = NetSchedule(
         net_id=net_id,
         day_of_week=data.day_of_week,
@@ -4674,7 +4737,7 @@ def delete_schedule(schedule_id: int, current_user: User = Depends(get_current_u
     sched = db.query(NetSchedule).filter(NetSchedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(404, "Schedule not found")
-    _get_owned_net(sched.net_id, current_user, db)
+    _get_editable_net(sched.net_id, current_user, db)
     db.delete(sched)
     db.commit()
 
@@ -4687,7 +4750,7 @@ def upcoming_slots(
     db: Session = Depends(get_db),
 ):
     """Return the next `weeks` scheduled dates across all schedules for a net, with signup info."""
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     schedules = db.query(NetSchedule).filter(NetSchedule.net_id == net_id).all()
 
     # Gather all upcoming dates across all schedules
@@ -4851,7 +4914,7 @@ def get_dmr_config(net_id: int, current_user: User = Depends(get_current_user), 
 
 @app.put("/nets/{net_id}/dmr/config", response_model=DmrConfigOut)
 def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_owned_net(net_id, current_user, db)
+    net = _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
     cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
     if cfg:
@@ -4877,7 +4940,7 @@ def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Dep
 
 @app.delete("/nets/{net_id}/dmr/config", status_code=204)
 def delete_dmr_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_owned_net(net_id, current_user, db)
+    net = _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
     cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
     if cfg:
@@ -5001,7 +5064,7 @@ def dmr_cache(
 
 @app.post("/nets/{net_id}/signups", response_model=SignupOut, status_code=201)
 def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_owned_net(net_id, current_user, db)
+    net = _get_editable_net(net_id, current_user, db)
 
     # Verify the schedule belongs to this net
     sched = db.query(NetSchedule).filter(
@@ -5152,7 +5215,7 @@ def delete_signup(signup_id: int, current_user: User = Depends(get_current_user)
 
 @app.get("/nets/{net_id}/signups", response_model=list[SignupOut])
 def list_signups(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_owned_net(net_id, current_user, db)
+    _get_editable_net(net_id, current_user, db)
     signups = (
         db.query(NetControlSignup)
         .filter(NetControlSignup.net_id == net_id)
@@ -5171,9 +5234,12 @@ def get_net_shares(net_id: int, current_user: User = Depends(get_current_user), 
     """Return the current sharing config for a net (owner or admin only)."""
     _get_owned_net(net_id, current_user, db)
     shares = db.query(NetShare).filter(NetShare.net_id == net_id).all()
+    all_share = next((s for s in shares if s.user_id is None), None)
     return {
-        "share_with_all": any(s.user_id is None for s in shares),
+        "share_with_all": all_share is not None,
+        "can_edit_all": bool(all_share and all_share.can_edit),
         "user_ids": [s.user_id for s in shares if s.user_id is not None],
+        "editor_user_ids": [s.user_id for s in shares if s.user_id is not None and s.can_edit],
     }
 
 
@@ -5184,10 +5250,11 @@ def update_net_shares(net_id: int, data: NetShareUpdate, current_user: User = De
     # Wipe existing shares for this net
     db.query(NetShare).filter(NetShare.net_id == net_id).delete()
     if data.share_with_all:
-        db.add(NetShare(net_id=net_id, user_id=None))
+        db.add(NetShare(net_id=net_id, user_id=None, can_edit=data.can_edit_all))
     else:
+        editor_ids = set(data.editor_user_ids)
         for uid in data.user_ids:
-            db.add(NetShare(net_id=net_id, user_id=uid))
+            db.add(NetShare(net_id=net_id, user_id=uid, can_edit=uid in editor_ids))
     db.commit()
 
 
@@ -5199,10 +5266,15 @@ def _net_to_out(net: Net, user: User, db: Session) -> NetOut:
     """Build a NetOut with sharing metadata attached."""
     shares = db.query(NetShare).filter(NetShare.net_id == net.id).all()
     owner = db.query(User).filter(User.id == net.owner_id).first()
+    all_share = next((s for s in shares if s.user_id is None), None)
     out = NetOut.model_validate(net)
     out.is_owner = (net.owner_id == user.id or user.is_admin)
-    out.shared_with_all = any(s.user_id is None for s in shares)
+    out.shared_with_all = all_share is not None
+    out.can_edit_all = bool(all_share and all_share.can_edit)
     out.shared_user_ids = [s.user_id for s in shares if s.user_id is not None]
+    out.editor_user_ids = [s.user_id for s in shares if s.user_id is not None and s.can_edit]
+    my_share = next((s for s in shares if s.user_id == user.id), None)
+    out.can_edit = out.is_owner or out.can_edit_all or bool(my_share and my_share.can_edit)
     out.owner_callsign = owner.callsign if owner else None
     return out
 
@@ -5211,7 +5283,11 @@ def _get_owned_net(net_id: int, user: User, db: Session) -> Net:
     """Fetch a net; require owner or admin. Non-admins are further scoped to
     their current org (issue #1) — a net in a different org 404s rather than
     403s, so its existence isn't leaked across tenants. Super admins bypass
-    org scoping entirely, same as they already bypass ownership."""
+    org scoping entirely, same as they already bypass ownership. Deliberately
+    NOT satisfied by an edit-rights share (see _get_editable_net below) —
+    reserved for destructive/sensitive actions: deleting the net, and
+    managing sharing itself (an editor granting themselves or others further
+    access would be a privilege-escalation chain)."""
     net = db.query(Net).filter(Net.id == net_id).first()
     if not net:
         raise HTTPException(404, "Net not found")
@@ -5222,6 +5298,28 @@ def _get_owned_net(net_id: int, user: User, db: Session) -> Net:
     if net.owner_id != user.id:
         raise HTTPException(403, "Not your net")
     return net
+
+
+def _get_editable_net(net_id: int, user: User, db: Session) -> Net:
+    """Like _get_owned_net, but also allows a user explicitly granted edit
+    rights via sharing (NetShare.can_edit) — issue follow-up: previously
+    sharing only ever granted view/check-in access, with no way to let a
+    trusted co-operator help maintain a net's schedule, DMR config, evac
+    zones, etc. without handing them full ownership. Used for exactly that
+    kind of net-configuration endpoint; delete_net and the sharing endpoints
+    themselves stay on the stricter _get_owned_net."""
+    try:
+        return _get_owned_net(net_id, user, db)
+    except HTTPException as e:
+        if e.status_code == 403:
+            share = db.query(NetShare).filter(
+                NetShare.net_id == net_id,
+                NetShare.can_edit == True,
+                or_(NetShare.user_id == user.id, NetShare.user_id == None),
+            ).first()
+            if share:
+                return db.query(Net).filter(Net.id == net_id).first()
+        raise
 
 
 def _get_net_for_user(net_id: int, user: User, db: Session) -> Net:

@@ -138,6 +138,26 @@
           <div class="empty" id="admin-users-empty" style="display:none"><p>No users found.</p></div>
         </div>
 
+        <!-- Nets in your org (org-admin-only view -- super admins have the
+             equivalent, any-org version in the Reassign tab instead) -->
+        <div class="card" id="org-nets-card" style="display:none;margin-top:16px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">NETS IN YOUR ORGANIZATION</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+            Reassign a net's owner within your organization — useful when an operator steps down and someone else takes over their net.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Net</label>
+              <select class="form-control" id="org-net-select"></select>
+            </div>
+            <div class="form-group">
+              <label>New Owner</label>
+              <select class="form-control" id="org-net-owner-select"></select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="submitOrgNetOwner(this)">Change Owner</button>
+        </div>
+
       </div><!-- /admin-panel-operators -->
 
       <!-- ── Branding panel ────────────────────────────────────── -->
@@ -325,17 +345,39 @@
           </div>
           <button class="btn btn-primary btn-sm" onclick="submitReassignNet(this)">Move Net</button>
         </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">REASSIGN NET OWNER</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+            Changes who owns a net. The new owner must already be an approved member of the net's organization.
+          </p>
+          <div class="form-group">
+            <label>Filter By Current Organization</label>
+            <select class="form-control" id="reassign-owner-net-org-filter" onchange="filterReassignOwnerNets()"></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Net</label>
+              <select class="form-control" id="reassign-owner-net-select" onchange="onReassignOwnerNetChange()"></select>
+            </div>
+            <div class="form-group">
+              <label>New Owner</label>
+              <select class="form-control" id="reassign-owner-user-select"></select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="submitReassignNetOwner(this)">Change Owner</button>
+        </div>
       </div><!-- /admin-panel-reassign -->
 
     </div><!-- /content -->
   </main>
 </div>
-<script src="/static/js/state.js?v=9"></script>
+<script src="/static/js/state.js?v=10"></script>
 <script src="/static/js/utils.js?v=8"></script>
 <script src="/static/js/auth.js?v=15"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/branding.js?v=9"></script>
-<script src="/static/js/admin.js?v=17"></script>
+<script src="/static/js/admin.js?v=18"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {
@@ -381,7 +423,9 @@
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
       document.querySelector('#content h2.section-title').textContent = 'Organization Admin';
+      document.getElementById('org-nets-card').style.display = '';
       loadOrgOperators();
+      loadOrgNets();
     } else {
       loadAdminUsers();
       loadAdminBranding();

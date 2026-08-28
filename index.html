@@ -404,13 +404,18 @@
           <!-- Sharing section — only shown when editing an existing net you own -->
           <div id="net-sharing-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
             <div style="font-size:13px;font-weight:700;color:var(--lc-blue);margin-bottom:10px">🔗 Sharing</div>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:6px">
               <input type="checkbox" id="net-share-all" style="accent-color:var(--lc-blue);width:16px;height:16px"
                 onchange="onShareAllChanged()" />
               Share with all registered users
             </label>
+            <label id="net-share-all-edit-wrap" style="display:none;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-muted);margin:0 0 10px 24px">
+              <input type="checkbox" id="net-share-all-edit" style="accent-color:var(--lc-orange)"
+                onchange="onShareAllEditChanged()" />
+              Everyone can also edit this net, not just view/check in
+            </label>
             <div id="net-share-users" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--lc-border);border-radius:6px;padding:8px 10px">
-              <div class="text-muted" style="font-size:12px;margin-bottom:6px">Select individual users:</div>
+              <div class="text-muted" style="font-size:12px;margin-bottom:6px">Select individual users — check "Can edit" to also grant them edit rights, not just view/check-in access:</div>
               <div id="net-share-user-list"></div>
             </div>
             <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="saveSharing()">Save Sharing</button>
@@ -1125,7 +1130,7 @@
   </main>
 </div><!-- /app -->
 
-  <script src="/static/js/state.js?v=22"></script>
+  <script src="/static/js/state.js?v=23"></script>
   <script src="/static/js/utils.js?v=21"></script>
   <script src="/static/js/offline-queue.js?v=2"></script>
   <script src="/static/js/auth.js?v=28"></script>
@@ -1133,11 +1138,11 @@
   <script src="/static/js/views.js?v=19"></script>
   <script src="/static/js/branding.js?v=22"></script>
   <script src="/static/js/report.js?v=20"></script>
-  <script src="/static/js/nets.js?v=26"></script>
+  <script src="/static/js/nets.js?v=27"></script>
   <script src="/static/js/sessions.js?v=27"></script>
   <script src="/static/js/checkins.js?v=31"></script>
   <script src="/static/js/history.js?v=20"></script>
-  <script src="/static/js/admin.js?v=29"></script>
+  <script src="/static/js/admin.js?v=30"></script>
   <script src="/static/js/schedules.js?v=21"></script>
   <script src="/static/js/tokens.js?v=22"></script>
   <script src="/static/js/dmr.js?v=20"></script>

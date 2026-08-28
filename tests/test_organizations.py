@@ -576,6 +576,120 @@ class TestCrossOrgIsolation:
         assert any(n["id"] == net_a["id"] for n in all_nets)
 
 
+class TestOrgNetOwnership:
+    """GET /orgs/{id}/nets and PATCH /nets/{id}/owner -- org admins can now
+    see and reassign ownership of every net in their own org, not just ones
+    they personally own or are shared on, without needing a super admin
+    (issue follow-up)."""
+
+    def test_org_admin_sees_every_net_in_their_org_via_orgs_nets(self, client):
+        super_token = _bootstrap_super_admin(client)
+        admin_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(admin_token)).json()["current_org_id"]
+
+        # A different member of the same org creates their OWN net -- the
+        # org admin doesn't own it and isn't shared on it.
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "Member", "email": "mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(admin_token))
+        member_token = login(client, "W2MEM")
+        member_net = client.post("/nets", json={"name": "Member's Net", "is_ares": False}, headers=auth(member_token)).json()
+
+        # It doesn't show up in the org admin's own /nets (they don't own or
+        # share it)...
+        own_nets = client.get("/nets", headers=auth(admin_token)).json()
+        assert member_net["id"] not in [n["id"] for n in own_nets]
+
+        # ...but it DOES show up via the org-scoped oversight endpoint.
+        org_nets = client.get(f"/orgs/{org_id}/nets", headers=auth(admin_token)).json()
+        assert member_net["id"] in [n["id"] for n in org_nets]
+
+    def test_non_admin_member_cannot_list_org_nets(self, client):
+        super_token = _bootstrap_super_admin(client)
+        admin_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(admin_token)).json()["current_org_id"]
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "Member", "email": "mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(admin_token))
+        member_token = login(client, "W2MEM")
+
+        resp = client.get(f"/orgs/{org_id}/nets", headers=auth(member_token))
+        assert resp.status_code == 403
+
+    def test_org_admin_can_reassign_a_net_they_dont_own(self, client):
+        super_token = _bootstrap_super_admin(client)
+        admin_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(admin_token)).json()["current_org_id"]
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "Member", "email": "mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(admin_token))
+        member_token = login(client, "W2MEM")
+        net = client.post("/nets", json={"name": "Orphaned Net", "is_ares": False}, headers=auth(member_token)).json()
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W3NEW", "name": "New Owner", "email": "w3new@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        new_owner_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{new_owner_id}/approve", headers=auth(admin_token))
+
+        resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": new_owner_id}, headers=auth(admin_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["owner_id"] == new_owner_id
+
+    def test_cannot_transfer_to_a_user_outside_the_nets_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        admin_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        _org_owner(client, super_token, "W1BORG", "orgb", "Org B")
+        net = client.post("/nets", json={"name": "Org A Net", "is_ares": False}, headers=auth(admin_token)).json()
+
+        users = client.get("/admin/users", headers=auth(super_token)).json()
+        org_b_owner_id = next(u["id"] for u in users if u["callsign"] == "W1BORG")
+
+        resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": org_b_owner_id}, headers=auth(admin_token))
+        assert resp.status_code == 400
+
+    def test_org_admin_cannot_reassign_a_net_in_a_different_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        admin_a_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        admin_b_token = _org_owner(client, super_token, "W1BORG", "orgb", "Org B")
+        net_b = client.post("/nets", json={"name": "Org B Net", "is_ares": False}, headers=auth(admin_b_token)).json()
+
+        resp = client.get("/admin/users", headers=auth(super_token)).json()
+        a_owner_id = next(u["id"] for u in resp if u["callsign"] == "W1AORG")
+
+        transfer = client.patch(f"/nets/{net_b['id']}/owner", json={"owner_id": a_owner_id}, headers=auth(admin_a_token))
+        assert transfer.status_code in (403, 404)
+
+    def test_super_admin_can_reassign_any_net_to_any_org_member(self, client):
+        super_token = _bootstrap_super_admin(client)
+        admin_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(admin_token)).json()["current_org_id"]
+        net = client.post("/nets", json={"name": "Org A Net", "is_ares": False}, headers=auth(admin_token)).json()
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "Member", "email": "mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(admin_token))
+
+        resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": member_id}, headers=auth(super_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["owner_id"] == member_id
+
+
 class TestBackwardCompatDefaultOrg:
     """A single-tenant deployment that never sends org fields should behave
     exactly as it did before this feature existed."""

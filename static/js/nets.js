@@ -19,9 +19,10 @@ function renderNets() {
     const gmrsBadge = n.net_type === 'gmrs'
       ? ' <span style="font-size:11px;background:#22c55e;color:#000;border-radius:10px;padding:2px 8px;font-weight:700;vertical-align:middle">GMRS</span>'
       : '';
-    // Shared badge — shown for nets not owned by current user
+    // Shared badge — shown for nets not owned by current user; "Editor"
+    // instead of "Shared" when this viewer's own share grants edit rights.
     const sharedBadge = !n.is_owner
-      ? ` <span style="font-size:11px;background:var(--lc-blue);color:#000;border-radius:10px;padding:2px 8px;font-weight:700;vertical-align:middle">Shared</span>`
+      ? ` <span style="font-size:11px;background:var(--lc-blue);color:#000;border-radius:10px;padding:2px 8px;font-weight:700;vertical-align:middle">${n.can_edit ? 'Editor' : 'Shared'}</span>`
       : '';
     // Share status line shown under the net name for owners
     let shareInfo = '';
@@ -34,10 +35,11 @@ function renderNets() {
     } else if (n.owner_callsign) {
       shareInfo = `<div style="font-size:11px;color:var(--lc-muted);margin-top:2px">Owner: ${esc(n.owner_callsign)}</div>`;
     }
-    const editDeleteBtns = n.is_owner
-      ? `<button class="btn btn-ghost btn-sm" onclick="editNet(${n.id})">Edit</button>
-         <button class="btn btn-danger btn-sm" onclick="deleteNet(${n.id})">Delete</button>`
-      : '';
+    // Edit is available to the owner, an admin, or an editor-rights share;
+    // Delete stays owner/admin-only regardless (destructive, see
+    // _get_owned_net vs _get_editable_net in main.py).
+    const editDeleteBtns = (n.can_edit ? `<button class="btn btn-ghost btn-sm" onclick="editNet(${n.id})">Edit</button>` : '')
+      + (n.is_owner ? `<button class="btn btn-danger btn-sm" onclick="deleteNet(${n.id})">Delete</button>` : '');
     return `
     <div class="card" style="max-width:600px">
       <div class="card-header">
@@ -241,7 +243,7 @@ function cancelNetForm() {
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
   editNetId = null;
-  shareState = { share_with_all: false, user_ids: [] };
+  shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [] };
   switchNetFormTab('details');
 }
 
@@ -276,13 +278,16 @@ async function editNet(id) {
   onNetTypeChange();
   document.getElementById('net-form-card').style.display = '';
   switchNetFormTab('details');
-  // Load sharing and DMR config if owner (DMR section only for ham nets)
-  if (n.is_owner) {
-    document.getElementById('net-sharing-section').style.display = '';
-    await loadSharesForNet(id);
-    if (netType === 'ham') await loadDmrConfig(id);
+  // Sharing management stays owner/admin-only (an editor granting further
+  // access would be a privilege-escalation chain -- see _get_owned_net vs
+  // _get_editable_net in main.py). DMR config is available to anyone with
+  // edit rights, including an editor-rights share, same as the rest of
+  // this form (ham nets only).
+  document.getElementById('net-sharing-section').style.display = n.is_owner ? '' : 'none';
+  if (n.is_owner) await loadSharesForNet(id);
+  if (n.can_edit && netType === 'ham') {
+    await loadDmrConfig(id);
   } else {
-    document.getElementById('net-sharing-section').style.display = 'none';
     document.getElementById('net-dmr-section').style.display = 'none';
   }
 }
@@ -318,10 +323,7 @@ async function saveNet() {
       // only saved the net's other fields, silently dropping any sharing change
       // that hadn't separately been saved.
       if (document.getElementById('net-sharing-section').style.display !== 'none') {
-        await apiFetch(`/nets/${editNetId}/shares`, {
-          method: 'PUT',
-          body: JSON.stringify({ share_with_all: shareState.share_with_all, user_ids: shareState.user_ids }),
-        });
+        await apiFetch(`/nets/${editNetId}/shares`, { method: 'PUT', body: JSON.stringify(_shareStatePayload()) });
       }
       toast('Net updated');
     } else {
@@ -345,9 +347,13 @@ async function loadSharesForNet(netId) {
     allUsers = users;
     shareState = {
       share_with_all: shares.share_with_all,
+      can_edit_all: shares.can_edit_all || false,
       user_ids: shares.user_ids || [],
+      editor_user_ids: shares.editor_user_ids || [],
     };
     document.getElementById('net-share-all').checked = shareState.share_with_all;
+    document.getElementById('net-share-all-edit').checked = shareState.can_edit_all;
+    document.getElementById('net-share-all-edit-wrap').style.display = shareState.share_with_all ? '' : 'none';
     renderShareUserList();
     document.getElementById('net-share-users').style.display = shareState.share_with_all ? 'none' : '';
   } catch (e) {
@@ -361,19 +367,33 @@ function renderShareUserList() {
     el.innerHTML = '<div class="text-muted" style="font-size:12px">No other registered users found.</div>';
     return;
   }
-  el.innerHTML = allUsers.map(u => `
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;padding:3px 0">
-      <input type="checkbox" data-uid="${u.id}" style="accent-color:var(--lc-blue)"
-        ${shareState.user_ids.includes(u.id) ? 'checked' : ''}
-        onchange="toggleShareUser(${u.id}, this.checked)" />
-      ${esc(u.callsign)} — ${esc(u.name)}
-    </label>
-  `).join('');
+  el.innerHTML = allUsers.map(u => {
+    const shared = shareState.user_ids.includes(u.id);
+    const canEdit = shareState.editor_user_ids.includes(u.id);
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:3px 0;font-size:13px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0">
+        <input type="checkbox" data-uid="${u.id}" style="accent-color:var(--lc-blue);flex-shrink:0"
+          ${shared ? 'checked' : ''} onchange="toggleShareUser(${u.id}, this.checked)" />
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.callsign)} — ${esc(u.name)}</span>
+      </label>
+      <label data-edit-row="${u.id}" style="display:${shared ? 'flex' : 'none'};align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--text-muted);flex-shrink:0">
+        <input type="checkbox" style="accent-color:var(--lc-orange)"
+          ${canEdit ? 'checked' : ''} onchange="toggleShareUserEdit(${u.id}, this.checked)" />
+        Can edit
+      </label>
+    </div>`;
+  }).join('');
 }
 
 function onShareAllChanged() {
   shareState.share_with_all = document.getElementById('net-share-all').checked;
   document.getElementById('net-share-users').style.display = shareState.share_with_all ? 'none' : '';
+  document.getElementById('net-share-all-edit-wrap').style.display = shareState.share_with_all ? '' : 'none';
+}
+
+function onShareAllEditChanged() {
+  shareState.can_edit_all = document.getElementById('net-share-all-edit').checked;
 }
 
 function toggleShareUser(uid, checked) {
@@ -381,23 +401,46 @@ function toggleShareUser(uid, checked) {
     if (!shareState.user_ids.includes(uid)) shareState.user_ids.push(uid);
   } else {
     shareState.user_ids = shareState.user_ids.filter(id => id !== uid);
+    // Losing sharing loses edit rights too -- can't edit a net you can't see.
+    shareState.editor_user_ids = shareState.editor_user_ids.filter(id => id !== uid);
   }
+  const row = document.querySelector(`[data-edit-row="${uid}"]`);
+  if (row) {
+    row.style.display = checked ? 'flex' : 'none';
+    if (!checked) row.querySelector('input').checked = false;
+  }
+}
+
+function toggleShareUserEdit(uid, checked) {
+  if (checked) {
+    if (!shareState.editor_user_ids.includes(uid)) shareState.editor_user_ids.push(uid);
+  } else {
+    shareState.editor_user_ids = shareState.editor_user_ids.filter(id => id !== uid);
+  }
+}
+
+function _shareStatePayload() {
+  return {
+    share_with_all: shareState.share_with_all,
+    can_edit_all: shareState.can_edit_all,
+    user_ids: shareState.user_ids,
+    editor_user_ids: shareState.editor_user_ids,
+  };
 }
 
 async function saveSharing() {
   if (!editNetId) return;
   try {
-    await apiFetch(`/nets/${editNetId}/shares`, {
-      method: 'PUT',
-      body: JSON.stringify({ share_with_all: shareState.share_with_all, user_ids: shareState.user_ids }),
-    });
+    await apiFetch(`/nets/${editNetId}/shares`, { method: 'PUT', body: JSON.stringify(_shareStatePayload()) });
     toast('Sharing saved');
     await loadNets();
     // Re-render to update share info on card without closing form
     const n = nets.find(x => x.id === editNetId);
     if (n) {
       shareState.share_with_all = n.shared_with_all;
+      shareState.can_edit_all = n.can_edit_all;
       shareState.user_ids = n.shared_user_ids || [];
+      shareState.editor_user_ids = n.editor_user_ids || [];
     }
   } catch (e) { toast(e.message, 'error'); }
 }

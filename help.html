@@ -63,6 +63,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-28 — Net Ownership Transfer &amp; Editor-Rights Sharing (v2.11.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>A net's owner can now be <strong>reassigned</strong> — previously the only way to change who controls a net was deleting and recreating it. The current owner, an admin of the net's own organization, or a super admin can do it. Org admins get a new <strong>Nets in Your Organization</strong> card (Organization Admin panel); super admins get a matching <strong>Reassign Net Owner</strong> card in Admin → Reassign. The new owner must already be an approved member of the net's org.</li>
+              <li>Sharing a net can now also grant <strong>edit rights</strong>, not just view/check-in access — check "Can edit" next to a shared user (or "Everyone can also edit" for share-with-all) to let a trusted co-operator help maintain the net's details, schedule, DMR config, and evac zones. Deleting the net and managing sharing itself stay owner/admin-only regardless.</li>
+              <li>Database migration: one new column on <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">net_shares</code>.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-27 — Org Admins Can Promote Other Admins (v2.10.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>An org admin could approve or reject a new member, but had no way to grant admin rights to someone already in the organization — a single-admin org had no way to add a second one without a super admin's help.</li>
