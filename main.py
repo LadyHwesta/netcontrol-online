@@ -2405,7 +2405,7 @@ def list_nets(current_user: User = Depends(get_current_user), db: Session = Depe
         shared_net_ids = (
             db.query(NetShare.net_id)
             .filter(or_(NetShare.user_id == current_user.id, NetShare.user_id == None))
-            .subquery()
+            .scalar_subquery()
         )
         nets = (
             db.query(Net)
