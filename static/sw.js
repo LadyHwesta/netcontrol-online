@@ -21,7 +21,7 @@
 // entry just means offline mode serves an older shell, not a broken one,
 // but it's worth keeping current.
 
-const CACHE_NAME = 'netcontrol-online-shell-v39';
+const CACHE_NAME = 'netcontrol-online-shell-v40';
 
 const PRECACHE_URLS = [
   '/',
@@ -37,7 +37,7 @@ const PRECACHE_URLS = [
   '/static/js/sessions.js?v=27',
   '/static/js/checkins.js?v=31',
   '/static/js/history.js?v=20',
-  '/static/js/admin.js?v=28',
+  '/static/js/admin.js?v=29',
   '/static/js/schedules.js?v=21',
   '/static/js/tokens.js?v=22',
   '/static/js/dmr.js?v=20',

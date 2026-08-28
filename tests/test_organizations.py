@@ -329,6 +329,118 @@ class TestOrgEditing:
         assert resp.json()["name"] == "Fixed by Super Admin"
 
 
+class TestOrgMemberRoles:
+    """PATCH /orgs/{id}/members/{user_id}/role — previously an org admin
+    could approve or reject a new member but had no way to grant admin to
+    someone already in the org, so a single-admin org had no way to add a
+    second one without a super admin's help (issue follow-up)."""
+
+    def _approved_member(self, client, org_admin_token, org_id, callsign):
+        """Registers a user joining org_id, approves them (as a plain
+        member), and returns their user_id."""
+        resp = client.post("/auth/register", json={
+            "callsign": callsign, "name": callsign, "email": f"{callsign.lower()}@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        assert resp.status_code == 201, resp.text
+        user_id = resp.json()["id"]
+        approve = client.patch(f"/orgs/{org_id}/members/{user_id}/approve", headers=auth(org_admin_token))
+        assert approve.status_code == 204, approve.text
+        return user_id
+
+    def test_org_admin_can_promote_a_member_to_admin(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        member_id = self._approved_member(client, owner_token, org_id, "W2MEM")
+
+        resp = client.patch(f"/orgs/{org_id}/members/{member_id}/role", json={"role": "admin"}, headers=auth(owner_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["role"] == "admin"
+
+        members = client.get(f"/orgs/{org_id}/members", headers=auth(owner_token)).json()
+        assert next(m for m in members if m["user_id"] == member_id)["role"] == "admin"
+
+        # The newly-promoted admin can now act as one themselves
+        new_admin_token = login(client, "W2MEM")
+        another = self._approved_member(client, owner_token, org_id, "W3MEM")
+        promote = client.patch(f"/orgs/{org_id}/members/{another}/role", json={"role": "admin"}, headers=auth(new_admin_token))
+        assert promote.status_code == 200, promote.text
+
+    def test_org_admin_can_demote_an_admin_to_member(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        member_id = self._approved_member(client, owner_token, org_id, "W2MEM")
+        client.patch(f"/orgs/{org_id}/members/{member_id}/role", json={"role": "admin"}, headers=auth(owner_token))
+
+        resp = client.patch(f"/orgs/{org_id}/members/{member_id}/role", json={"role": "member"}, headers=auth(owner_token))
+        assert resp.status_code == 200
+        assert resp.json()["role"] == "member"
+
+    def test_cannot_change_own_role(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        owner_id = client.get("/auth/me", headers=auth(owner_token)).json()["id"]
+
+        resp = client.patch(f"/orgs/{org_id}/members/{owner_id}/role", json={"role": "member"}, headers=auth(owner_token))
+        assert resp.status_code == 400
+
+    def test_cannot_change_role_of_pending_member(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2PEND", "name": "Pending", "email": "pending@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        pending_id = resp.json()["id"]
+
+        role_resp = client.patch(f"/orgs/{org_id}/members/{pending_id}/role", json={"role": "admin"}, headers=auth(owner_token))
+        assert role_resp.status_code == 404
+
+    def test_non_admin_member_cannot_change_roles(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        member_id = self._approved_member(client, owner_token, org_id, "W2MEM")
+        other_id = self._approved_member(client, owner_token, org_id, "W3MEM")
+        member_token = login(client, "W2MEM")
+
+        resp = client.patch(f"/orgs/{org_id}/members/{other_id}/role", json={"role": "admin"}, headers=auth(member_token))
+        assert resp.status_code == 403
+
+    def test_org_admin_cannot_change_role_in_a_different_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        token_a = _org_owner(client, super_token, "W1AORG", "org-a", "Org A")
+        token_b = _org_owner(client, super_token, "W1BORG", "org-b", "Org B")
+        org_b_id = client.get("/auth/me", headers=auth(token_b)).json()["current_org_id"]
+        b_id = client.get("/auth/me", headers=auth(token_b)).json()["id"]
+
+        resp = client.patch(f"/orgs/{org_b_id}/members/{b_id}/role", json={"role": "member"}, headers=auth(token_a))
+        assert resp.status_code == 403
+
+    def test_super_admin_can_change_role_in_any_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        member_id = self._approved_member(client, owner_token, org_id, "W2MEM")
+
+        resp = client.patch(f"/orgs/{org_id}/members/{member_id}/role", json={"role": "admin"}, headers=auth(super_token))
+        assert resp.status_code == 200
+        assert resp.json()["role"] == "admin"
+
+    def test_unknown_member_404(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+
+        resp = client.patch(f"/orgs/{org_id}/members/999999/role", json={"role": "admin"}, headers=auth(owner_token))
+        assert resp.status_code == 404
+
+
 class TestOrgSwitching:
     def test_orgs_mine_lists_approved_orgs(self, client):
         register(client, "W1OWN", "Owner", "owner@example.com")

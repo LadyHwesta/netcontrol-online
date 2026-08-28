@@ -63,6 +63,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-27 — Org Admins Can Promote Other Admins (v2.10.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>An org admin could approve or reject a new member, but had no way to grant admin rights to someone already in the organization — a single-admin org had no way to add a second one without a super admin's help.</li>
+              <li>The Operators table in Organization Admin now has a <strong>Make Admin</strong> / <strong>Remove Admin</strong> action for every other member. You can't change your own role — that's still someone else's call, so an org can't accidentally end up with zero admins.</li>
+              <li>No database migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-27 — Fix Sharing Silently Not Saving (v2.9.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Editing a net's sharing had its own small <strong>Save Sharing</strong> button, separate from the main <strong>Save</strong> button — checking a share box and clicking the obvious main Save (not the smaller one) silently discarded the sharing change entirely, with no warning.</li>

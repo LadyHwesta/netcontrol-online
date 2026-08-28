@@ -428,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.9.1", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.10.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -1754,6 +1754,41 @@ def reject_org_member(org_id: int, user_id: int, admin: User = Depends(require_o
         raise HTTPException(400, "Cannot reject an already-approved membership — remove them from the org instead")
     db.delete(membership)
     db.commit()
+
+
+class OrgMemberRoleUpdate(BaseModel):
+    role: Literal["member", "admin"]
+
+
+@app.patch("/orgs/{org_id}/members/{user_id}/role", response_model=OrgMemberOut)
+def update_org_member_role(
+    org_id: int, user_id: int, data: OrgMemberRoleUpdate,
+    admin: User = Depends(require_org_admin), db: Session = Depends(get_db),
+):
+    """Promote/demote an already-approved member's role within this org —
+    previously an org admin could approve or reject a new member but had no
+    way to grant admin to someone already in the org, so a single-admin org
+    had no way to add a second one without a super admin's help. Changing
+    your own role is blocked (mirrors the "can't act on your own account"
+    pattern used elsewhere) so an org can't end up with zero admins via a
+    single self-demote."""
+    if user_id == admin.id:
+        raise HTTPException(400, "Cannot change your own role")
+    membership = db.query(OrganizationMembership).filter(
+        OrganizationMembership.org_id == org_id,
+        OrganizationMembership.user_id == user_id,
+        OrganizationMembership.approved == True,
+    ).first()
+    if not membership:
+        raise HTTPException(404, "Membership not found")
+    membership.role = data.role
+    db.commit()
+
+    user = db.query(User).filter(User.id == user_id).first()
+    return OrgMemberOut(
+        user_id=user.id, callsign=user.callsign, name=user.name, email=user.email,
+        role=membership.role, approved=membership.approved, requested_at=membership.created_at,
+    )
 
 
 class OrgUserCreate(BaseModel):

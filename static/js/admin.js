@@ -305,7 +305,18 @@ async function loadOrgOperators() {
     return;
   }
   empty.style.display = 'none';
-  tbody.innerHTML = members.map(m => `<tr>
+  tbody.innerHTML = members.map(m => {
+    const isMe = m.user_id === currentUser.id;
+    // Every other org admin action here is org-scoped already (approve/
+    // reject); this one crosses into "can this member manage the org too" --
+    // let an org admin add/remove peers, but not touch their own role, so a
+    // single self-demote can't leave the org with zero admins.
+    const roleAction = isMe
+      ? '<span class="text-muted" style="font-size:11px">you</span>'
+      : (m.role === 'admin'
+          ? `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'member', '${esc(m.callsign)}')">Remove Admin</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'admin', '${esc(m.callsign)}')">Make Admin</button>`);
+    return `<tr>
     <td><span class="callsign">${esc(m.callsign)}</span></td>
     <td>${esc(m.name)}</td>
     <td class="text-muted" style="font-size:12px">${esc(m.email)}</td>
@@ -313,8 +324,9 @@ async function loadOrgOperators() {
     <td><span class="badge badge-green">Active</span></td>
     <td class="text-muted" style="font-size:11px;text-align:center">—</td>
     <td class="text-muted" style="font-size:12px">${fmt(m.requested_at)}</td>
-    <td><span class="text-muted" style="font-size:11px">—</span></td>
-  </tr>`).join('');
+    <td>${roleAction}</td>
+  </tr>`;
+  }).join('');
 }
 
 async function orgApproveMember(orgId, userId, btn) {
@@ -334,6 +346,16 @@ async function orgRejectMember(orgId, userId, callsign) {
   try {
     await apiFetch(`/orgs/${orgId}/members/${userId}/reject`, { method: 'POST' });
     toast('Request rejected');
+    loadOrgOperators();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function orgSetMemberRole(orgId, userId, role, callsign) {
+  const msg = role === 'admin' ? `Grant org admin to ${callsign}?` : `Remove org admin from ${callsign}?`;
+  if (!confirm(msg)) return;
+  try {
+    await apiFetch(`/orgs/${orgId}/members/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) });
+    toast(role === 'admin' ? `${callsign} is now an org admin` : `${callsign} is now a member`, 'success');
     loadOrgOperators();
   } catch (e) { toast(e.message, 'error'); }
 }
