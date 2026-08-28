@@ -63,6 +63,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-27 — Fix Sharing Silently Not Saving (v2.9.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Editing a net's sharing had its own small <strong>Save Sharing</strong> button, separate from the main <strong>Save</strong> button — checking a share box and clicking the obvious main Save (not the smaller one) silently discarded the sharing change entirely, with no warning.</li>
+              <li>Fixed: the main Save button now saves sharing too. The separate Save Sharing button is still there if you want to update just sharing without touching anything else.</li>
+              <li>No database migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-27 — Import Check-ins from a CSV (v2.9.0, issue #26)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <strong>⬆ Import CSV</strong> button next to a session's CSV export — bulk-adds check-ins from an uploaded CSV instead of typing each one in by hand. Built mainly for <strong>Log a Net That Already Happened</strong>, where re-entering a long paper roster is tedious, but works for any session that can still take check-ins.</li>

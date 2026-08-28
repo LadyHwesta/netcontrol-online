@@ -312,6 +312,17 @@ async function saveNet() {
   try {
     if (editNetId) {
       await apiFetch(`/nets/${editNetId}`, { method: 'PUT', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, band, mode, ctcss_tone, region, state, website }) });
+      // Sharing also has its own "Save Sharing" button below, but folding it into
+      // this main save too means checking a share box and clicking the obvious
+      // "save the form" button actually persists it -- previously that button
+      // only saved the net's other fields, silently dropping any sharing change
+      // that hadn't separately been saved.
+      if (document.getElementById('net-sharing-section').style.display !== 'none') {
+        await apiFetch(`/nets/${editNetId}/shares`, {
+          method: 'PUT',
+          body: JSON.stringify({ share_with_all: shareState.share_with_all, user_ids: shareState.user_ids }),
+        });
+      }
       toast('Net updated');
     } else {
       await apiFetch('/nets', { method: 'POST', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, band, mode, ctcss_tone, region, state, website }) });
