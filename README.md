@@ -16,6 +16,8 @@ A public demo is available at **[demo.netcontrol.online](https://demo.netcontrol
 
 > The demo account has full admin access. Any nets, sessions, or check-ins you create will be wiped on the next reset.
 
+Setting up your own instance? See **[QUICKSTART.md](QUICKSTART.md)** for the fast path — running locally and taking your first check-in in a few minutes, including how to get a Net Repository API token. This README is the full reference.
+
 ## Features
 
 - **Multi-tenancy** — every account belongs to one or more **Organizations**; nets, sessions, and check-ins are scoped so separate organizations sharing the same install never see each other's data. Registration offers create-a-new-organization (name + required website URL; needs a Super Admin's approval before login, since a founder can't approve themselves) or join-an-existing-one (needs that organization's own admin to approve you instead); an org switcher appears for anyone in more than one. Organization admins get a scoped Admin page for their own members; the existing site-wide Super Admin role is unchanged, still sees everything, and is the only registration path that's ever auto-approved (the instance's first-ever user, with no one else to ask)

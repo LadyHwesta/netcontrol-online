@@ -63,6 +63,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-28 — Quickstart Guide; Fix Newly-Created Net's Response (v2.11.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">QUICKSTART.md</code> — running the app and taking a first check-in in a few minutes, including how to get a Net Repository API token. Linked from the top of the README, which stays the full reference.</li>
+              <li>Fixed: the response from creating a net (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">POST /nets</code>) had an incorrect <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">can_edit</code> and a missing <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">owner_callsign</code> — the app itself was unaffected (it always re-fetches the net list right after creating one), but anything calling the API directly was getting wrong data back.</li>
+              <li>No database migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-28 — Net Ownership Transfer &amp; Editor-Rights Sharing (v2.11.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>A net's owner can now be <strong>reassigned</strong> — previously the only way to change who controls a net was deleting and recreating it. The current owner, an admin of the net's own organization, or a super admin can do it. Org admins get a new <strong>Nets in Your Organization</strong> card (Organization Admin panel); super admins get a matching <strong>Reassign Net Owner</strong> card in Admin → Reassign. The new owner must already be an approved member of the net's org.</li>

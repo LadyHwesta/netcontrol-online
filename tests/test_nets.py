@@ -25,6 +25,13 @@ class TestNetCRUD:
         assert data["name"] == "2m Monday Net"
         assert data["frequency"] == "146.520 MHz"
         assert "id" in data
+        # Derived sharing fields must be genuinely computed, not left at the
+        # NetOut schema's bare defaults (create_net previously returned the
+        # raw ORM object instead of running it through _net_to_out -- correct
+        # by coincidence for is_owner/shared_* on a brand new net, but wrong
+        # for can_edit and owner_callsign).
+        assert data["can_edit"] is True
+        assert data["owner_callsign"] == "W1ADMIN"
 
     def test_create_net_with_script(self, client, admin_headers):
         resp = client.post("/nets", json={
