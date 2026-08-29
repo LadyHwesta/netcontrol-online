@@ -428,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.11.1", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.11.2", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

@@ -63,6 +63,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-29 — Net Repository Setup in the Help Page (v2.11.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <strong>Net Repository</strong> card in Help → Guide (admins only) — the one-time <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> and Admin panel setup for pushing publicly-listed nets to a central community directory. Same ground the README's Net Repository Integration section already covers, now available in-app without leaving the browser.</li>
+              <li>Fixed along the way: the two existing admin-only Help cards (Admin Panel, Database Migrations) were never actually hidden from non-admin operators — the "show only to admins" logic had nothing to toggle. All three now correctly show only to admins.</li>
+              <li>No database migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-28 — Quickstart Guide; Fix Newly-Created Net's Response (v2.11.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">QUICKSTART.md</code> — running the app and taking a first check-in in a few minutes, including how to get a Net Repository API token. Linked from the top of the README, which stays the full reference.</li>
@@ -885,14 +894,25 @@ Thank you all for checking in. This net is now closed.</pre>
           <p style="margin:0">Nets are unlisted by default — opt in per net. Visiting <strong>/directory</strong> or <strong>/live</strong> with no organization in the URL shows a picker listing every organization that has at least one publicly listed net.</p>
         </div>
 
-        <div id="help-admin-section" class="card" style="margin-bottom:16px">
+        <div id="help-netrepo-section" class="card" style="display:none;margin-bottom:16px">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">NET REPOSITORY</h3>
+          <p style="margin:0 0 8px"><a href="https://github.com/LadyHwesta/Net-Repository" target="_blank" style="color:var(--lc-blue)">Net Repository</a> is a separate, community-run central directory — a net listed in your own <strong>Public Net Directory</strong> (above) can also be pushed there so it's discoverable beyond this one instance. It's entirely optional and off by default.</p>
+          <p style="margin:0 0 6px;font-weight:700;color:var(--text-muted);font-size:12px">ONE-TIME SETUP</p>
+          <p style="margin:0 0 8px"><strong>1.</strong> Set <code style="background:var(--surface);padding:1px 5px;border-radius:3px">NET_REPOSITORY_URL</code> in <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code> to the Net Repository instance you want to publish to (ask its admin for the URL, or run your own from the repo linked above), then restart the app.</p>
+          <p style="margin:0 0 8px"><strong>2.</strong> In <strong>Admin → Net Repository</strong>, fill in a name (shown to that instance's admin for review) and click <strong>Request API Key</strong>.</p>
+          <p style="margin:0 0 8px"><strong>3.</strong> This enters that instance's moderation queue. Click <strong>Check Status</strong> any time afterward — once approved, the key is stored automatically. No <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code> edit or restart needed. Use <strong>Forget This Key</strong> to clear it and start over.</p>
+          <p style="margin:0 0 8px">From then on, checking <strong>List in Public Net Directory</strong> on any net's Edit form pushes it — every save, not just the first, so schedule changes and edits stay in sync automatically. Optional fields on the same form (<strong>Band</strong>, <strong>Mode</strong>, <strong>CTCSS Tone</strong>, <strong>Region</strong>, <strong>State</strong>, <strong>Website</strong>) make the listing more useful; Website falls back to the org-wide one in Admin → Branding if left blank.</p>
+          <p style="margin:0">Already had public nets before setting this up? <code style="background:var(--surface);padding:1px 5px;border-radius:3px">python3 push_to_net_repository.py</code> backfills every currently-public net in one shot — safe to re-run, existing listings get refreshed rather than duplicated.</p>
+        </div>
+
+        <div id="help-admin-section" class="card" style="display:none;margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">ADMIN PANEL</h3>
           <p style="margin:0 0 8px">The very first user to ever register on an instance automatically becomes <strong>Super Admin</strong> — sees and manages every organization, and is the only registration that skips approval entirely (there's no one else to ask). Every other new registration either founds its own organization — pending a Super Admin's approval, shown in their Admin panel's Pending Approval list — or requests to join an existing one, which needs approval from that organization's own admin instead.</p>
           <p style="margin:0 0 8px">An organization admin gets a scoped Admin page — approve/reject pending members of their own organization only (this does not cover approving a brand-new organization's founder, which only a Super Admin can do). A Super Admin's Admin page is unchanged: approve/deactivate any account, grant Super Admin, delete accounts, and opt in to <strong>email notifications</strong> for new registrations using the ✉/📧 toggle in the Notify column.</p>
           <p style="margin:0">Newly approved operators receive an automatic confirmation email if SMTP is configured in <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code>.</p>
         </div>
 
-        <div id="help-db-section" class="card">
+        <div id="help-db-section" class="card" style="display:none">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">DATABASE MIGRATIONS</h3>
           <p style="margin:0 0 8px">
             Schema migrations are managed by <code style="background:var(--surface);padding:1px 5px;border-radius:3px">migrate.py</code> in the app directory.
@@ -953,8 +973,10 @@ python3 /opt/netcontrol/gmrs_sync.py --mode update</pre>
       if (currentUser.is_admin) {
         const adminSec = document.getElementById('help-admin-section');
         const dbSec = document.getElementById('help-db-section');
+        const netrepoSec = document.getElementById('help-netrepo-section');
         if (adminSec) adminSec.style.display = '';
         if (dbSec) dbSec.style.display = '';
+        if (netrepoSec) netrepoSec.style.display = '';
       }
     }
     initPage();
