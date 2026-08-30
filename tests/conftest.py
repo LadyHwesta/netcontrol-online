@@ -3,22 +3,37 @@ Pytest configuration and shared fixtures for the NetControl Online test suite.
 
 Strategy
 --------
-- DATABASE_URL is set to SQLite in-memory BEFORE any app imports, so
-  database.py never tries to connect to PostgreSQL.
-- StaticPool is applied so all get_db() calls share the same in-memory
-  connection — critical for SQLite :memory: to work across requests.
+- DATABASE_URL is set to a temp file-based SQLite DB BEFORE any app
+  imports, so database.py never tries to connect to PostgreSQL. A FILE
+  (not sqlite+aiosqlite:///:memory:) is required: TestClient runs the
+  ASGI app in its own background thread via an anyio blocking portal,
+  with its own event loop — an in-memory DB shared via StaticPool would
+  mean one aiosqlite connection driven from two different event
+  loops/threads (pytest-asyncio's fixture loop and the portal's), which
+  deadlocks. A file is naturally shared across separate connections, so
+  no StaticPool is needed. Verified empirically before writing this.
 - Rate limiting is disabled so tests can hit /auth endpoints freely.
 - Tables are created once per session; rows are wiped between tests.
+- Async: pytest-asyncio with asyncio_mode=auto (see pytest.ini) and
+  asyncio_default_fixture_loop_scope=session — the session scope is
+  required for session-scoped async autouse fixtures (setup_database
+  below) to work at all; with the default function scope every test,
+  sync or async, fails collection with a ScopeMismatch. With session
+  scope, plain sync `def test_...` functions depend on async autouse
+  fixtures (and can even request an async fixture directly) with no
+  special handling needed on their part.
 """
 
 import os
 import sys
+import tempfile
 
 # Add this directory to sys.path so helpers.py is importable from test files.
 sys.path.insert(0, os.path.dirname(__file__))
 
 # ── Must happen before any app imports ──────────────────────────────────────
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+_DB_PATH = os.path.join(tempfile.gettempdir(), f"netcontrol_test_{os.getpid()}.db")
+os.environ["DATABASE_URL"] = f"sqlite:///{_DB_PATH}"  # database.py rewrites this to +aiosqlite
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
@@ -42,30 +57,19 @@ os.environ["SUPPORT_EMAIL"] = ""
 os.environ["NET_REPOSITORY_URL"] = ""
 os.environ["NET_REPOSITORY_API_KEY"] = ""
 
-# ── Patch the database module to use StaticPool ──────────────────────────────
-# SQLite :memory: databases are per-connection; StaticPool forces SQLAlchemy
-# to reuse one connection so all get_db() calls see the same data.
-import database  # noqa: E402 — must come after env vars are set
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-_test_engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
-
-# Replace the module-level engine and session factory
-database.engine = _test_engine
-database.SessionLocal = _TestSession
-
 # ── Now safe to import the app ───────────────────────────────────────────────
+# database.py builds its own async engine/session factory from DATABASE_URL
+# at import time (with the postgresql/sqlite -> +asyncpg/+aiosqlite rewrite
+# already applied there) -- since that env var is already set to our temp
+# file above, database.engine/SessionLocal are already correctly pointed at
+# the test DB. No monkeypatching needed (unlike the old sync setup, which
+# needed a StaticPool override specifically for :memory: connection-sharing
+# -- moot now that tests use a real file).
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from models import Base  # noqa: E402
+from database import engine, SessionLocal  # noqa: E402
 from main import app, limiter  # noqa: E402
 from helpers import register, login, auth  # noqa: E402, F401
 
@@ -76,24 +80,27 @@ limiter.enabled = False
 # ── Database lifecycle ───────────────────────────────────────────────────────
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_database():
-    """Create all tables once for the entire test session."""
-    Base.metadata.create_all(bind=_test_engine)
+async def setup_database():
+    """Create all tables once for the entire test session; remove the temp
+    DB file afterward."""
+    if os.path.exists(_DB_PATH):
+        os.remove(_DB_PATH)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
-    Base.metadata.drop_all(bind=_test_engine)
+    await engine.dispose()
+    if os.path.exists(_DB_PATH):
+        os.remove(_DB_PATH)
 
 
 @pytest.fixture(autouse=True)
-def clean_tables():
+async def clean_tables():
     """Wipe all rows after each test to guarantee isolation."""
     yield
-    db = _TestSession()
-    try:
+    async with SessionLocal() as db:
         for table in reversed(Base.metadata.sorted_tables):
-            db.execute(table.delete())
-        db.commit()
-    finally:
-        db.close()
+            await db.execute(table.delete())
+        await db.commit()
 
 
 # ── Test client ──────────────────────────────────────────────────────────────
@@ -332,13 +339,12 @@ def user_headers(user_token):
 
 
 @pytest.fixture
-def db():
-    """Raw DB session for seeding test data directly (e.g. cache rows)."""
-    session = _TestSession()
-    try:
+async def db():
+    """Raw DB session for seeding test data directly (e.g. cache rows).
+    Tests using this fixture must be `async def` (they'll need to `await`
+    its query/commit calls)."""
+    async with SessionLocal() as session:
         yield session
-    finally:
-        session.close()
 
 
 @pytest.fixture

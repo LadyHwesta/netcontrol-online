@@ -423,7 +423,7 @@ STATIC_DIR  = pathlib.Path(__file__).parent / "static"
 
 @asynccontextmanager
 async def lifespan(_app):
-    init_db()
+    await init_db()
     UPLOADS_DIR.mkdir(exist_ok=True)
     yield
 

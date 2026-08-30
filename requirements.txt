@@ -1,7 +1,8 @@
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 sqlalchemy==2.0.36
-psycopg2-binary==2.9.10
+psycopg2-binary==2.9.10   # only for migrate.py/gmrs_sync.py, which use raw psycopg2 directly
+asyncpg==0.31.0           # async driver for the app's own DB access (database.py)
 PyJWT==2.10.1
 bcrypt==4.2.0
 python-multipart==0.0.19

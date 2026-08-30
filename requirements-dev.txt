@@ -3,3 +3,5 @@
 -r requirements.txt
 pytest==8.3.4
 pytest-cov==6.0.0
+pytest-asyncio==1.4.0
+aiosqlite==0.22.1   # async SQLite driver, test suite only (prod uses asyncpg)
