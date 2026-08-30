@@ -243,6 +243,25 @@ class TestSignOnOff:
         resp = client.post(f"/tactical-positions/{position['id']}/sign-on", json={"callsign": "W1ABC"}, headers=admin_headers)
         assert resp.status_code == 400
 
+    async def test_two_simultaneously_open_checkins_does_not_500(self, client, admin_headers, db):
+        """Normal sign-on flow always closes the prior occupant first, so
+        this shouldn't happen -- but two operators racing to sign on to the
+        same vacant position concurrently could still produce it momentarily.
+        _current_occupant() used to be scalar_one_or_none(), which would
+        raise MultipleResultsFound (-> 500) here; seed the race directly to
+        prove the fix (take the most recent via .order_by + .limit(1))
+        holds regardless of how two open rows happened."""
+        import models
+        _anet, activation, position = _position(client, admin_headers)
+        db.add(models.Checkin(session_id=activation["id"], callsign="W1ABC", tactical_position_id=position["id"]))
+        db.add(models.Checkin(session_id=activation["id"], callsign="W2DEF", tactical_position_id=position["id"]))
+        await db.commit()
+
+        # Sign-on internally calls _current_occupant() to close out whoever's
+        # currently open before creating the new checkin.
+        resp = client.post(f"/tactical-positions/{position['id']}/sign-on", json={"callsign": "W3GHI"}, headers=admin_headers)
+        assert resp.status_code == 201, resp.text
+
 
 class TestShiftHistory:
     def test_shift_history_ordering_and_denormalized_callsign(self, client, admin_headers):

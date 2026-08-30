@@ -3125,10 +3125,14 @@ async def _create_checkin(session: NetSession, net: Optional[Net], data: Checkin
     # single family licence is shared among multiple stations.
     is_gmrs = net and net.net_type == "gmrs"
     if not is_gmrs:
+        # This check IS the (app-level, not DB-level) enforcement of
+        # uniqueness here -- .limit(1) + .scalars().first() rather than
+        # scalar_one_or_none(), so two check-ins racing for the same
+        # callsign can't turn into a 500 for whoever submits third.
         existing = (await db.execute(select(Checkin).filter(
             Checkin.session_id == session.id,
             Checkin.callsign == data.callsign,
-        ))).scalar_one_or_none()
+        ).limit(1))).scalars().first()
         if existing:
             raise HTTPException(409, f"{data.callsign} has already checked in to this session")
 
@@ -3416,8 +3420,21 @@ async def _get_position_for_user(position_id: int, user: User, db: AsyncSession)
 
 
 async def _current_occupant(position_id: int, db: AsyncSession) -> Optional[Checkin]:
+    # Take-the-first (.limit(1) + .scalars().first()), not scalar_one_or_none() --
+    # normal app flow keeps this to one row (sign-on always closes the prior
+    # occupant first), but two operators racing to sign on to the same vacant
+    # position concurrently could still momentarily produce two open rows; the
+    # .order_by() here already signals "pick the latest deterministically"
+    # rather than "there must be exactly one," so this should degrade
+    # gracefully instead of 500ing (see issue found on _net_history's
+    # equivalent last-session lookup).
     return (
-        (await db.execute(select(Checkin).filter(Checkin.tactical_position_id == position_id, Checkin.signed_off_at.is_(None)).order_by(Checkin.checked_in_at.desc()))).scalar_one_or_none()
+        (await db.execute(
+            select(Checkin)
+            .filter(Checkin.tactical_position_id == position_id, Checkin.signed_off_at.is_(None))
+            .order_by(Checkin.checked_in_at.desc())
+            .limit(1)
+        )).scalars().first()
     )
 
 
@@ -4041,9 +4058,18 @@ async def net_history(
         )).all()
     }
 
-    # Who checked in to the most recent ended session?
+    # Who checked in to the most recent ended session? Deliberately take-the-
+    # first (.limit(1) + .scalars().first()), not scalar_one_or_none() -- any
+    # net used across more than one session has multiple rows matching this
+    # filter by design, so scalar_one_or_none() would raise MultipleResultsFound
+    # (found live: a real net with session history 500'd on this exact line).
     last_session = (
-        (await db.execute(select(NetSession).filter(NetSession.net_id == net_id, NetSession.ended_at.isnot(None)).order_by(NetSession.started_at.desc()))).scalar_one_or_none()
+        (await db.execute(
+            select(NetSession)
+            .filter(NetSession.net_id == net_id, NetSession.ended_at.isnot(None))
+            .order_by(NetSession.started_at.desc())
+            .limit(1)
+        )).scalars().first()
     )
     last_session_callsigns: set = set()
     if last_session:
@@ -5226,7 +5252,16 @@ def _aprs_fetch_aprsfi(cfg: AprsConfig, callsigns: list[str]) -> list[dict]:
 async def _aprs_active_session_callsigns(net_id: int, db: AsyncSession) -> list[str]:
     """Callsigns checked into the net's current live session, if any — the
     watch-list aprs.fi mode queries positions for."""
-    session = (await db.execute(select(NetSession).filter(NetSession.net_id == net_id, NetSession.ended_at.is_(None)))).scalar_one_or_none()
+    # Nothing stops a net from having more than one simultaneously-active
+    # session (start_session doesn't check for one already open) -- take the
+    # most recently started one deterministically rather than
+    # scalar_one_or_none(), which would raise if that ever happens.
+    session = (await db.execute(
+        select(NetSession)
+        .filter(NetSession.net_id == net_id, NetSession.ended_at.is_(None))
+        .order_by(NetSession.started_at.desc())
+        .limit(1)
+    )).scalars().first()
     if not session:
         return []
     rows = (await db.execute(select(Checkin.callsign).filter(Checkin.session_id == session.id).distinct())).scalars().all()
@@ -5661,11 +5696,16 @@ async def _get_editable_net(net_id: int, user: User, db: AsyncSession) -> Net:
         return await _get_owned_net(net_id, user, db)
     except HTTPException as e:
         if e.status_code == 403:
+            # A net can legitimately have BOTH an individual share for this
+            # user AND a separate share-with-all row (user_id IS NULL) at
+            # the same time -- this is an existence check, not a unique
+            # lookup, so .limit(1) + .scalars().first() rather than
+            # scalar_one_or_none(), which would raise if both exist.
             share = (await db.execute(select(NetShare).filter(
                 NetShare.net_id == net_id,
                 NetShare.can_edit == True,
                 or_(NetShare.user_id == user.id, NetShare.user_id == None),
-            ))).scalar_one_or_none()
+            ).limit(1))).scalars().first()
             if share:
                 return (await db.execute(select(Net).filter(Net.id == net_id))).scalar_one_or_none()
         raise
@@ -5684,11 +5724,14 @@ async def _get_net_for_user(net_id: int, user: User, db: AsyncSession) -> Net:
     if net.owner_id == user.id:
         return net
     # Check shares: shared with all (user_id IS NULL) or shared with this user
+    # -- both rows can legitimately exist at once for the same net, so this
+    # is an existence check (.limit(1) + .scalars().first()), not a unique
+    # lookup; scalar_one_or_none() would raise if both do.
     share = (
         (await db.execute(select(NetShare).filter(
             NetShare.net_id == net_id,
             or_(NetShare.user_id == user.id, NetShare.user_id == None),
-        ))).scalar_one_or_none()
+        ).limit(1))).scalars().first()
     )
     if not share:
         raise HTTPException(403, "Access denied")

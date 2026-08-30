@@ -366,3 +366,34 @@ class TestNetOwnershipTransfer:
         other_id = self._other_user_id(client, admin_headers)
         resp = client.patch(f"/nets/{net['id']}/owner", json={"owner_id": other_id}, headers=user_headers)
         assert resp.status_code in (403, 404)
+
+
+class TestDualNetShareRows:
+    """update_net_shares() only ever writes an all-users row (user_id=NULL)
+    OR individual rows, never both for the same net -- so this specific
+    combination isn't reachable through the sharing UI today. But
+    _get_net_for_user/_get_editable_net's share lookup used to be
+    scalar_one_or_none(), which would raise MultipleResultsFound (-> 500)
+    if it ever were, and a concurrent pair of PUT /shares requests
+    interleaving their delete+insert could still produce it. Seed both
+    rows directly to prove the fix holds regardless of how they got there."""
+
+    async def test_individual_and_share_all_rows_coexisting_does_not_500(self, client, admin_headers, user_headers, net, db):
+        import models
+        from sqlalchemy import select
+
+        user = (await db.execute(select(models.User).filter(models.User.callsign == "W2USER"))).scalar_one_or_none()
+        db.add(models.NetShare(net_id=net["id"], user_id=user.id, can_edit=True))
+        db.add(models.NetShare(net_id=net["id"], user_id=None, can_edit=True))
+        await db.commit()
+
+        # _get_net_for_user path
+        resp = client.get(f"/nets/{net['id']}", headers=user_headers)
+        assert resp.status_code == 200, resp.text
+
+        # _get_editable_net path (owner check fails for user_headers, falls
+        # through to the share lookup that used to be able to double-match)
+        resp2 = client.put(f"/nets/{net['id']}/dmr/config", json={
+            "source_type": "wpsd", "hotspot_url": "http://x",
+        }, headers=user_headers)
+        assert resp2.status_code == 200, resp2.text

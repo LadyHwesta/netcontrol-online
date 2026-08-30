@@ -83,17 +83,30 @@ function renderCheckinImportResult(result) {
 const lookupCache = {};  // callsign → result, avoids repeat API calls per session
 let lastLookedUpCallsign = null;  // guards against a redundant re-lookup wiping an open remark editor
 
+// Bumped by every lookupCallsign()/searchCallsigns() call and by
+// clearLookupInfo() -- each in-flight request captures the value at the
+// moment it started, and checks it again before touching the DOM once the
+// network round-trip completes. Without this, hitting Enter (submitting
+// and clearing the form) or typing the next callsign before a slow FCC
+// lookup finishes let that stale response land in the now-empty Name
+// field for whatever callsign came after it (issue: name field getting
+// populated from the previous check-in's lookup).
+let lookupGeneration = 0;
+
 async function lookupCallsign(callsign) {
   if (!callsign || callsign.length < 3) { clearLookupInfo(); return; }
   lastLookedUpCallsign = callsign;
+  const generation = ++lookupGeneration;
   if (lookupCache[callsign]) { applyLookupResult(lookupCache[callsign]); return; }
 
   setLookupInfo('<span class="lookup-spinner"></span><span class="text-muted" style="font-size:11px">Looking up…</span>');
   try {
     const result = await apiFetch(`/callsign/${encodeURIComponent(callsign)}/lookup`);
+    if (generation !== lookupGeneration) return;  // superseded by a newer lookup/clear
     lookupCache[callsign] = result;
     applyLookupResult(result);
   } catch {
+    if (generation !== lookupGeneration) return;
     clearLookupInfo();
   }
 }
@@ -161,6 +174,7 @@ function clearLookupInfo() {
   document.getElementById('ci-lookup-info').innerHTML = '';
   document.getElementById('ci-name-autofill-note').style.display = 'none';
   lastLookedUpCallsign = null;
+  lookupGeneration++;  // invalidate any still-in-flight lookup (e.g. form just got cleared/submitted)
 }
 
 // ============================================================
@@ -321,10 +335,12 @@ function selectCallsign(callsign) {
 }
 
 async function searchCallsigns(q) {
+  const generation = ++lookupGeneration;
   setLookupInfo('<span class="lookup-spinner"></span><span class="text-muted" style="font-size:11px">Searching…</span>');
   try {
     const netParam = currentNetId ? `&net_id=${currentNetId}` : '';
     const results = await apiFetch(`/callsign/search?q=${encodeURIComponent(q)}${netParam}`);
+    if (generation !== lookupGeneration) return;  // superseded by a newer lookup/search/clear
     clearLookupInfo();
     if (results.length === 0) {
       setLookupInfo('<span class="lookup-notfound">No matches found</span>');
@@ -335,6 +351,7 @@ async function searchCallsigns(q) {
       showCallsignDropdown(results);
     }
   } catch (err) {
+    if (generation !== lookupGeneration) return;
     setLookupInfo(`<span class="lookup-notfound">Search error: ${esc(err.message)}</span>`);
   }
 }

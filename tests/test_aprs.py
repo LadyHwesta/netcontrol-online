@@ -186,6 +186,29 @@ class TestAprsCache:
 
 
 class TestAprsFiFetch:
+    def test_two_simultaneously_active_sessions_does_not_500(self, client, admin_headers, net, monkeypatch):
+        """Nothing stops a net from having more than one simultaneously-
+        active session (starting a second one doesn't require ending the
+        first) -- _aprs_active_session_callsigns() used to be
+        scalar_one_or_none(), which would raise MultipleResultsFound
+        (-> 500) here instead of just picking the most recent."""
+        client.put(f"/nets/{net['id']}/aprs/config", json={
+            "source_type": "aprs_fi", "aprs_fi_api_key": "testkey",
+        }, headers=admin_headers)
+        client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)
+        client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)  # a second concurrent session
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"result": "ok", "entries": []}
+
+        monkeypatch.setattr(main.httpx, "get", lambda *a, **k: FakeResponse())
+        resp = client.get(f"/nets/{net['id']}/aprs/positions", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+
     def test_positions_calls_aprsfi_and_normalizes(self, client, admin_headers, net, monkeypatch):
         client.put(f"/nets/{net['id']}/aprs/config", json={
             "source_type": "aprs_fi", "aprs_fi_api_key": "testkey",

@@ -46,6 +46,23 @@ class TestAddCheckin:
         assert resp.status_code == 201
         assert resp.json()["has_traffic"] is True
 
+    async def test_third_duplicate_attempt_after_a_seeded_race_does_not_500(self, client, admin_headers, session, db):
+        """The duplicate-callsign guard itself used to be scalar_one_or_none()
+        -- fine under the normal one-at-a-time flow, but two check-in
+        requests racing for the same callsign could both pass the "does it
+        exist" check before either commits, leaving two rows. A third
+        attempt would then 500 instead of correctly rejecting. Seed that
+        race directly rather than trying to win an actual thread race."""
+        import models
+        db.add(models.Checkin(session_id=session["id"], callsign="W7DUP2"))
+        db.add(models.Checkin(session_id=session["id"], callsign="W7DUP2"))
+        await db.commit()
+
+        resp = client.post(f"/sessions/{session['id']}/checkins", json={
+            "callsign": "W7DUP2", "has_traffic": False,
+        }, headers=admin_headers)
+        assert resp.status_code == 409, resp.text
+
     def test_duplicate_callsign_rejected(self, client, admin_headers, session):
         """Same callsign cannot check in twice to the same session."""
         client.post(f"/sessions/{session['id']}/checkins", json={
