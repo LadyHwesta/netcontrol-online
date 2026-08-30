@@ -13,12 +13,13 @@ behave exactly as before. Exactly one provider is active at a time.
 
 import pytest
 
-import main
+from routers import helpers
 from helpers import register, login
 
-# altcha is an OPTIONAL runtime dependency (see requirements.txt / main.py's
-# lazy import) -- a deployment using only turnstile/recaptcha (or no
-# CAPTCHA_PROVIDER at all) may not have it installed. Importing it at module
+# altcha is an OPTIONAL runtime dependency (see requirements.txt /
+# routers/helpers.py's lazy import) -- a deployment using only
+# turnstile/recaptcha (or no CAPTCHA_PROVIDER at all) may not have it
+# installed. Importing it at module
 # level unconditionally would make pytest fail to even COLLECT this whole
 # file -- and since a collection error aborts the entire run, every other
 # test file in the suite too -- on such a deployment. Degrade gracefully
@@ -37,8 +38,8 @@ requires_altcha = pytest.mark.skipif(
 class TestTurnstileVerifyHelper:
     def test_no_token_fails_without_network_call(self, monkeypatch, turnstile_configured):
         calls = []
-        monkeypatch.setattr(main.httpx, "post", lambda *a, **k: calls.append(1))
-        assert main._verify_turnstile(None, "1.2.3.4") is False
+        monkeypatch.setattr(helpers.httpx, "post", lambda *a, **k: calls.append(1))
+        assert helpers._verify_turnstile(None, "1.2.3.4") is False
         assert calls == []
 
     def test_cloudflare_success_true(self, monkeypatch, turnstile_configured):
@@ -49,8 +50,8 @@ class TestTurnstileVerifyHelper:
             def json(self):
                 return {"success": True}
 
-        monkeypatch.setattr(main.httpx, "post", lambda *a, **k: FakeResponse())
-        assert main._verify_turnstile("sometoken", "1.2.3.4") is True
+        monkeypatch.setattr(helpers.httpx, "post", lambda *a, **k: FakeResponse())
+        assert helpers._verify_turnstile("sometoken", "1.2.3.4") is True
 
     def test_cloudflare_success_false(self, monkeypatch, turnstile_configured):
         class FakeResponse:
@@ -60,22 +61,22 @@ class TestTurnstileVerifyHelper:
             def json(self):
                 return {"success": False, "error-codes": ["invalid-input-response"]}
 
-        monkeypatch.setattr(main.httpx, "post", lambda *a, **k: FakeResponse())
-        assert main._verify_turnstile("badtoken", "1.2.3.4") is False
+        monkeypatch.setattr(helpers.httpx, "post", lambda *a, **k: FakeResponse())
+        assert helpers._verify_turnstile("badtoken", "1.2.3.4") is False
 
     def test_network_error_fails_closed(self, monkeypatch, turnstile_configured):
         def raise_error(*a, **k):
             raise ConnectionError("boom")
 
-        monkeypatch.setattr(main.httpx, "post", raise_error)
-        assert main._verify_turnstile("sometoken", "1.2.3.4") is False
+        monkeypatch.setattr(helpers.httpx, "post", raise_error)
+        assert helpers._verify_turnstile("sometoken", "1.2.3.4") is False
 
 
 class TestRecaptchaVerifyHelper:
     def test_no_token_fails_without_network_call(self, monkeypatch, recaptcha_configured):
         calls = []
-        monkeypatch.setattr(main.httpx, "post", lambda *a, **k: calls.append(1))
-        assert main._verify_recaptcha(None, "1.2.3.4") is False
+        monkeypatch.setattr(helpers.httpx, "post", lambda *a, **k: calls.append(1))
+        assert helpers._verify_recaptcha(None, "1.2.3.4") is False
         assert calls == []
 
     def test_google_success_true(self, monkeypatch, recaptcha_configured):
@@ -86,8 +87,8 @@ class TestRecaptchaVerifyHelper:
             def json(self):
                 return {"success": True}
 
-        monkeypatch.setattr(main.httpx, "post", lambda *a, **k: FakeResponse())
-        assert main._verify_recaptcha("sometoken", "1.2.3.4") is True
+        monkeypatch.setattr(helpers.httpx, "post", lambda *a, **k: FakeResponse())
+        assert helpers._verify_recaptcha("sometoken", "1.2.3.4") is True
 
     def test_google_success_false(self, monkeypatch, recaptcha_configured):
         class FakeResponse:
@@ -97,15 +98,15 @@ class TestRecaptchaVerifyHelper:
             def json(self):
                 return {"success": False, "error-codes": ["invalid-input-response"]}
 
-        monkeypatch.setattr(main.httpx, "post", lambda *a, **k: FakeResponse())
-        assert main._verify_recaptcha("badtoken", "1.2.3.4") is False
+        monkeypatch.setattr(helpers.httpx, "post", lambda *a, **k: FakeResponse())
+        assert helpers._verify_recaptcha("badtoken", "1.2.3.4") is False
 
     def test_network_error_fails_closed(self, monkeypatch, recaptcha_configured):
         def raise_error(*a, **k):
             raise ConnectionError("boom")
 
-        monkeypatch.setattr(main.httpx, "post", raise_error)
-        assert main._verify_recaptcha("sometoken", "1.2.3.4") is False
+        monkeypatch.setattr(helpers.httpx, "post", raise_error)
+        assert helpers._verify_recaptcha("sometoken", "1.2.3.4") is False
 
 
 def _solve_altcha_challenge(challenge_json: dict) -> str:
@@ -133,17 +134,17 @@ def _solve_altcha_challenge(challenge_json: dict) -> str:
 
 class TestAltchaVerifyHelper:
     def test_no_token_fails(self, altcha_configured):
-        assert main._verify_altcha(None, "1.2.3.4") is False
+        assert helpers._verify_altcha(None, "1.2.3.4") is False
 
     def test_garbage_token_fails(self, altcha_configured):
-        assert main._verify_altcha("not-a-real-payload", "1.2.3.4") is False
+        assert helpers._verify_altcha("not-a-real-payload", "1.2.3.4") is False
 
     @requires_altcha
     def test_real_solved_challenge_passes(self, client, altcha_configured):
         resp = client.get("/captcha/altcha-challenge")
         assert resp.status_code == 200, resp.text
         token = _solve_altcha_challenge(resp.json())
-        assert main._verify_altcha(token, "1.2.3.4") is True
+        assert helpers._verify_altcha(token, "1.2.3.4") is True
 
     @requires_altcha
     def test_token_from_wrong_hmac_key_fails(self, client, altcha_configured, monkeypatch):
@@ -151,8 +152,8 @@ class TestAltchaVerifyHelper:
         token = _solve_altcha_challenge(resp.json())
         # A correctly-solved token for THIS key must fail verification
         # against a different one -- simulates a forged/replayed payload.
-        monkeypatch.setattr(main, "ALTCHA_HMAC_KEY", "a-different-key-entirely")
-        assert main._verify_altcha(token, "1.2.3.4") is False
+        monkeypatch.setattr(helpers, "ALTCHA_HMAC_KEY", "a-different-key-entirely")
+        assert helpers._verify_altcha(token, "1.2.3.4") is False
 
     def test_challenge_endpoint_404s_when_not_the_active_provider(self, client, turnstile_configured):
         resp = client.get("/captcha/altcha-challenge")

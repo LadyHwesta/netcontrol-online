@@ -10,13 +10,13 @@ Tests for the APRS station map integration (issue #22):
   GET    /public/active, /public/sessions/{id}  — aprs_map_enabled gating
 
 Mirrors the DMR test conventions (test_gmrs.py's GMRS-block tests,
-test_captcha.py's monkeypatch.setattr(main.httpx, ...) pattern for
+test_captcha.py's monkeypatch.setattr(aprs.httpx, ...) pattern for
 mocking the aprs.fi HTTP call).
 """
 
 import pytest
 
-import main
+from routers import aprs
 from helpers import auth
 
 
@@ -28,9 +28,9 @@ def _clear_aprs_memory_cache():
     id sequence on DELETE, but the tables ARE emptied), so without this a
     cache entry written by an earlier test would leak into a later test
     that happens to get the same net id — clear it on both sides."""
-    main._aprs_push_cache.clear()
+    aprs._aprs_push_cache.clear()
     yield
-    main._aprs_push_cache.clear()
+    aprs._aprs_push_cache.clear()
 
 
 def make_gmrs_net(client, headers):
@@ -179,8 +179,8 @@ class TestAprsCache:
             {"callsign": "W1AW", "lat": 41.7, "lon": -72.7},
         ]}, headers=admin_headers)
         # Push the clock forward past the cache TTL.
-        real_time = main._time.time
-        monkeypatch.setattr(main._time, "time", lambda: real_time() + main._APRS_CACHE_TTL + 1)
+        real_time = aprs._time.time
+        monkeypatch.setattr(aprs._time, "time", lambda: real_time() + aprs._APRS_CACHE_TTL + 1)
         resp = client.get(f"/nets/{net['id']}/aprs/cache", headers=admin_headers)
         assert resp.status_code == 404
 
@@ -205,7 +205,7 @@ class TestAprsFiFetch:
             def json(self):
                 return {"result": "ok", "entries": []}
 
-        monkeypatch.setattr(main.httpx, "get", lambda *a, **k: FakeResponse())
+        monkeypatch.setattr(aprs.httpx, "get", lambda *a, **k: FakeResponse())
         resp = client.get(f"/nets/{net['id']}/aprs/positions", headers=admin_headers)
         assert resp.status_code == 200, resp.text
 
@@ -232,7 +232,7 @@ class TestAprsFiFetch:
                 }]}
 
         calls = []
-        monkeypatch.setattr(main.httpx, "get", lambda *a, **k: (calls.append(1), FakeResponse())[1])
+        monkeypatch.setattr(aprs.httpx, "get", lambda *a, **k: (calls.append(1), FakeResponse())[1])
 
         positions = client.get(f"/nets/{net['id']}/aprs/positions", headers=admin_headers).json()
         assert len(calls) == 1
@@ -262,7 +262,7 @@ class TestAprsFiFetch:
             def json(self):
                 return {"result": "fail", "description": "Invalid API key"}
 
-        monkeypatch.setattr(main.httpx, "get", lambda *a, **k: FakeResponse())
+        monkeypatch.setattr(aprs.httpx, "get", lambda *a, **k: FakeResponse())
         positions = client.get(f"/nets/{net['id']}/aprs/positions", headers=admin_headers).json()
         assert positions == []
 
@@ -280,7 +280,7 @@ class TestAprsFiFetch:
         def raise_connect_error(*a, **k):
             raise httpx_module.ConnectError("boom")
 
-        monkeypatch.setattr(main.httpx, "get", raise_connect_error)
+        monkeypatch.setattr(aprs.httpx, "get", raise_connect_error)
         resp = client.get(f"/nets/{net['id']}/aprs/positions", headers=admin_headers)
         assert resp.status_code == 502
 

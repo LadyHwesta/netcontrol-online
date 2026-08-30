@@ -118,32 +118,44 @@ def client():
 def smtp_configured(monkeypatch):
     """Makes _smtp_configured() return True, for tests exercising SMTP-gated code
     paths (email verification, support tickets). Pair with sent_emails so no real
-    network call is attempted."""
-    import main
-    monkeypatch.setattr(main, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(main, "SMTP_USER", "bot@example.com")
-    monkeypatch.setattr(main, "SMTP_PASSWORD", "secret")
+    network call is attempted.
+
+    Patches routers.helpers, not main -- SMTP config and _smtp_configured()
+    live there since the main.py -> routers/ split (shared by every router
+    that sends email), and a function only ever sees monkeypatched globals
+    in the module where IT is defined, not wherever it happens to be
+    imported from."""
+    from routers import helpers
+    monkeypatch.setattr(helpers, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(helpers, "SMTP_USER", "bot@example.com")
+    monkeypatch.setattr(helpers, "SMTP_PASSWORD", "secret")
 
 
 @pytest.fixture
 def app_base_url(monkeypatch):
     """Sets APP_BASE_URL so emails (verify-your-email, account-approved) include
-    a clickable link — without it those links are omitted (main.py's _app_url())."""
-    import main
-    monkeypatch.setattr(main, "APP_BASE_URL", "http://testserver")
+    a clickable link — without it those links are omitted (routers/helpers.py's
+    _app_url()). Patches routers.helpers -- see smtp_configured above."""
+    from routers import helpers
+    monkeypatch.setattr(helpers, "APP_BASE_URL", "http://testserver")
 
 
 @pytest.fixture
 def sent_emails(monkeypatch):
-    """Intercepts main.send_email() and records each call instead of hitting the network."""
-    import main
+    """Intercepts send_email() and records each call instead of hitting the
+    network. Patches routers.helpers.send_email -- every router calls it via
+    qualified access (`helpers.send_email(...)`, never a bare `from
+    routers.helpers import send_email`) specifically so this one patch is
+    observed everywhere, regardless of which router the call originates
+    from."""
+    from routers import helpers
     calls = []
 
     def fake_send_email(**kwargs):
         calls.append(kwargs)
         return True
 
-    monkeypatch.setattr(main, "send_email", fake_send_email)
+    monkeypatch.setattr(helpers, "send_email", fake_send_email)
     return calls
 
 
@@ -164,19 +176,21 @@ def turnstile_configured(monkeypatch):
     """Makes _captcha_configured() return True for Turnstile, for tests
     exercising the CAPTCHA-gated code paths on /auth/register and
     /auth/login. Pair with turnstile_verify so no real network call is
-    attempted."""
-    import main
-    monkeypatch.setattr(main, "CAPTCHA_PROVIDER", "turnstile")
-    monkeypatch.setattr(main, "TURNSTILE_SITE_KEY", "1x00000000000000000000AA")
-    monkeypatch.setattr(main, "TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA")
+    attempted. Patches routers.helpers -- see smtp_configured's docstring
+    above for why (captcha config + _verify_*/_captcha_configured() all live
+    there since the main.py -> routers/ split)."""
+    from routers import helpers
+    monkeypatch.setattr(helpers, "CAPTCHA_PROVIDER", "turnstile")
+    monkeypatch.setattr(helpers, "TURNSTILE_SITE_KEY", "1x00000000000000000000AA")
+    monkeypatch.setattr(helpers, "TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA")
 
 
 @pytest.fixture
 def turnstile_verify(monkeypatch):
-    """Intercepts main._verify_turnstile() so tests control pass/fail without
-    a real call to Cloudflare. Defaults to always passing; call
+    """Intercepts _verify_turnstile() so tests control pass/fail without a
+    real call to Cloudflare. Defaults to always passing; call
     calls.set_result(False) to simulate a failed challenge."""
-    import main
+    from routers import helpers
     calls = _CallList()
     result = {"ok": True}
 
@@ -184,7 +198,7 @@ def turnstile_verify(monkeypatch):
         calls.append({"token": token, "remote_ip": remote_ip})
         return result["ok"]
 
-    monkeypatch.setattr(main, "_verify_turnstile", fake_verify)
+    monkeypatch.setattr(helpers, "_verify_turnstile", fake_verify)
     calls.set_result = lambda ok: result.update(ok=ok)
     return calls
 
@@ -193,18 +207,18 @@ def turnstile_verify(monkeypatch):
 def recaptcha_configured(monkeypatch):
     """Makes _captcha_configured() return True for reCAPTCHA. Pair with
     recaptcha_verify so no real network call is attempted."""
-    import main
-    monkeypatch.setattr(main, "CAPTCHA_PROVIDER", "recaptcha")
-    monkeypatch.setattr(main, "RECAPTCHA_SITE_KEY", "6Lc-test-site-key")
-    monkeypatch.setattr(main, "RECAPTCHA_SECRET_KEY", "6Lc-test-secret-key")
+    from routers import helpers
+    monkeypatch.setattr(helpers, "CAPTCHA_PROVIDER", "recaptcha")
+    monkeypatch.setattr(helpers, "RECAPTCHA_SITE_KEY", "6Lc-test-site-key")
+    monkeypatch.setattr(helpers, "RECAPTCHA_SECRET_KEY", "6Lc-test-secret-key")
 
 
 @pytest.fixture
 def recaptcha_verify(monkeypatch):
-    """Intercepts main._verify_recaptcha() so tests control pass/fail without
-    a real call to Google. Defaults to always passing; call
+    """Intercepts _verify_recaptcha() so tests control pass/fail without a
+    real call to Google. Defaults to always passing; call
     calls.set_result(False) to simulate a failed challenge."""
-    import main
+    from routers import helpers
     calls = _CallList()
     result = {"ok": True}
 
@@ -212,7 +226,7 @@ def recaptcha_verify(monkeypatch):
         calls.append({"token": token, "remote_ip": remote_ip})
         return result["ok"]
 
-    monkeypatch.setattr(main, "_verify_recaptcha", fake_verify)
+    monkeypatch.setattr(helpers, "_verify_recaptcha", fake_verify)
     calls.set_result = lambda ok: result.update(ok=ok)
     return calls
 
@@ -222,9 +236,9 @@ def altcha_configured(monkeypatch):
     """Makes _captcha_configured() return True for ALTCHA, with a fixed HMAC
     key so tests can generate/solve/verify real challenges deterministically
     -- no mocking needed, ALTCHA does no network calls of its own."""
-    import main
-    monkeypatch.setattr(main, "CAPTCHA_PROVIDER", "altcha")
-    monkeypatch.setattr(main, "ALTCHA_HMAC_KEY", "test-hmac-key-for-altcha")
+    from routers import helpers
+    monkeypatch.setattr(helpers, "CAPTCHA_PROVIDER", "altcha")
+    monkeypatch.setattr(helpers, "ALTCHA_HMAC_KEY", "test-hmac-key-for-altcha")
 
 
 # ── Net Repository ───────────────────────────────────────────────────────────

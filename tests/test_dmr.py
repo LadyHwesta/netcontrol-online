@@ -13,12 +13,12 @@ the GMRS 400-block. This fills that gap while also covering the new
 filtering added for issue #26.
 
 Mocks httpx.get for the proxy fetch, same pattern as test_captcha.py /
-test_aprs.py: monkeypatch.setattr(main.httpx, "get", ...).
+test_aprs.py: monkeypatch.setattr(digital_voice.httpx, "get", ...).
 """
 
 import pytest
 
-import main
+from routers import digital_voice
 from helpers import auth
 
 
@@ -28,9 +28,9 @@ def _clear_dmr_memory_cache():
     conftest's per-test DB row wipe. Net IDs get reused starting from 1
     each test, so without this a cache entry written by an earlier test
     could leak into a later one with the same net id."""
-    main._dmr_push_cache.clear()
+    digital_voice._dmr_push_cache.clear()
     yield
-    main._dmr_push_cache.clear()
+    digital_voice._dmr_push_cache.clear()
 
 
 class TestDmrConfigCrud:
@@ -151,7 +151,7 @@ class TestHotspotProxyFetch:
             calls.append((url, params))
             return FakeResponse()
 
-        monkeypatch.setattr(main.httpx, "get", fake_get)
+        monkeypatch.setattr(digital_voice.httpx, "get", fake_get)
 
         resp = client.get(f"/nets/{net['id']}/dmr/lastheard", headers=admin_headers)
         assert resp.status_code == 200
@@ -183,7 +183,7 @@ class TestHotspotProxyFetch:
             def json(self):
                 return TestHotspotProxyFetch.WPSD_RESPONSE
 
-        monkeypatch.setattr(main.httpx, "get", lambda *a, **k: FakeResponse())
+        monkeypatch.setattr(digital_voice.httpx, "get", lambda *a, **k: FakeResponse())
 
         entries = client.get(f"/nets/{net['id']}/dmr/lastheard", headers=admin_headers).json()
         callsigns = [e["callsign"] for e in entries]
@@ -213,7 +213,7 @@ class TestHotspotProxyFetch:
             calls.append((url, params))
             return FakeResponse()
 
-        monkeypatch.setattr(main.httpx, "get", fake_get)
+        monkeypatch.setattr(digital_voice.httpx, "get", fake_get)
 
         client.get(f"/nets/{net['id']}/dmr/lastheard", headers=admin_headers)
         assert len(calls) == 1

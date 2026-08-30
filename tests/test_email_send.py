@@ -2,9 +2,14 @@
 Tests for send_email()'s low-level SMTP mechanics (as opposed to the
 higher-level flows in test_email_verification.py / test_reminders.py, which
 monkeypatch send_email() itself and never touch smtplib).
+
+send_email() and its SMTP config live in routers/helpers.py (shared by
+every router that sends email) -- not main.py -- since the main.py ->
+routers/ split, so this module patches routers.helpers directly rather
+than main.
 """
 
-import main
+from routers import helpers
 
 
 class TestSMTPTimeout:
@@ -35,10 +40,10 @@ class TestSMTPTimeout:
             def sendmail(self, from_addr, to, msg):
                 pass
 
-        monkeypatch.setattr(main.smtplib, "SMTP", FakeSMTP)
-        ok = main.send_email(to=["x@example.com"], subject="Test", body_html="<p>hi</p>")
+        monkeypatch.setattr(helpers.smtplib, "SMTP", FakeSMTP)
+        ok = helpers.send_email(to=["x@example.com"], subject="Test", body_html="<p>hi</p>")
         assert ok is True
-        assert captured["timeout"] == main.SMTP_TIMEOUT_SECONDS
+        assert captured["timeout"] == helpers.SMTP_TIMEOUT_SECONDS
         assert captured["timeout"] is not None
 
     def test_smtp_ssl_call_passes_a_timeout(self, monkeypatch, smtp_configured):
@@ -60,9 +65,9 @@ class TestSMTPTimeout:
             def sendmail(self, from_addr, to, msg):
                 pass
 
-        monkeypatch.setattr(main, "SMTP_USE_SSL", True)
-        monkeypatch.setattr(main.smtplib, "SMTP_SSL", FakeSMTPSSL)
-        ok = main.send_email(to=["x@example.com"], subject="Test", body_html="<p>hi</p>")
+        monkeypatch.setattr(helpers, "SMTP_USE_SSL", True)
+        monkeypatch.setattr(helpers.smtplib, "SMTP_SSL", FakeSMTPSSL)
+        ok = helpers.send_email(to=["x@example.com"], subject="Test", body_html="<p>hi</p>")
         assert ok is True
-        assert captured["timeout"] == main.SMTP_TIMEOUT_SECONDS
+        assert captured["timeout"] == helpers.SMTP_TIMEOUT_SECONDS
         assert captured["timeout"] is not None
