@@ -712,3 +712,64 @@ async function clearNetRepoKey() {
 
 onEnter(['netrepo-req-name', 'netrepo-req-callsign', 'netrepo-req-url', 'netrepo-req-notes'], requestNetRepoKey);
 
+async function loadDbStats() {
+  const sqliteNote = document.getElementById('dbstats-sqlite-note');
+  const summary = document.getElementById('dbstats-summary');
+  const tablesCard = document.getElementById('dbstats-tables-card');
+  const slowCard = document.getElementById('dbstats-slow-card');
+  const slowNote = document.getElementById('dbstats-slow-note');
+  const slowTable = document.getElementById('dbstats-slow-table');
+
+  let data;
+  try {
+    data = await apiFetch('/admin/db-stats');
+  } catch (e) {
+    toast(e.message, 'error');
+    return;
+  }
+
+  if (data.dialect !== 'postgresql') {
+    sqliteNote.style.display = '';
+    summary.style.display = 'none';
+    tablesCard.style.display = 'none';
+    slowCard.style.display = 'none';
+    return;
+  }
+  sqliteNote.style.display = 'none';
+
+  summary.style.display = 'flex';
+  document.getElementById('dbstats-size').textContent = data.database_size || '—';
+  const c = data.connections;
+  document.getElementById('dbstats-connections').textContent = c
+    ? `${c.total} (${c.active} active, ${c.idle} idle)`
+    : '—';
+
+  tablesCard.style.display = '';
+  const tbody = document.querySelector('#dbstats-tables-table tbody');
+  tbody.innerHTML = data.tables.map(t => `
+    <tr><td>${esc(t.name)}</td><td>${esc(t.size)}</td><td>${t.row_estimate.toLocaleString()}</td></tr>
+  `).join('') || '<tr><td colspan="3" class="text-muted">No tables found</td></tr>';
+
+  slowCard.style.display = '';
+  if (data.slow_queries_note) {
+    slowNote.textContent = data.slow_queries_note;
+    slowNote.style.display = '';
+  } else {
+    slowNote.style.display = 'none';
+  }
+  if (data.slow_queries.length) {
+    slowTable.style.display = '';
+    const slowBody = document.querySelector('#dbstats-slow-table tbody');
+    slowBody.innerHTML = data.slow_queries.map(q => `
+      <tr>
+        <td style="max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:11px" title="${esc(q.query)}">${esc(q.query)}</td>
+        <td>${q.calls.toLocaleString()}</td>
+        <td>${q.mean_time_ms.toLocaleString()}</td>
+        <td>${q.total_time_ms.toLocaleString()}</td>
+      </tr>
+    `).join('');
+  } else {
+    slowTable.style.display = 'none';
+  }
+}
+

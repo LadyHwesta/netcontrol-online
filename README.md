@@ -46,6 +46,7 @@ Setting up your own instance? See **[QUICKSTART.md](QUICKSTART.md)** for the fas
 - **User management** — registration with org-admin approval, email verification (when SMTP is configured), email notifications, admin panel
 - **Bot protection (optional)** — Cloudflare Turnstile, Google reCAPTCHA, or ALTCHA (open source, self-contained — no third-party service) on registration and login, off by default; set `CAPTCHA_PROVIDER` plus that provider's keys to enable
 - **Configurable branding** — set organization name, tagline, website URL, and logo from the Admin panel
+- **Database stats (Postgres deployments)** — Admin → DB Stats shows database size, connection counts, and largest tables; also surfaces slowest queries if the [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html) extension is enabled on the server. A no-op on SQLite deployments
 - **Theme engine** — per-account color theme (LCARS, Dark, Light, High Contrast, or System/OS-matched), persisted server-side so it follows you across devices
 - **Digital voice integration** — connect a net to a WPSD/Pi-Star hotspot or a BrandMeister talk group; covers DMR, D-Star, YSF, NXDN, P25, and M17. See a live "last heard" panel during the session, quick-check-in heard stations, and log Talk Group + Region per check-in
 - **Keyboard-friendly forms** — Enter submits the primary action from any save/submit form's text fields (multi-line fields like net description and report body are left alone so Enter still inserts a newline)

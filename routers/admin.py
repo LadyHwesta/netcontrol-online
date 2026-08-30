@@ -7,11 +7,11 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
-from database import get_db
+from database import engine, get_db
 from models import Organization, OrganizationMembership, User
 from routers import helpers
 from routers.deps import get_current_user
@@ -341,6 +341,129 @@ def admin_email_status(admin: User = Depends(require_admin)):
         "from_address": helpers.SMTP_FROM or helpers.SMTP_USER or None,
         "host": helpers.SMTP_HOST or None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Database stats (native, lightweight Postgres visibility for Admin)
+#
+# Not a pghero replacement -- pghero is a Ruby/Rack tool, which would mean
+# running a second language runtime as its own service for a single-process,
+# club-scale deployment (see TECH_DEBT.md). This covers the handful of stats
+# people actually check day to day -- connection counts, table sizes, and
+# (if the pg_stat_statements extension is installed) slow queries -- with
+# zero new dependencies or services. A no-op on SQLite deployments.
+# ---------------------------------------------------------------------------
+
+class DbConnectionStats(BaseModel):
+    total: int
+    active: int
+    idle: int
+
+
+class DbTableStat(BaseModel):
+    name: str
+    size: str
+    row_estimate: int
+
+
+class DbSlowQuery(BaseModel):
+    query: str
+    calls: int
+    mean_time_ms: float
+    total_time_ms: float
+
+
+class DbStatsOut(BaseModel):
+    dialect: str                     # "postgresql" | "sqlite" | whatever SQLAlchemy names it
+    database_size: Optional[str] = None
+    connections: Optional[DbConnectionStats] = None
+    tables: list[DbTableStat] = []
+    pg_stat_statements_available: bool = False
+    slow_queries: list[DbSlowQuery] = []
+    slow_queries_note: Optional[str] = None   # e.g. extension not installed, or a version-mismatch error
+
+
+@router.get("/admin/db-stats", response_model=DbStatsOut)
+async def admin_db_stats(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Instance-wide DB diagnostics -- super-admin only, same as
+    Branding/Email/Net Repository/Reassign, since this exposes internals
+    across every org, not just the caller's own."""
+    dialect = engine.dialect.name
+    if dialect != "postgresql":
+        return DbStatsOut(dialect=dialect)
+
+    database_size = (await db.execute(text("SELECT pg_size_pretty(pg_database_size(current_database()))"))).scalar()
+
+    conn_row = (await db.execute(text(
+        "SELECT count(*) AS total, "
+        "count(*) FILTER (WHERE state = 'active') AS active, "
+        "count(*) FILTER (WHERE state = 'idle') AS idle "
+        "FROM pg_stat_activity WHERE datname = current_database()"
+    ))).one()
+    connections = DbConnectionStats(total=conn_row.total, active=conn_row.active, idle=conn_row.idle)
+
+    table_rows = (await db.execute(text(
+        "SELECT relname AS name, pg_size_pretty(pg_total_relation_size(relid)) AS size, "
+        "n_live_tup AS row_estimate FROM pg_stat_user_tables "
+        "ORDER BY pg_total_relation_size(relid) DESC LIMIT 15"
+    ))).all()
+    tables = [DbTableStat(name=r.name, size=r.size, row_estimate=r.row_estimate or 0) for r in table_rows]
+
+    ext_available = bool((await db.execute(text(
+        "SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements'"
+    ))).scalar())
+
+    slow_queries: list[DbSlowQuery] = []
+    slow_queries_note = None
+    if ext_available:
+        try:
+            # mean_exec_time/total_exec_time are the PG13+ column names
+            # (renamed from mean_time/total_time) -- this app's own
+            # deployment target is recent enough that an older PG isn't
+            # worth branching for; if the columns don't exist, the
+            # exception below surfaces a clear message instead of a 500.
+            slow_rows = (await db.execute(text(
+                "SELECT query, calls, "
+                "round(mean_exec_time::numeric, 2) AS mean_time_ms, "
+                "round(total_exec_time::numeric, 2) AS total_time_ms "
+                "FROM pg_stat_statements "
+                "WHERE query NOT ILIKE '%pg_stat_statements%' "
+                "ORDER BY mean_exec_time DESC LIMIT 15"
+            ))).all()
+            slow_queries = [
+                DbSlowQuery(
+                    query=(r.query or "")[:300],
+                    calls=r.calls,
+                    mean_time_ms=float(r.mean_time_ms or 0),
+                    total_time_ms=float(r.total_time_ms or 0),
+                )
+                for r in slow_rows
+            ]
+        except Exception as exc:
+            await db.rollback()  # the failed statement leaves the transaction unusable otherwise
+            # SQLAlchemy's asyncpg adapter wraps the real driver error in its
+            # own Error class, whose __str__ embeds "<class '...'>: message"
+            # for log-friendliness -- __cause__ is the original asyncpg
+            # exception underneath, whose str() is just the plain message.
+            orig = getattr(exc, "orig", None)
+            detail = str(getattr(orig, "__cause__", None) or orig or exc)
+            slow_queries_note = f"Could not read pg_stat_statements: {detail}"
+    else:
+        slow_queries_note = (
+            "pg_stat_statements extension is not installed -- run "
+            "`CREATE EXTENSION pg_stat_statements;` as a superuser (and add it to "
+            "shared_preload_libraries) to enable slow-query tracking."
+        )
+
+    return DbStatsOut(
+        dialect=dialect,
+        database_size=database_size,
+        connections=connections,
+        tables=tables,
+        pg_stat_statements_available=ext_available,
+        slow_queries=slow_queries,
+        slow_queries_note=slow_queries_note,
+    )
 
 
 # ---------------------------------------------------------------------------

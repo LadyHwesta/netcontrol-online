@@ -59,6 +59,7 @@
         <button class="tab-btn" id="admin-tab-branding"   onclick="switchAdminTab('branding')">🎨 Branding</button>
         <button class="tab-btn" id="admin-tab-email"      onclick="switchAdminTab('email')">📧 Email</button>
         <button class="tab-btn" id="admin-tab-netrepo"    onclick="switchAdminTab('netrepo')">🌐 Net Repository</button>
+        <button class="tab-btn" id="admin-tab-dbstats"    onclick="switchAdminTab('dbstats')">🗄️ DB Stats</button>
         <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')">🔀 Reassign</button>
       </div>
 
@@ -272,6 +273,47 @@
         </div>
       </div><!-- /admin-panel-netrepo -->
 
+      <!-- ── DB Stats panel ───────────────────────────────────────── -->
+      <div id="admin-panel-dbstats" style="display:none">
+        <div class="card">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">DATABASE</h3>
+          <div id="dbstats-sqlite-note" class="text-muted" style="font-size:12px;display:none">
+            This instance is running on SQLite — connection/query stats only apply to Postgres deployments.
+          </div>
+          <div id="dbstats-summary" style="display:none;gap:24px;flex-wrap:wrap;margin-bottom:14px">
+            <div>
+              <div class="text-muted" style="font-size:11px">DATABASE SIZE</div>
+              <div id="dbstats-size" style="font-size:20px;font-weight:700"></div>
+            </div>
+            <div>
+              <div class="text-muted" style="font-size:11px">CONNECTIONS</div>
+              <div id="dbstats-connections" style="font-size:20px;font-weight:700"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="dbstats-tables-card" style="display:none">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">LARGEST TABLES</h3>
+          <div style="overflow-x:auto">
+            <table class="tbl" id="dbstats-tables-table">
+              <thead><tr><th>Table</th><th>Size</th><th>Rows (est.)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="dbstats-slow-card" style="display:none">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">SLOWEST QUERIES</h3>
+          <p id="dbstats-slow-note" class="text-muted" style="font-size:11px;display:none;margin:0 0 10px"></p>
+          <div style="overflow-x:auto">
+            <table class="tbl" id="dbstats-slow-table" style="display:none">
+              <thead><tr><th>Query</th><th>Calls</th><th>Avg (ms)</th><th>Total (ms)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /admin-panel-dbstats -->
+
       <!-- ── Reassign panel (super admin only, issue #1 follow-up) ─── -->
       <div id="admin-panel-reassign" style="display:none">
         <div class="card" style="margin-bottom:16px">
@@ -377,7 +419,7 @@
 <script src="/static/js/auth.js?v=15"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/branding.js?v=9"></script>
-<script src="/static/js/admin.js?v=18"></script>
+<script src="/static/js/admin.js?v=34"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {
@@ -387,6 +429,7 @@
     });
     if (tab === 'email') loadAdminUsers(); // refreshes email status card
     if (tab === 'netrepo') loadNetRepoStatus();
+    if (tab === 'dbstats') loadDbStats();
     if (tab === 'reassign') loadReassignTab();
   }
 
@@ -418,8 +461,8 @@
     loadOrgEditForm();   // fire-and-forget; non-blocking — shown for org admins and super admins alike
 
     if (orgAdminOnly) {
-      // Branding/Email/Net Repository/Reassign are super-admin-only, instance-wide concerns
-      ['branding', 'email', 'netrepo', 'reassign'].forEach(t => {
+      // Branding/Email/Net Repository/DB Stats/Reassign are super-admin-only, instance-wide concerns
+      ['branding', 'email', 'netrepo', 'dbstats', 'reassign'].forEach(t => {
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
       document.querySelector('#content h2.section-title').textContent = 'Organization Admin';
