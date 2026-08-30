@@ -75,10 +75,11 @@ class TestAprsConfigCrud:
         assert resp.status_code == 204
         assert client.get(f"/nets/{net['id']}/aprs/config", headers=admin_headers).json() is None
 
-    def test_editor_share_can_configure(self, client, admin_headers, user_headers, net, db):
+    async def test_editor_share_can_configure(self, client, admin_headers, user_headers, net, db):
         # Grant edit rights to the second user, then have them configure APRS.
         import models
-        user = db.query(models.User).filter(models.User.callsign == "W2USER").first()
+        from sqlalchemy import select
+        user = (await db.execute(select(models.User).filter(models.User.callsign == "W2USER"))).scalar_one_or_none()
         resp = client.put(f"/nets/{net['id']}/shares", json={
             "share_with_all": False, "can_edit_all": False,
             "user_ids": [user.id], "editor_user_ids": [user.id],

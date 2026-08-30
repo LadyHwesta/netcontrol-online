@@ -24,8 +24,11 @@ Environment variables (read from .env)
     NET_REPOSITORY_API_KEY    nr_-prefixed API key issued by that instance's admin
 """
 
+import asyncio
 import os
 import sys
+
+from sqlalchemy import select
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,17 +49,16 @@ from models import Net  # noqa: E402
 from net_repository import net_repository_configured, push_net  # noqa: E402
 
 
-def run():
-    db = SessionLocal()
-    try:
-        if not net_repository_configured(db):
+async def run():
+    async with SessionLocal() as db:
+        if not await net_repository_configured(db):
             sys.exit(
                 "NET_REPOSITORY_URL isn't set, and no API key is available (neither "
                 "NET_REPOSITORY_API_KEY in .env nor a self-service key obtained via "
                 "Admin > Net Repository) — nothing to do. See .env.example."
             )
 
-        nets = db.query(Net).filter(Net.public_listed == True).all()  # noqa: E712
+        nets = (await db.execute(select(Net).filter(Net.public_listed == True))).scalars().all()  # noqa: E712
         if not nets:
             print("No public nets found.")
             return
@@ -64,16 +66,14 @@ def run():
         pushed = 0
         for net in nets:
             print(f"Pushing '{net.name}' (id={net.id})... ", end="", flush=True)
-            if push_net(net, db):
+            if await push_net(net, db):
                 print("done")
                 pushed += 1
             else:
                 print("FAILED (see log)")
 
         print(f"\n{pushed}/{len(nets)} nets pushed (or updated) at Net Repository.")
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":
-    run()
+    asyncio.run(run())

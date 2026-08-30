@@ -77,8 +77,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select, delete, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db, init_db
 from models import ApiToken, AprsConfig, CallsignCache, Checkin, DmrConfig, EvacZone, GmrsLicense, Net, NetControlShift, NetControlSignup, NetSchedule, NetSession, NetShare, Organization, OrganizationMembership, StationRemark, SystemSetting, TacticalPosition, TrafficMessage, User, utcnow
@@ -483,12 +483,12 @@ def serve_report():
 
 
 @app.get("/manifest.json", include_in_schema=False)
-def serve_manifest(db: Session = Depends(get_db)):
+async def serve_manifest(db: AsyncSession = Depends(get_db)):
     """PWA web manifest (issue #9). Generated dynamically rather than a static
     file so name/short_name pick up the org's own Branding settings instead of
     a hardcoded name — icons stay fixed to the built-in mark (reliable/square)
     regardless of any uploaded club logo."""
-    org_name = _get_setting("org_name", db) or "NetControl Online"
+    org_name = await _get_setting("org_name", db) or "NetControl Online"
     return {
         "name": org_name,
         "short_name": org_name if len(org_name) <= 15 else "NetControl Online",
@@ -538,19 +538,14 @@ def robots_txt(request: Request):
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
-def sitemap_xml(request: Request, db: Session = Depends(get_db)):
+async def sitemap_xml(request: Request, db: AsyncSession = Depends(get_db)):
     """Lists each organization's public directory/live pages (issue #1) — the
     same set /public/organizations already computes: orgs with at least one
     net actually opted into the public directory, so nothing thin or private
     gets listed."""
     base = _public_base_url(request)
     orgs = (
-        db.query(Organization)
-        .join(Net, Net.org_id == Organization.id)
-        .filter(Net.public_listed == True)
-        .distinct()
-        .order_by(Organization.name)
-        .all()
+        (await db.execute(select(Organization).join(Net, Net.org_id == Organization.id).filter(Net.public_listed == True).distinct().order_by(Organization.name))).scalars().all()
     )
     entries = [(f"{base}/directory", "0.5", "weekly"), (f"{base}/live", "0.3", "daily")]
     for org in orgs:
@@ -1139,7 +1134,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -1149,18 +1144,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     # --- Try long-lived API token first (format: "nt_<64 hex chars>") ---
     if token.startswith("nt_"):
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        api_token = db.query(ApiToken).filter(ApiToken.token_hash == token_hash).first()
+        api_token = (await db.execute(select(ApiToken).filter(ApiToken.token_hash == token_hash))).scalar_one_or_none()
         if api_token is None:
             raise credentials_exception
-        user = db.query(User).filter(User.id == api_token.user_id).first()
+        user = (await db.execute(select(User).filter(User.id == api_token.user_id))).scalar_one_or_none()
         if user is None or not user.is_active:
             raise credentials_exception
         # Update last_used_at (fire-and-forget; don't fail the request if this errors)
         try:
             api_token.last_used_at = datetime.now(timezone.utc)
-            db.commit()
+            await db.commit()
         except Exception:
-            db.rollback()
+            await db.rollback()
         return user
 
     # --- Fall back to JWT ---
@@ -1172,7 +1167,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except jwt.PyJWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    user = (await db.execute(select(User).filter(User.id == int(user_id)))).scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
     return user
@@ -1187,8 +1182,8 @@ def _slugify(text: str) -> str:
     return slug or "org"
 
 
-def _get_or_create_org(
-    org_slug: Optional[str], org_name: Optional[str], org_website_url: Optional[str], db: Session,
+async def _get_or_create_org(
+    org_slug: Optional[str], org_name: Optional[str], org_website_url: Optional[str], db: AsyncSession,
 ) -> tuple[Organization, bool]:
     """Multi-tenancy (issue #1) join-or-create: resolves the org for a slug,
     creating it if it doesn't exist yet. Returns (org, created) — the caller
@@ -1202,7 +1197,7 @@ def _get_or_create_org(
     something to verify it against; the bare default-org bootstrap path does
     not, since nothing about it was actually requested by the caller."""
     slug = org_slug or (_slugify(org_name) if org_name else "default")
-    org = db.query(Organization).filter(Organization.slug == slug).first()
+    org = (await db.execute(select(Organization).filter(Organization.slug == slug))).scalar_one_or_none()
     if org:
         return org, False
     website = (org_website_url or "").strip()
@@ -1214,14 +1209,14 @@ def _get_or_create_org(
         # be a stored-XSS vector against whoever reviews it.
         if not re.match(r"^https?://", website, re.IGNORECASE):
             raise HTTPException(400, "Organization website URL must start with http:// or https://")
-    name = org_name or (_get_setting("org_name", db) if slug == "default" else None) or slug.replace("-", " ").title()
+    name = org_name or (await _get_setting("org_name", db) if slug == "default" else None) or slug.replace("-", " ").title()
     org = Organization(name=name, slug=slug, website_url=website or None)
     db.add(org)
-    db.flush()
+    await db.flush()
     return org, True
 
 
-def _delete_orphaned_orgs(org_ids: set[int], db: Session) -> None:
+async def _delete_orphaned_orgs(org_ids: set[int], db: AsyncSession) -> None:
     """Deletes any of the given orgs that now have zero memberships — call
     this AFTER deleting a user (with their org_ids captured beforehand),
     since a rejected/deleted user could have been an org's only member (most
@@ -1230,28 +1225,28 @@ def _delete_orphaned_orgs(org_ids: set[int], db: Session) -> None:
     existing organization" picker with no one left who could ever approve a
     join request (issue #1 follow-up)."""
     for org_id in org_ids:
-        remaining = db.query(func.count(OrganizationMembership.id)).filter(
-            OrganizationMembership.org_id == org_id
-        ).scalar()
+        remaining = (await db.execute(
+            select(func.count(OrganizationMembership.id)).filter(OrganizationMembership.org_id == org_id)
+        )).scalar()
         if remaining == 0:
-            org = db.query(Organization).filter(Organization.id == org_id).first()
+            org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
             if org:
-                db.delete(org)
+                await db.delete(org)
 
 
 @app.post("/auth/register", response_model=UserOut, status_code=201)
 @limiter.limit("5/minute")
-def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
+async def register(request: Request, data: UserCreate, db: AsyncSession = Depends(get_db)):
     if _captcha_configured() and not _verify_captcha(data.captcha_token, get_remote_address(request)):
         raise HTTPException(400, "Verification failed — please try again.")
-    if db.query(User).filter(User.callsign == data.callsign).first():
+    if (await db.execute(select(User).filter(User.callsign == data.callsign))).scalar_one_or_none():
         raise HTTPException(400, "Callsign already registered")
-    if db.query(User).filter(User.email == data.email).first():
+    if (await db.execute(select(User).filter(User.email == data.email))).scalar_one_or_none():
         raise HTTPException(400, "Email already registered")
 
     # First registered user becomes (super) admin and is immediately active,
     # independent of org — is_admin bypasses org scoping entirely.
-    is_first_user = db.query(User).count() == 0
+    is_first_user = (await db.execute(select(func.count()).select_from(User))).scalar() == 0
     # The bootstrap admin is trusted implicitly (they had server access to deploy this at
     # all) and skips verification so a first-run SMTP misconfiguration can't lock them out.
     needs_verification = _smtp_configured() and not is_first_user
@@ -1267,7 +1262,7 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
     # IN (is_active) now always needs a super admin's sign-off, since an org
     # founder approving themselves would be no approval at all — except the
     # instance's literal first-ever user, who has no one else to ask.
-    org, org_created = _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db)
+    org, org_created = await _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db)
     membership_approved = is_first_user or org_created
     user_is_active = is_first_user
 
@@ -1284,8 +1279,8 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
         current_org_id=org.id,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
 
     db.add(OrganizationMembership(
         org_id=org.id,
@@ -1293,7 +1288,7 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
         role="admin" if org_created else "member",
         approved=membership_approved,
     ))
-    db.commit()
+    await db.commit()
 
     if needs_verification:
         verify_link = _app_url(f"/auth/verify-email?token={verification_token}")
@@ -1325,9 +1320,7 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
             # /admin/users/{id}/approve (membership itself is already
             # approved — only is_active is still gated).
             notify_admins = (
-                db.query(User)
-                .filter(User.is_admin == True, User.notify_new_registrations == True, User.is_active == True)
-                .all()
+                (await db.execute(select(User).filter(User.is_admin == True, User.notify_new_registrations == True, User.is_active == True))).scalars().all()
             )
             if notify_admins:
                 send_email(
@@ -1359,16 +1352,13 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
         else:
             # Joining an existing org: that org's own admins approve it.
             notify_admins = (
-                db.query(User)
-                .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
-                .filter(
+                (await db.execute(select(User).join(OrganizationMembership, OrganizationMembership.user_id == User.id).filter(
                     OrganizationMembership.org_id == org.id,
                     OrganizationMembership.role == "admin",
                     OrganizationMembership.approved == True,
                     User.notify_new_registrations == True,
                     User.is_active == True,
-                )
-                .all()
+                ))).scalars().all()
             )
             if notify_admins:
                 send_email(
@@ -1398,13 +1388,13 @@ def register(request: Request, data: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/auth/verify-email", include_in_schema=False)
-def verify_email(token: str, db: Session = Depends(get_db)):
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     """Public link clicked from the verification email. Redirects back to the
     login page with a query param the frontend uses to show a result toast."""
     if not token:
         return RedirectResponse(url="/?verified=0")
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    user = db.query(User).filter(User.verification_token == token_hash).first()
+    user = (await db.execute(select(User).filter(User.verification_token == token_hash))).scalar_one_or_none()
     if not user:
         return RedirectResponse(url="/?verified=0")
     if user.verification_sent_at:
@@ -1416,7 +1406,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
             return RedirectResponse(url="/?verified=0")
     user.email_verified = True
     user.verification_token = None
-    db.commit()
+    await db.commit()
     return RedirectResponse(url="/?verified=1")
 
 
@@ -1427,7 +1417,7 @@ class SetPasswordRequest(BaseModel):
 
 @app.post("/auth/set-password", response_model=Token)
 @limiter.limit("10/minute")
-def set_password(request: Request, data: SetPasswordRequest, db: Session = Depends(get_db)):
+async def set_password(request: Request, data: SetPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Redeems the invite link from an admin-created account's "set your
     password" email (issue #1 follow-up) — the account already exists and is
     active, but hashed_password is an unusable random placeholder until this
@@ -1436,7 +1426,7 @@ def set_password(request: Request, data: SetPasswordRequest, db: Session = Depen
     if len(data.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
     token_hash = hashlib.sha256(data.token.encode()).hexdigest()
-    user = db.query(User).filter(User.password_set_token == token_hash).first()
+    user = (await db.execute(select(User).filter(User.password_set_token == token_hash))).scalar_one_or_none()
     if not user:
         raise HTTPException(400, "This link is invalid or has already been used.")
     if user.password_set_sent_at:
@@ -1448,8 +1438,8 @@ def set_password(request: Request, data: SetPasswordRequest, db: Session = Depen
     user.hashed_password = hash_password(data.password)
     user.password_set_token = None
     user.password_set_sent_at = None
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
 
     token = create_access_token({"sub": str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": token, "token_type": "bearer", "user": user}
@@ -1457,19 +1447,19 @@ def set_password(request: Request, data: SetPasswordRequest, db: Session = Depen
 
 @app.post("/auth/login", response_model=Token)
 @limiter.limit("10/minute")
-def login(
+async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     captcha_token: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     if _captcha_configured() and not _verify_captcha(captcha_token, get_remote_address(request)):
         _log_auth_fail(request, f"captcha_failed username={form_data.username!r}")
         raise HTTPException(status_code=400, detail="Verification failed — please try again.")
     # Accept callsign or email as username
     user = (
-        db.query(User).filter(User.callsign == form_data.username.upper()).first()
-        or db.query(User).filter(User.email == form_data.username.lower()).first()
+        (await db.execute(select(User).filter(User.callsign == form_data.username.upper()))).scalar_one_or_none()
+        or (await db.execute(select(User).filter(User.email == form_data.username.lower()))).scalar_one_or_none()
     )
     if not user or not verify_password(form_data.password, user.hashed_password):
         _log_auth_fail(request, f"bad_credentials username={form_data.username!r}")
@@ -1542,28 +1532,28 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 @app.patch("/auth/theme", response_model=UserOut)
-def update_theme(
+async def update_theme(
     data: ThemeUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     current_user.theme = data.theme
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 
 @app.patch("/auth/gmrs-callsign", response_model=UserOut)
-def update_gmrs_callsign(
+async def update_gmrs_callsign(
     data: GmrsCallsignUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Self-service: set or clear the operator's own GMRS callsign (issue #23)
     — separate from their amateur callsign, used as Net Control on GMRS nets."""
     current_user.gmrs_callsign = (data.gmrs_callsign or "").strip().upper() or None
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 
@@ -1571,55 +1561,49 @@ def update_gmrs_callsign(
 # Organizations (issue #1 — multi-tenancy)
 # ---------------------------------------------------------------------------
 
-def require_org_admin(org_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+async def require_org_admin(org_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
     """Org-scoped equivalent of require_admin — an approved admin of THIS org,
     or a super admin (User.is_admin bypasses org scoping everywhere, including
     here)."""
     if current_user.is_admin:
         return current_user
-    membership = db.query(OrganizationMembership).filter(
+    membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org_id,
         OrganizationMembership.user_id == current_user.id,
         OrganizationMembership.role == "admin",
         OrganizationMembership.approved == True,
-    ).first()
+    ))).scalar_one_or_none()
     if not membership:
         raise HTTPException(403, "Organization admin access required")
     return current_user
 
 
 @app.get("/orgs", response_model=list[OrganizationOut])
-def list_orgs(db: Session = Depends(get_db)):
+async def list_orgs(db: AsyncSession = Depends(get_db)):
     """Organizations that actually have someone who could approve a join
     request — name+slug only — powers the "join an existing organization"
     picker at registration. No auth required: same trust level as
     callsign/name being visible in the registration form itself, and an
     org's existence isn't sensitive. Excludes an org with no approved admin
     (e.g. its founder was rejected/deleted before anyone else joined) —
-    _delete_orphaned_orgs() cleans those up outright, but this filter is a
+    await _delete_orphaned_orgs() cleans those up outright, but this filter is a
     second line of defense against ever listing a dead-end org (issue #1
     follow-up)."""
     return (
-        db.query(Organization)
-        .join(OrganizationMembership, OrganizationMembership.org_id == Organization.id)
-        .filter(OrganizationMembership.role == "admin", OrganizationMembership.approved == True)
-        .distinct()
-        .order_by(Organization.name)
-        .all()
+        (await db.execute(select(Organization).join(OrganizationMembership, OrganizationMembership.org_id == Organization.id).filter(OrganizationMembership.role == "admin", OrganizationMembership.approved == True).distinct().order_by(Organization.name))).scalars().all()
     )
 
 
 @app.get("/orgs/mine", response_model=list[MyOrgOut])
-def list_my_orgs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_my_orgs(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """The current user's own approved organizations, with their role in each
     — powers the org switcher and the org-admin panel visibility check."""
-    rows = (
-        db.query(Organization, OrganizationMembership.role)
+    rows = (await db.execute(
+        select(Organization, OrganizationMembership.role)
         .join(OrganizationMembership, OrganizationMembership.org_id == Organization.id)
         .filter(OrganizationMembership.user_id == current_user.id, OrganizationMembership.approved == True)
         .order_by(Organization.name)
-        .all()
-    )
+    )).all()
     return [MyOrgOut(id=org.id, name=org.name, slug=org.slug, website_url=org.website_url, role=role) for org, role in rows]
 
 
@@ -1629,14 +1613,14 @@ class OrganizationUpdate(BaseModel):
 
 
 @app.patch("/orgs/{org_id}", response_model=OrganizationOut)
-def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
+async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     """Rename an org / fix its website — previously there was no way to do
     this at all once created (issue #1 follow-up; an org's name is its own
     property, independent of the instance-wide Branding settings, so
     changing Branding doesn't retroactively rename any org). Slug is
     intentionally not editable here — it's baked into public
     /directory/<slug> and /live/<slug> URLs."""
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
     name = data.name.strip()
@@ -1647,8 +1631,8 @@ def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depends(requ
         raise HTTPException(400, "Organization website URL must start with http:// or https://")
     org.name = name
     org.website_url = website or None
-    db.commit()
-    db.refresh(org)
+    await db.commit()
+    await db.refresh(org)
     return org
 
 
@@ -1659,7 +1643,7 @@ class OrgJoinRequest(BaseModel):
 
 
 @app.post("/orgs/join", response_model=OrganizationOut, status_code=201)
-def join_org(data: OrgJoinRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def join_org(data: OrgJoinRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Already-logged-in self-service: request to join an additional org (or
     create a new one), same join-or-create semantics as registration. Does
     not touch is_active — the caller is already active via an existing org.
@@ -1667,10 +1651,10 @@ def join_org(data: OrgJoinRequest, current_user: User = Depends(get_current_user
     self-approved) — the caller being active elsewhere doesn't make them a
     trustworthy org founder; a super admin still needs to sign off via the
     existing /admin/users/{id}/approve (issue #1 follow-up)."""
-    org, org_created = _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db)
-    existing = db.query(OrganizationMembership).filter(
+    org, org_created = await _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db)
+    existing = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org.id, OrganizationMembership.user_id == current_user.id,
-    ).first()
+    ))).scalar_one_or_none()
     if existing:
         raise HTTPException(400, "Already a member (or pending member) of this organization")
     db.add(OrganizationMembership(
@@ -1679,7 +1663,7 @@ def join_org(data: OrgJoinRequest, current_user: User = Depends(get_current_user
         role="admin" if org_created else "member",
         approved=False,
     ))
-    db.commit()
+    await db.commit()
     return org
 
 
@@ -1688,37 +1672,36 @@ class CurrentOrgUpdate(BaseModel):
 
 
 @app.patch("/auth/current-org", response_model=UserOut)
-def switch_current_org(data: CurrentOrgUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def switch_current_org(data: CurrentOrgUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Switch which org the user is "working as" — every net/session/checkin
     endpoint scopes to current_org_id from here on. Restricted to orgs the user
     has an APPROVED membership in (super admins may switch to any org, since
     they already see everything regardless)."""
     if not current_user.is_admin:
-        membership = db.query(OrganizationMembership).filter(
+        membership = (await db.execute(select(OrganizationMembership).filter(
             OrganizationMembership.org_id == data.org_id,
             OrganizationMembership.user_id == current_user.id,
             OrganizationMembership.approved == True,
-        ).first()
+        ))).scalar_one_or_none()
         if not membership:
             raise HTTPException(403, "Not an approved member of that organization")
     else:
-        if not db.query(Organization).filter(Organization.id == data.org_id).first():
+        if not (await db.execute(select(Organization).filter(Organization.id == data.org_id))).scalar_one_or_none():
             raise HTTPException(404, "Organization not found")
     current_user.current_org_id = data.org_id
-    db.commit()
-    db.refresh(current_user)
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 
 @app.get("/orgs/{org_id}/pending-members", response_model=list[OrgMemberOut])
-def list_pending_org_members(org_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
-    rows = (
-        db.query(OrganizationMembership, User)
+async def list_pending_org_members(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)
         .filter(OrganizationMembership.org_id == org_id, OrganizationMembership.approved == False)
         .order_by(OrganizationMembership.created_at.desc())
-        .all()
-    )
+    )).all()
     return [
         OrgMemberOut(
             user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
@@ -1729,14 +1712,13 @@ def list_pending_org_members(org_id: int, admin: User = Depends(require_org_admi
 
 
 @app.get("/orgs/{org_id}/members", response_model=list[OrgMemberOut])
-def list_org_members(org_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
-    rows = (
-        db.query(OrganizationMembership, User)
+async def list_org_members(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(OrganizationMembership, User)
         .join(User, User.id == OrganizationMembership.user_id)
         .filter(OrganizationMembership.org_id == org_id, OrganizationMembership.approved == True)
         .order_by(User.callsign)
-        .all()
-    )
+    )).all()
     return [
         OrgMemberOut(
             user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
@@ -1747,32 +1729,32 @@ def list_org_members(org_id: int, admin: User = Depends(require_org_admin), db: 
 
 
 @app.get("/orgs/{org_id}/nets", response_model=list[NetOut])
-def list_org_nets(org_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
+async def list_org_nets(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     """Every net in this org, regardless of ownership or sharing — lets an
     org admin see (and reassign ownership of) every net in their org, not
     just ones they personally own or are shared on (issue follow-up).
     list_nets doesn't do this for non-super-admins: org-admin role alone
     was never a substitute for owning or being shared on a net."""
-    nets = db.query(Net).filter(Net.org_id == org_id).order_by(Net.name).all()
-    return [_net_to_out(n, admin, db) for n in nets]
+    nets = (await db.execute(select(Net).filter(Net.org_id == org_id).order_by(Net.name))).scalars().all()
+    return [await _net_to_out(n, admin, db) for n in nets]
 
 
 @app.patch("/orgs/{org_id}/members/{user_id}/approve", status_code=204)
-def approve_org_member(org_id: int, user_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
-    membership = db.query(OrganizationMembership).filter(
+async def approve_org_member(org_id: int, user_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org_id, OrganizationMembership.user_id == user_id,
-    ).first()
+    ))).scalar_one_or_none()
     if not membership:
         raise HTTPException(404, "Membership not found")
     membership.approved = True
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     # Only their FIRST approved org needs to flip is_active — a user already
     # active via another org just needed this specific membership approved.
     if user and not user.is_active:
         user.is_active = True
         user.email_verified = True
         user.verification_token = None
-    db.commit()
+    await db.commit()
 
     if user:
         login_link = _app_url("/")
@@ -1796,20 +1778,20 @@ def approve_org_member(org_id: int, user_id: int, admin: User = Depends(require_
 
 
 @app.post("/orgs/{org_id}/members/{user_id}/reject", status_code=204)
-def reject_org_member(org_id: int, user_id: int, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
+async def reject_org_member(org_id: int, user_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     """Rejects (deletes) a pending membership request. Unlike the legacy
     single-tenant /admin/users/{id}/reject, this does NOT delete the user
     account itself — they may hold approved memberships in other orgs, or be
     free to request a different org."""
-    membership = db.query(OrganizationMembership).filter(
+    membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org_id, OrganizationMembership.user_id == user_id,
-    ).first()
+    ))).scalar_one_or_none()
     if not membership:
         raise HTTPException(404, "Membership not found")
     if membership.approved:
         raise HTTPException(400, "Cannot reject an already-approved membership — remove them from the org instead")
-    db.delete(membership)
-    db.commit()
+    await db.delete(membership)
+    await db.commit()
 
 
 class OrgMemberRoleUpdate(BaseModel):
@@ -1817,9 +1799,9 @@ class OrgMemberRoleUpdate(BaseModel):
 
 
 @app.patch("/orgs/{org_id}/members/{user_id}/role", response_model=OrgMemberOut)
-def update_org_member_role(
+async def update_org_member_role(
     org_id: int, user_id: int, data: OrgMemberRoleUpdate,
-    admin: User = Depends(require_org_admin), db: Session = Depends(get_db),
+    admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
     """Promote/demote an already-approved member's role within this org —
     previously an org admin could approve or reject a new member but had no
@@ -1830,17 +1812,17 @@ def update_org_member_role(
     single self-demote."""
     if user_id == admin.id:
         raise HTTPException(400, "Cannot change your own role")
-    membership = db.query(OrganizationMembership).filter(
+    membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org_id,
         OrganizationMembership.user_id == user_id,
         OrganizationMembership.approved == True,
-    ).first()
+    ))).scalar_one_or_none()
     if not membership:
         raise HTTPException(404, "Membership not found")
     membership.role = data.role
-    db.commit()
+    await db.commit()
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     return OrgMemberOut(
         user_id=user.id, callsign=user.callsign, name=user.name, email=user.email,
         role=membership.role, approved=membership.approved, requested_at=membership.created_at,
@@ -1861,7 +1843,7 @@ class OrgUserCreate(BaseModel):
 
 
 @app.post("/orgs/{org_id}/users", response_model=AdminUserOut, status_code=201)
-def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(require_org_admin), db: Session = Depends(get_db)):
+async def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     """Admin-seeds an operator account directly — for bringing existing
     operators onto the org without a self-registration/approval round trip
     (issue #1 follow-up). Auto-approved (the admin creating it IS the
@@ -1872,12 +1854,12 @@ def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(requ
     become usable."""
     if not _smtp_configured():
         raise HTTPException(400, "Email must be configured (Admin → Email) before creating operator accounts this way — the invite link is sent by email.")
-    org = db.query(Organization).filter(Organization.id == org_id).first()
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
-    if db.query(User).filter(User.callsign == data.callsign).first():
+    if (await db.execute(select(User).filter(User.callsign == data.callsign))).scalar_one_or_none():
         raise HTTPException(400, "Callsign already registered")
-    if db.query(User).filter(User.email == data.email).first():
+    if (await db.execute(select(User).filter(User.email == data.email))).scalar_one_or_none():
         raise HTTPException(400, "Email already registered")
 
     raw_token = secrets.token_urlsafe(32)
@@ -1897,11 +1879,11 @@ def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(requ
         password_set_sent_at=datetime.now(timezone.utc),
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
 
     db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
-    db.commit()
+    await db.commit()
 
     set_link = _app_url(f"/?setpw={raw_token}")
     send_email(
@@ -1931,43 +1913,38 @@ def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(requ
 
 
 @app.get("/stats")
-def get_stats(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_stats(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Quick stats for the sidebar dashboard panel."""
     from datetime import date, datetime, timezone
 
     # Net IDs the user can see (owned + shared), scoped to their current org (issue #1)
-    owned_ids = [
-        r[0] for r in
-        db.query(Net.id).filter(Net.owner_id == current_user.id, Net.org_id == current_user.current_org_id).all()
-    ]
-    shared_ids = [
-        r[0] for r in
-        db.query(NetShare.net_id)
+    owned_ids = (await db.execute(
+        select(Net.id).filter(Net.owner_id == current_user.id, Net.org_id == current_user.current_org_id)
+    )).scalars().all()
+    shared_ids = (await db.execute(
+        select(NetShare.net_id)
         .join(Net, Net.id == NetShare.net_id)
         .filter(NetShare.user_id == current_user.id, Net.org_id == current_user.current_org_id)
-        .all()
-    ]
-    all_net_ids = list(set(owned_ids + shared_ids))
+    )).scalars().all()
+    all_net_ids = list(set(list(owned_ids) + list(shared_ids)))
 
     total_nets = len(all_net_ids)
 
     active_sessions = 0
     checkins_today = 0
     if all_net_ids:
-        active_sessions = (
-            db.query(func.count(NetSession.id))
+        active_sessions = (await db.execute(
+            select(func.count(NetSession.id))
             .filter(NetSession.net_id.in_(all_net_ids), NetSession.ended_at.is_(None))
-            .scalar() or 0
-        )
+        )).scalar() or 0
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        checkins_today = (
-            db.query(func.count(Checkin.id))
+        checkins_today = (await db.execute(
+            select(func.count(Checkin.id))
             .join(NetSession, Checkin.session_id == NetSession.id)
             .filter(NetSession.net_id.in_(all_net_ids), Checkin.checked_in_at >= today_start)
-            .scalar() or 0
-        )
+        )).scalar() or 0
 
-    gmrs_row = db.query(SystemSetting).filter(SystemSetting.key == "gmrs_db_synced_at").first()
+    gmrs_row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == "gmrs_db_synced_at"))).scalar_one_or_none()
 
     return {
         "total_nets": total_nets,
@@ -1982,10 +1959,10 @@ def get_stats(current_user: User = Depends(get_current_user), db: Session = Depe
 # ---------------------------------------------------------------------------
 
 @app.post("/auth/tokens", response_model=ApiTokenCreated, status_code=201)
-def create_api_token(
+async def create_api_token(
     data: ApiTokenCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a long-lived API token. The raw token is returned once — store it securely."""
     raw_token = "nt_" + secrets.token_hex(32)   # 64 hex chars → 256 bits
@@ -1996,30 +1973,30 @@ def create_api_token(
         token_hash=token_hash,
     )
     db.add(api_token)
-    db.commit()
-    db.refresh(api_token)
+    await db.commit()
+    await db.refresh(api_token)
     return ApiTokenCreated(id=api_token.id, name=api_token.name, token=raw_token, created_at=api_token.created_at)
 
 
 @app.get("/auth/tokens", response_model=list[ApiTokenOut])
-def list_api_tokens(
+async def list_api_tokens(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return db.query(ApiToken).filter(ApiToken.user_id == current_user.id).all()
+    return (await db.execute(select(ApiToken).filter(ApiToken.user_id == current_user.id))).scalars().all()
 
 
 @app.delete("/auth/tokens/{token_id}", status_code=204)
-def delete_api_token(
+async def delete_api_token(
     token_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    api_token = db.query(ApiToken).filter(ApiToken.id == token_id, ApiToken.user_id == current_user.id).first()
+    api_token = (await db.execute(select(ApiToken).filter(ApiToken.id == token_id, ApiToken.user_id == current_user.id))).scalar_one_or_none()
     if not api_token:
         raise HTTPException(404, "Token not found")
-    db.delete(api_token)
-    db.commit()
+    await db.delete(api_token)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -2062,7 +2039,7 @@ def _inject_seo_meta(html_content: str, *, title: str, description: str, canonic
 
 @app.get("/live", response_class=HTMLResponse, include_in_schema=False)
 @app.get("/live/{org_slug}", response_class=HTMLResponse, include_in_schema=False)
-def public_live_page(request: Request, org_slug: Optional[str] = None, db: Session = Depends(get_db)):
+async def public_live_page(request: Request, org_slug: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Serve the public live nets page. org_slug (issue #1), if present, is
     read client-side from the URL path — same SPA path-routing convention as
     /directory/{slug} below. Bare /live with no slug renders an org picker.
@@ -2071,7 +2048,7 @@ def public_live_page(request: Request, org_slug: Optional[str] = None, db: Sessi
     import pathlib
     content = (pathlib.Path(__file__).parent / "public.html").read_text()
     if org_slug:
-        org = db.query(Organization).filter(Organization.slug == org_slug).first()
+        org = (await db.execute(select(Organization).filter(Organization.slug == org_slug))).scalar_one_or_none()
         if org:
             content = _inject_seo_meta(
                 content,
@@ -2084,29 +2061,25 @@ def public_live_page(request: Request, org_slug: Optional[str] = None, db: Sessi
 
 
 @app.get("/public/active")
-def public_active_sessions(org: Optional[str] = None, db: Session = Depends(get_db)):
+async def public_active_sessions(org: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Return all currently active net sessions for one org — no auth
     required. Org-scoped (issue #1); omitting `org` falls back to the
     "default" org (single-tenant backward compat — see _get_or_create_org).
     Deliberately NOT gated on Net.public_listed, unlike /public/directory —
     this page has always shown any net currently in progress in the org,
     listed or not (see TestSchedules::test_public_active_shows_broadcaster)."""
-    org_row = db.query(Organization).filter(Organization.slug == (org or "default")).first()
+    org_row = (await db.execute(select(Organization).filter(Organization.slug == (org or "default")))).scalar_one_or_none()
     if not org_row:
         return []
     sessions = (
-        db.query(NetSession)
-        .join(Net, Net.id == NetSession.net_id)
-        .filter(NetSession.ended_at == None, Net.org_id == org_row.id)
-        .order_by(NetSession.started_at)
-        .all()
+        (await db.execute(select(NetSession).join(Net, Net.id == NetSession.net_id).filter(NetSession.ended_at == None, Net.org_id == org_row.id).order_by(NetSession.started_at))).scalars().all()
     )
     result = []
     for s in sessions:
-        net = db.query(Net).filter(Net.id == s.net_id).first()
+        net = (await db.execute(select(Net).filter(Net.id == s.net_id))).scalar_one_or_none()
         if not net:
             continue
-        count = db.query(func.count(Checkin.id)).filter(Checkin.session_id == s.id).scalar()
+        count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == s.id))).scalar()
         result.append({
             "session_id": s.id,
             "net_name": net.name,
@@ -2114,28 +2087,25 @@ def public_active_sessions(org: Optional[str] = None, db: Session = Depends(get_
             "started_at": s.started_at.isoformat(),
             "checkin_count": count,
             "aprs_map_enabled": net.aprs_map_enabled,
-            "aprs_positions": _public_aprs_positions(net, db),
-            **_duty_labels_for_session(net, s, db),
+            "aprs_positions": await _public_aprs_positions(net, db),
+            **await _duty_labels_for_session(net, s, db),
         })
     return result
 
 
 @app.get("/public/sessions/{session_id}")
-def public_session_detail(session_id: int, db: Session = Depends(get_db)):
+async def public_session_detail(session_id: int, db: AsyncSession = Depends(get_db)):
     """Return session info + checkin list — no auth required. Keyed directly
     by session ID (reached by clicking through from the already org-scoped
     /public/active list), so no separate org check is needed here."""
-    s = db.query(NetSession).filter(NetSession.id == session_id, NetSession.ended_at == None).first()
+    s = (await db.execute(select(NetSession).filter(NetSession.id == session_id, NetSession.ended_at == None))).scalar_one_or_none()
     if not s:
         raise HTTPException(404, "Session not found or no longer active")
-    net = db.query(Net).filter(Net.id == s.net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == s.net_id))).scalar_one_or_none()
     checkins = (
-        db.query(Checkin)
-        .filter(Checkin.session_id == session_id)
-        .order_by(Checkin.checked_in_at)
-        .all()
+        (await db.execute(select(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at))).scalars().all()
     )
-    duty = _duty_labels_for_session(net, s, db) if net else {
+    duty = await _duty_labels_for_session(net, s, db) if net else {
         "ncs_callsign": None, "ncs_name": None,
         "broadcaster_callsign": None, "broadcaster_name": None, "broadcast_label": None,
         "next_ncs_callsign": None, "next_ncs_name": None,
@@ -2151,14 +2121,14 @@ def public_session_detail(session_id: int, db: Session = Depends(get_db)):
             for c in checkins
         ],
         "aprs_map_enabled": net.aprs_map_enabled if net else False,
-        "aprs_positions": _public_aprs_positions(net, db) if net else [],
+        "aprs_positions": await _public_aprs_positions(net, db) if net else [],
         **duty,
     }
 
 
 @app.get("/directory", response_class=HTMLResponse, include_in_schema=False)
 @app.get("/directory/{org_slug}", response_class=HTMLResponse, include_in_schema=False)
-def public_directory_page(request: Request, org_slug: Optional[str] = None, db: Session = Depends(get_db)):
+async def public_directory_page(request: Request, org_slug: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Serve the public net directory page. org_slug (issue #1), if present,
     is read client-side from the URL path — the frontend calls
     /public/directory?org=<slug> accordingly. Bare /directory with no slug
@@ -2167,7 +2137,7 @@ def public_directory_page(request: Request, org_slug: Optional[str] = None, db: 
     _inject_seo_meta) for crawlers and link-preview bots that don't run JS."""
     content = (_STATIC_DIR / "directory.html").read_text(encoding="utf-8")
     if org_slug:
-        org = db.query(Organization).filter(Organization.slug == org_slug).first()
+        org = (await db.execute(select(Organization).filter(Organization.slug == org_slug))).scalar_one_or_none()
         if org:
             canonical_path = f"/directory/{org_slug}"
             content = _inject_seo_meta(
@@ -2193,41 +2163,30 @@ def public_directory_page(request: Request, org_slug: Optional[str] = None, db: 
 
 
 @app.get("/public/organizations", response_model=list[OrganizationOut])
-def public_organizations(db: Session = Depends(get_db)):
+async def public_organizations(db: AsyncSession = Depends(get_db)):
     """Orgs with at least one net in the public directory — powers the org
     picker shown at bare /directory or /live (no slug in the URL)."""
     return (
-        db.query(Organization)
-        .join(Net, Net.org_id == Organization.id)
-        .filter(Net.public_listed == True)
-        .distinct()
-        .order_by(Organization.name)
-        .all()
+        (await db.execute(select(Organization).join(Net, Net.org_id == Organization.id).filter(Net.public_listed == True).distinct().order_by(Organization.name))).scalars().all()
     )
 
 
 @app.get("/public/directory")
-def public_directory(org: Optional[str] = None, db: Session = Depends(get_db)):
+async def public_directory(org: Optional[str] = None, db: AsyncSession = Depends(get_db)):
     """Return every net whose owner has opted into the public directory, for
     one org — no auth required. Org-scoped (issue #1); omitting `org` falls
     back to the "default" org (single-tenant backward compat)."""
-    org_row = db.query(Organization).filter(Organization.slug == (org or "default")).first()
+    org_row = (await db.execute(select(Organization).filter(Organization.slug == (org or "default")))).scalar_one_or_none()
     if not org_row:
         return []
     nets = (
-        db.query(Net)
-        .filter(Net.public_listed == True, Net.org_id == org_row.id)
-        .order_by(Net.name)
-        .all()
+        (await db.execute(select(Net).filter(Net.public_listed == True, Net.org_id == org_row.id).order_by(Net.name))).scalars().all()
     )
     result = []
     for net in nets:
-        owner = db.query(User).filter(User.id == net.owner_id).first()
+        owner = (await db.execute(select(User).filter(User.id == net.owner_id))).scalar_one_or_none()
         schedules = (
-            db.query(NetSchedule)
-            .filter(NetSchedule.net_id == net.id)
-            .order_by(NetSchedule.day_of_week)
-            .all()
+            (await db.execute(select(NetSchedule).filter(NetSchedule.net_id == net.id).order_by(NetSchedule.day_of_week))).scalars().all()
         )
         result.append({
             "id": net.id,
@@ -2251,13 +2210,13 @@ def public_directory(org: Optional[str] = None, db: Session = Depends(get_db)):
 BRANDING_KEYS = ("org_name", "tagline", "website_url")
 
 
-def _get_setting(key: str, db: Session) -> Optional[str]:
-    row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+async def _get_setting(key: str, db: AsyncSession) -> Optional[str]:
+    row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == key))).scalar_one_or_none()
     return row.value if row else None
 
 
-def _set_setting(key: str, value: Optional[str], db: Session):
-    row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+async def _set_setting(key: str, value: Optional[str], db: AsyncSession):
+    row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == key))).scalar_one_or_none()
     if row:
         row.value = value
         row.updated_at = utcnow()
@@ -2275,12 +2234,12 @@ def _logo_file() -> Optional[pathlib.Path]:
 
 
 @app.get("/branding", response_model=BrandingOut)
-def get_branding(db: Session = Depends(get_db)):
+async def get_branding(db: AsyncSession = Depends(get_db)):
     """Public endpoint — returns current branding settings."""
     return BrandingOut(
-        org_name=_get_setting("org_name", db),
-        tagline=_get_setting("tagline", db),
-        website_url=_get_setting("website_url", db),
+        org_name=await _get_setting("org_name", db),
+        tagline=await _get_setting("tagline", db),
+        website_url=await _get_setting("website_url", db),
         has_logo=_logo_file() is not None,
     )
 
@@ -2300,22 +2259,22 @@ def get_logo():
 
 
 @app.put("/admin/branding", response_model=BrandingOut)
-def update_branding(
+async def update_branding(
     data: BrandingUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Admin only — update branding text settings."""
     if not current_user.is_admin:
         raise HTTPException(403, "Admin only")
-    _set_setting("org_name", data.org_name or None, db)
-    _set_setting("tagline", data.tagline or None, db)
-    _set_setting("website_url", data.website_url or None, db)
-    db.commit()
+    await _set_setting("org_name", data.org_name or None, db)
+    await _set_setting("tagline", data.tagline or None, db)
+    await _set_setting("website_url", data.website_url or None, db)
+    await db.commit()
     return BrandingOut(
-        org_name=_get_setting("org_name", db),
-        tagline=_get_setting("tagline", db),
-        website_url=_get_setting("website_url", db),
+        org_name=await _get_setting("org_name", db),
+        tagline=await _get_setting("tagline", db),
+        website_url=await _get_setting("website_url", db),
         has_logo=_logo_file() is not None,
     )
 
@@ -2406,7 +2365,7 @@ def create_support_ticket(
 # ---------------------------------------------------------------------------
 
 @app.get("/users", response_model=list[UserPublicOut])
-def list_users(net_id: Optional[int] = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_users(net_id: Optional[int] = None, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Return active users in scope for a share/assignment picker (issue #1).
     Defaults to the caller's own current org. Pass net_id to scope to THAT
     net's org instead — necessary once a super admin can edit any net
@@ -2417,50 +2376,43 @@ def list_users(net_id: Optional[int] = None, current_user: User = Depends(get_cu
     even appear as selectable in the sharing/schedule pickers."""
     org_id = current_user.current_org_id
     if net_id is not None:
-        org_id = _get_editable_net(net_id, current_user, db).org_id
+        org_id = (await _get_editable_net(net_id, current_user, db)).org_id
 
     users = (
-        db.query(User)
-        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
-        .filter(
+        (await db.execute(select(User).join(OrganizationMembership, OrganizationMembership.user_id == User.id).filter(
             User.is_active == True,
             User.id != current_user.id,
             OrganizationMembership.org_id == org_id,
             OrganizationMembership.approved == True,
-        )
-        .order_by(User.callsign)
-        .all()
+        ).order_by(User.callsign))).scalars().all()
     )
     return users
 
 
 @app.get("/nets", response_model=list[NetOut])
-def list_nets(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_nets(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if current_user.is_admin:
         # Super admins see every net, across every org
-        nets = db.query(Net).order_by(Net.name).all()
+        nets = (await db.execute(select(Net).order_by(Net.name))).scalars().all()
     else:
         # Owned nets + nets shared with this user + nets shared with all,
         # scoped to the org the user is currently working as (issue #1)
         shared_net_ids = (
-            db.query(NetShare.net_id)
+            select(NetShare.net_id)
             .filter(or_(NetShare.user_id == current_user.id, NetShare.user_id == None))
             .scalar_subquery()
         )
         nets = (
-            db.query(Net)
-            .filter(
+            (await db.execute(select(Net).filter(
                 Net.org_id == current_user.current_org_id,
                 or_(Net.owner_id == current_user.id, Net.id.in_(shared_net_ids)),
-            )
-            .order_by(Net.name)
-            .all()
+            ).order_by(Net.name))).scalars().all()
         )
-    return [_net_to_out(n, current_user, db) for n in nets]
+    return [await _net_to_out(n, current_user, db) for n in nets]
 
 
 @app.post("/nets", response_model=NetOut, status_code=201)
-def create_net(data: NetCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_net(data: NetCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if not current_user.current_org_id:
         raise HTTPException(400, "No current organization selected")
     net_type = data.net_type if data.net_type in ("ham", "gmrs") else "ham"
@@ -2488,21 +2440,21 @@ def create_net(data: NetCreate, current_user: User = Depends(get_current_user), 
         org_id=current_user.current_org_id,
     )
     db.add(net)
-    db.commit()
-    db.refresh(net)
-    net_repository.push_net(net, db)
-    return _net_to_out(net, current_user, db)
+    await db.commit()
+    await db.refresh(net)
+    await net_repository.push_net(net, db)
+    return await _net_to_out(net, current_user, db)
 
 
 @app.get("/nets/{net_id}", response_model=NetOut)
-def get_net(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_net_for_user(net_id, current_user, db)
-    return _net_to_out(net, current_user, db)
+async def get_net(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_net_for_user(net_id, current_user, db)
+    return await _net_to_out(net, current_user, db)
 
 
 @app.put("/nets/{net_id}", response_model=NetOut)
-def update_net(net_id: int, data: NetCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_editable_net(net_id, current_user, db)
+async def update_net(net_id: int, data: NetCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_editable_net(net_id, current_user, db)
     net_type = data.net_type if data.net_type in ("ham", "gmrs") else "ham"
     net.name = data.name
     net.frequency = data.frequency
@@ -2523,14 +2475,14 @@ def update_net(net_id: int, data: NetCreate, current_user: User = Depends(get_cu
     net.region = data.region or None
     net.state = data.state or None
     net.website = data.website or None
-    db.commit()
-    db.refresh(net)
-    net_repository.push_net(net, db)
-    return _net_to_out(net, current_user, db)
+    await db.commit()
+    await db.refresh(net)
+    await net_repository.push_net(net, db)
+    return await _net_to_out(net, current_user, db)
 
 
 @app.patch("/nets/{net_id}/owner", response_model=NetOut)
-def transfer_net_owner(net_id: int, data: NetOwnerUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def transfer_net_owner(net_id: int, data: NetOwnerUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Reassign a net's owner — previously the only way to change who
     controls a net was deleting and recreating it (issue follow-up).
     Available to the net's current owner (hand off to someone else), an
@@ -2539,44 +2491,44 @@ def transfer_net_owner(net_id: int, data: NetOwnerUpdate, current_user: User = D
     (which only warns about this, since the admin may fix it in either
     order), this is a deliberate single assignment so it's enforced
     outright rather than left as a warning."""
-    net = db.query(Net).filter(Net.id == net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == net_id))).scalar_one_or_none()
     if not net:
         raise HTTPException(404, "Net not found")
     if not current_user.is_admin:
         if net.org_id != current_user.current_org_id:
             raise HTTPException(404, "Net not found")
         is_owner = net.owner_id == current_user.id
-        is_org_admin = db.query(OrganizationMembership).filter(
+        is_org_admin = (await db.execute(select(OrganizationMembership).filter(
             OrganizationMembership.org_id == net.org_id,
             OrganizationMembership.user_id == current_user.id,
             OrganizationMembership.role == "admin",
             OrganizationMembership.approved == True,
-        ).first() is not None
+        ))).scalar_one_or_none() is not None
         if not (is_owner or is_org_admin):
             raise HTTPException(403, "Not your net")
 
-    new_owner = db.query(User).filter(User.id == data.owner_id).first()
+    new_owner = (await db.execute(select(User).filter(User.id == data.owner_id))).scalar_one_or_none()
     if not new_owner:
         raise HTTPException(404, "User not found")
-    is_member = db.query(OrganizationMembership).filter(
+    is_member = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == net.org_id,
         OrganizationMembership.user_id == new_owner.id,
         OrganizationMembership.approved == True,
-    ).first() is not None
+    ))).scalar_one_or_none() is not None
     if not is_member:
         raise HTTPException(400, f"{new_owner.callsign} is not a member of this net's organization")
 
     net.owner_id = new_owner.id
-    db.commit()
-    db.refresh(net)
-    return _net_to_out(net, current_user, db)
+    await db.commit()
+    await db.refresh(net)
+    return await _net_to_out(net, current_user, db)
 
 
 @app.delete("/nets/{net_id}", status_code=204)
-def delete_net(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_owned_net(net_id, current_user, db)
-    db.delete(net)
-    db.commit()
+async def delete_net(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_owned_net(net_id, current_user, db)
+    await db.delete(net)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -2584,17 +2536,14 @@ def delete_net(net_id: int, current_user: User = Depends(get_current_user), db: 
 # ---------------------------------------------------------------------------
 
 @app.get("/nets/{net_id}/sessions", response_model=list[SessionOut])
-def list_sessions(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_net_for_user(net_id, current_user, db)
+async def list_sessions(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_net_for_user(net_id, current_user, db)
     sessions = (
-        db.query(NetSession)
-        .filter(NetSession.net_id == net_id)
-        .order_by(NetSession.started_at.desc())
-        .all()
+        (await db.execute(select(NetSession).filter(NetSession.net_id == net_id).order_by(NetSession.started_at.desc()))).scalars().all()
     )
     result = []
     for s in sessions:
-        count = db.query(func.count(Checkin.id)).filter(Checkin.session_id == s.id).scalar()
+        count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == s.id))).scalar()
         out = SessionOut.model_validate(s)
         out.checkin_count = count
         result.append(out)
@@ -2602,8 +2551,8 @@ def list_sessions(net_id: int, current_user: User = Depends(get_current_user), d
 
 
 @app.post("/nets/{net_id}/sessions", response_model=SessionOut, status_code=201)
-def start_session(net_id: int, data: SessionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_net_for_user(net_id, current_user, db)
+async def start_session(net_id: int, data: SessionCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_net_for_user(net_id, current_user, db)
     if data.is_offline and not data.occurred_at:
         raise HTTPException(400, "occurred_at is required for an offline net entry")
     session = NetSession(
@@ -2618,16 +2567,16 @@ def start_session(net_id: int, data: SessionCreate, current_user: User = Depends
     if data.is_offline:
         session.started_at = data.occurred_at
     db.add(session)
-    db.commit()
-    db.refresh(session)
+    await db.commit()
+    await db.refresh(session)
 
     if data.is_offline:
         # No live view for a backfilled entry (issue #20) -- put it straight into
         # the "ended" state at the reported timestamp. add_checkin() specifically
         # lets checkins through despite ended_at being set for sessions like this.
         session.ended_at = session.started_at
-        db.commit()
-        db.refresh(session)
+        await db.commit()
+        await db.refresh(session)
 
     # Auto-create the Net Control tactical position for an activation session, seeded
     # from the same day's-schedule/whoever-started-it resolution routine sessions use,
@@ -2636,7 +2585,7 @@ def start_session(net_id: int, data: SessionCreate, current_user: User = Depends
     # (issue #21 follow-up: routine sessions' single day-level NCS wasn't enough for a
     # multi-hour activation where net control itself rotates).
     if session.is_activation:
-        duty = _duty_labels_for_session(net, session, db)
+        duty = await _duty_labels_for_session(net, session, db)
         nc_position = TacticalPosition(
             session_id=session.id,
             tactical_callsign="NET CONTROL",
@@ -2645,8 +2594,8 @@ def start_session(net_id: int, data: SessionCreate, current_user: User = Depends
             assigned_name=duty["ncs_name"],
         )
         db.add(nc_position)
-        db.commit()
-        db.refresh(nc_position)
+        await db.commit()
+        await db.refresh(nc_position)
         if duty["ncs_callsign"]:
             db.add(Checkin(
                 session_id=session.id,
@@ -2655,7 +2604,7 @@ def start_session(net_id: int, data: SessionCreate, current_user: User = Depends
                 has_traffic=False,
                 tactical_position_id=nc_position.id,
             ))
-            db.commit()
+            await db.commit()
 
     out = SessionOut.model_validate(session)
     out.checkin_count = 0
@@ -2663,21 +2612,21 @@ def start_session(net_id: int, data: SessionCreate, current_user: User = Depends
 
 
 @app.get("/sessions/{session_id}", response_model=SessionOut)
-def get_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
-    count = db.query(func.count(Checkin.id)).filter(Checkin.session_id == session.id).scalar()
+async def get_session(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
+    count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == session.id))).scalar()
     out = SessionOut.model_validate(session)
     out.checkin_count = count
-    net = db.query(Net).filter(Net.id == session.net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
     if net:
-        for k, v in _duty_labels_for_session(net, session, db).items():
+        for k, v in (await _duty_labels_for_session(net, session, db)).items():
             setattr(out, k, v)
     return out
 
 
 @app.patch("/sessions/{session_id}/end", response_model=SessionOut)
-def end_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
+async def end_session(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
     # An offline entry (issue #20) already has ended_at set from creation (it's
     # never live), so that can't also signal "done entering data" for these --
     # is_offline_locked is that separate signal, and is what add_checkin() checks
@@ -2690,34 +2639,34 @@ def end_session(session_id: int, current_user: User = Depends(get_current_user),
         if session.ended_at is not None:
             raise HTTPException(400, "Session already ended")
         session.ended_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(session)
-    count = db.query(func.count(Checkin.id)).filter(Checkin.session_id == session.id).scalar()
-    net = db.query(Net).filter(Net.id == session.net_id).first()
+    await db.commit()
+    await db.refresh(session)
+    count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == session.id))).scalar()
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
     if net:
-        net_repository.push_session_stats(net, session, count, db)
+        await net_repository.push_session_stats(net, session, count, db)
     out = SessionOut.model_validate(session)
     out.checkin_count = count
     return out
 
 
 @app.patch("/sessions/{session_id}/rename", response_model=SessionOut)
-def rename_session(session_id: int, data: SessionRename, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
+async def rename_session(session_id: int, data: SessionRename, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
     session.name = data.name
-    db.commit()
-    db.refresh(session)
-    count = db.query(func.count(Checkin.id)).filter(Checkin.session_id == session.id).scalar()
+    await db.commit()
+    await db.refresh(session)
+    count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == session.id))).scalar()
     out = SessionOut.model_validate(session)
     out.checkin_count = count
     return out
 
 
 @app.delete("/sessions/{session_id}", status_code=204)
-def delete_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
-    db.delete(session)
-    db.commit()
+async def delete_session(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
+    await db.delete(session)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -2735,17 +2684,16 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 # ---------------------------------------------------------------------------
 
 @app.get("/admin/users", response_model=list[AdminUserOut])
-def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_list_users(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """List all users (active, pending, and inactive), with each user's
     current org name/website attached (issue #1 follow-up) — lets a super
     admin verify a pending registration, especially one founding a brand new
     org, without a separate lookup."""
-    rows = (
-        db.query(User, Organization)
+    rows = (await db.execute(
+        select(User, Organization)
         .outerjoin(Organization, Organization.id == User.current_org_id)
         .order_by(User.created_at.desc())
-        .all()
-    )
+    )).all()
     return [
         AdminUserOut(
             **UserOut.model_validate(u).model_dump(),
@@ -2757,7 +2705,7 @@ def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends
 
 
 @app.patch("/admin/users/{user_id}/approve", response_model=UserOut)
-def admin_approve_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_approve_user(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Activate a pending user account and notify them by email.
 
     Also marks the account email-verified: an admin manually approving someone
@@ -2765,7 +2713,7 @@ def admin_approve_user(user_id: int, admin: User = Depends(require_admin), db: S
     way to unblock a user whose verification email never arrived or whose link
     can't work because APP_BASE_URL isn't configured on this instance.
     """
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
     user.is_active = True
@@ -2774,11 +2722,11 @@ def admin_approve_user(user_id: int, admin: User = Depends(require_admin), db: S
     # Super-admin approval is a global escape hatch (issue #1) — clear every
     # pending org membership too, not just the account-level gate, since a
     # super admin isn't scoped to any one org's approval queue.
-    db.query(OrganizationMembership).filter(
+    await db.execute(update(OrganizationMembership).where(
         OrganizationMembership.user_id == user.id, OrganizationMembership.approved == False,
-    ).update({"approved": True})
-    db.commit()
-    db.refresh(user)
+    ).values(approved=True))
+    await db.commit()
+    await db.refresh(user)
 
     login_link = _app_url("/")
     send_email(
@@ -2812,9 +2760,9 @@ GITHUB_URL = os.getenv("GITHUB_URL", "https://github.com/LadyHwesta/netcontrol-o
 
 
 @app.post("/admin/users/{user_id}/reject", status_code=204)
-def admin_reject_user(user_id: int, body: RejectUserBody = RejectUserBody(), admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_reject_user(user_id: int, body: RejectUserBody = RejectUserBody(), admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Send a rejection email then permanently delete the pending account."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
     if user.id == admin.id:
@@ -2857,66 +2805,66 @@ def admin_reject_user(user_id: int, body: RejectUserBody = RejectUserBody(), adm
         ),
     )
 
-    org_ids = {r[0] for r in db.query(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id).all()}
-    db.delete(user)
-    db.flush()
-    _delete_orphaned_orgs(org_ids, db)
-    db.commit()
+    org_ids = set((await db.execute(select(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id))).scalars().all())
+    await db.delete(user)
+    await db.flush()
+    await _delete_orphaned_orgs(org_ids, db)
+    await db.commit()
 
 
 @app.patch("/admin/users/{user_id}/deactivate", response_model=UserOut)
-def admin_deactivate_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_deactivate_user(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Deactivate a user account (they can no longer log in)."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
     if user.id == admin.id:
         raise HTTPException(400, "Cannot deactivate your own account")
     user.is_active = False
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
 @app.patch("/admin/users/{user_id}/make-admin", response_model=UserOut)
-def admin_make_admin(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_make_admin(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Grant admin privileges to a user."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
     user.is_admin = True
     user.is_active = True   # admins must be active
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
 @app.delete("/admin/users/{user_id}", status_code=204)
-def admin_delete_user(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_delete_user(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Permanently delete a user account."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
     if user.id == admin.id:
         raise HTTPException(400, "Cannot delete your own account")
-    org_ids = {r[0] for r in db.query(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id).all()}
-    db.delete(user)
-    db.flush()
-    _delete_orphaned_orgs(org_ids, db)
-    db.commit()
+    org_ids = set((await db.execute(select(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id))).scalars().all())
+    await db.delete(user)
+    await db.flush()
+    await _delete_orphaned_orgs(org_ids, db)
+    await db.commit()
 
 
 @app.patch("/admin/users/{user_id}/notify", response_model=UserOut)
-def admin_toggle_notify(user_id: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_toggle_notify(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Toggle email notification opt-in for new registrations (admin accounts only)."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
     if not user.is_admin:
         raise HTTPException(400, "Only admins can receive registration notifications")
     user.notify_new_registrations = not user.notify_new_registrations
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
@@ -2926,29 +2874,29 @@ class OrgReassignUser(BaseModel):
 
 
 @app.patch("/admin/users/{user_id}/org", response_model=AdminUserOut)
-def admin_reassign_user_org(user_id: int, data: OrgReassignUser, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_reassign_user_org(user_id: int, data: OrgReassignUser, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Move a user wholesale into a different organization — removes every
     other org membership they hold and switches current_org_id to the
     target, so a deployment that started single-tenant can be split into
     per-region orgs after the fact (issue #1 follow-up). Super-admin only,
     since it crosses tenant boundaries by definition; existing nets they own
     are NOT moved along with them — reassign those separately below."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
-    org = db.query(Organization).filter(Organization.id == data.org_id).first()
+    org = (await db.execute(select(Organization).filter(Organization.id == data.org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
 
-    old_org_ids = {r[0] for r in db.query(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id).all()}
-    db.query(OrganizationMembership).filter(OrganizationMembership.user_id == user.id).delete()
+    old_org_ids = set((await db.execute(select(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id))).scalars().all())
+    await db.execute(delete(OrganizationMembership).where(OrganizationMembership.user_id == user.id))
     db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
     user.current_org_id = org.id
     user.is_active = True
-    db.flush()
-    _delete_orphaned_orgs(old_org_ids - {org.id}, db)
-    db.commit()
-    db.refresh(user)
+    await db.flush()
+    await _delete_orphaned_orgs(old_org_ids - {org.id}, db)
+    await db.commit()
+    await db.refresh(user)
 
     return AdminUserOut(
         **UserOut.model_validate(user).model_dump(),
@@ -2970,7 +2918,7 @@ class AddMembershipResult(BaseModel):
 
 
 @app.post("/admin/users/{user_id}/orgs", response_model=AddMembershipResult, status_code=201)
-def admin_add_user_to_org(user_id: int, data: OrgAddMembership, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_add_user_to_org(user_id: int, data: OrgAddMembership, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Add a user to an ADDITIONAL organization without touching their
     existing memberships — distinct from the wholesale move above (issue #1
     follow-up). For an operator who legitimately needs to work across more
@@ -2978,16 +2926,16 @@ def admin_add_user_to_org(user_id: int, data: OrgAddMembership, admin: User = De
     single-tenant deployment apart. If the user already has a pending
     membership in the target org (e.g. a self-service /orgs/join request),
     this approves it in place rather than erroring."""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(404, "User not found")
-    org = db.query(Organization).filter(Organization.id == data.org_id).first()
+    org = (await db.execute(select(Organization).filter(Organization.id == data.org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
 
-    membership = db.query(OrganizationMembership).filter(
+    membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org.id, OrganizationMembership.user_id == user.id,
-    ).first()
+    ))).scalar_one_or_none()
     if membership and membership.approved:
         raise HTTPException(400, "User is already a member of this organization")
     if membership:
@@ -2996,7 +2944,7 @@ def admin_add_user_to_org(user_id: int, data: OrgAddMembership, admin: User = De
     else:
         db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
     user.is_active = True
-    db.commit()
+    await db.commit()
 
     return AddMembershipResult(user_id=user.id, org_id=org.id, org_name=org.name, role=data.role)
 
@@ -3013,28 +2961,28 @@ class NetReassignResult(BaseModel):
 
 
 @app.patch("/admin/nets/{net_id}/org", response_model=NetReassignResult)
-def admin_reassign_net_org(net_id: int, data: OrgReassignNet, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_reassign_net_org(net_id: int, data: OrgReassignNet, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Move a net into a different organization (issue #1 follow-up). Does
     not touch ownership or sharing — if the net's owner isn't a member of
     the target org, owner_not_member comes back True so the admin panel can
     flag it (the owner will need to be added to the target org, or ownership
     transferred, before they can manage it themselves again); super admins
     can always reach it regardless."""
-    net = db.query(Net).filter(Net.id == net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == net_id))).scalar_one_or_none()
     if not net:
         raise HTTPException(404, "Net not found")
-    org = db.query(Organization).filter(Organization.id == data.org_id).first()
+    org = (await db.execute(select(Organization).filter(Organization.id == data.org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
 
     net.org_id = org.id
-    db.commit()
+    await db.commit()
 
-    owner_is_member = db.query(OrganizationMembership).filter(
+    owner_is_member = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org.id,
         OrganizationMembership.user_id == net.owner_id,
         OrganizationMembership.approved == True,
-    ).first() is not None
+    ))).scalar_one_or_none() is not None
 
     return NetReassignResult(id=net.id, org_id=org.id, org_name=org.name, owner_not_member=not owner_is_member)
 
@@ -3076,46 +3024,46 @@ class NetRepoActionResult(BaseModel):
 
 
 @app.get("/admin/net-repository/status", response_model=NetRepoStatusOut)
-def admin_net_repository_status(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_net_repository_status(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Current Net Repository integration status. Never exposes the raw API
     key or claim token — those are internal to net_repository.py."""
     return NetRepoStatusOut(
         url_configured=bool(net_repository.NET_REPOSITORY_URL),
-        has_key=bool(net_repository.get_api_key(db)),
-        key_source=net_repository.get_key_source(db),
-        request_status=net_repository.get_request_status(db),
+        has_key=bool(await net_repository.get_api_key(db)),
+        key_source=await net_repository.get_key_source(db),
+        request_status=await net_repository.get_request_status(db),
     )
 
 
 @app.post("/admin/net-repository/request-key", response_model=NetRepoActionResult)
-def admin_request_net_repository_key(
+async def admin_request_net_repository_key(
     data: NetRepoKeyRequestIn,
     admin: User = Depends(require_admin),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Request a Net Repository API key on this instance's behalf via its
     self-service POST /keys/request. Enters that instance's admin review
     queue; check status with admin_check_net_repository_key below."""
-    result = net_repository.request_api_key(
+    result = await net_repository.request_api_key(
         data.name, data.contact_callsign, data.instance_url, data.request_notes, db,
     )
     return NetRepoActionResult(**result)
 
 
 @app.post("/admin/net-repository/check-status", response_model=NetRepoActionResult)
-def admin_check_net_repository_key(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_check_net_repository_key(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Poll Net Repository for the outcome of a pending key request. Once
     approved, this stores the issued key so pushes start working immediately
     — no restart needed."""
-    result = net_repository.check_key_request_status(db)
+    result = await net_repository.check_key_request_status(db)
     return NetRepoActionResult(**result)
 
 
 @app.delete("/admin/net-repository/key", status_code=204)
-def admin_clear_net_repository_key(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+async def admin_clear_net_repository_key(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Forget the self-service key and any in-flight request, to start over.
     Does not affect NET_REPOSITORY_API_KEY if set via .env."""
-    net_repository.clear_stored_key(db)
+    await net_repository.clear_stored_key(db)
 
 
 # ---------------------------------------------------------------------------
@@ -3123,13 +3071,13 @@ def admin_clear_net_repository_key(admin: User = Depends(require_admin), db: Ses
 # ---------------------------------------------------------------------------
 
 @app.get("/sessions/{session_id}/checkins", response_model=list[CheckinOut])
-def list_checkins(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
+async def list_checkins(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
     # Newest first — this is the live roster's data source; CSV export and
     # ICS-205 have their own chronological (oldest-first) queries, unaffected.
-    checkins = db.query(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at.desc()).all()
-    preferred_names = _preferred_names_for_net(session.net_id, db)
-    tactical_callsigns = _tactical_callsigns_for_session(session_id, db)
+    checkins = (await db.execute(select(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at.desc()))).scalars().all()
+    preferred_names = await _preferred_names_for_net(session.net_id, db)
+    tactical_callsigns = await _tactical_callsigns_for_session(session_id, db)
     out = [CheckinOut.model_validate(c) for c in checkins]
     for c, o in zip(checkins, out):
         if c.callsign in preferred_names:
@@ -3139,21 +3087,25 @@ def list_checkins(session_id: int, current_user: User = Depends(get_current_user
     return out
 
 
-def _is_first_checkin_for_net(net_id: int, callsign: str, db: Session) -> bool:
+async def _is_first_checkin_for_net(net_id: int, callsign: str, db: AsyncSession) -> bool:
     """True if `callsign` has never checked into this net before (any session,
     any type of checkin -- routine, offline-logged, or tactical sign-on all
     count as prior participation). Called before inserting the new row, so
     the row being created is never counted against itself."""
-    prior = (
-        db.query(Checkin.id)
+    # GMRS nets allow the same callsign to check in multiple times (shared
+    # family licence), so this is deliberately "any match" (.limit(1) +
+    # .scalar(), matching the old .first()'s take-one-ignore-rest semantics)
+    # rather than scalar_one_or_none(), which would raise on the GMRS case.
+    prior = (await db.execute(
+        select(Checkin.id)
         .join(NetSession, NetSession.id == Checkin.session_id)
         .filter(NetSession.net_id == net_id, Checkin.callsign == callsign)
-        .first()
-    )
+        .limit(1)
+    )).scalar()
     return prior is None
 
 
-def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate, db: Session) -> Checkin:
+async def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate, db: AsyncSession) -> Checkin:
     """Shared per-checkin logic behind both add_checkin (one at a time) and
     import_checkins_csv (bulk, issue #26) — same validation either way so
     the two paths can't drift apart. Raises HTTPException on any rejection;
@@ -3173,10 +3125,10 @@ def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate
     # single family licence is shared among multiple stations.
     is_gmrs = net and net.net_type == "gmrs"
     if not is_gmrs:
-        existing = db.query(Checkin).filter(
+        existing = (await db.execute(select(Checkin).filter(
             Checkin.session_id == session.id,
             Checkin.callsign == data.callsign,
-        ).first()
+        ))).scalar_one_or_none()
         if existing:
             raise HTTPException(409, f"{data.callsign} has already checked in to this session")
 
@@ -3187,7 +3139,7 @@ def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate
         signal_report=data.signal_report,
         comments=data.comments,
         has_traffic=data.has_traffic,
-        is_first_checkin=_is_first_checkin_for_net(session.net_id, data.callsign, db),
+        is_first_checkin=await _is_first_checkin_for_net(session.net_id, data.callsign, db),
         evac_zone=data.evac_zone or None,
         dmr_talkgroup=data.dmr_talkgroup or None,
         dmr_region=data.dmr_region or None,
@@ -3196,30 +3148,30 @@ def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate
         # Stamp with the reported net date/time, not real "now" (issue #20).
         checkin.checked_in_at = session.started_at
     db.add(checkin)
-    db.commit()
-    db.refresh(checkin)
+    await db.commit()
+    await db.refresh(checkin)
 
     # Auto-upsert evac zone when provided (ARES/ACES nets)
     if data.evac_zone:
-        existing_ez = db.query(EvacZone).filter(
+        existing_ez = (await db.execute(select(EvacZone).filter(
             EvacZone.net_id == session.net_id,
             EvacZone.callsign == data.callsign,
-        ).first()
+        ))).scalar_one_or_none()
         if existing_ez:
             existing_ez.zone = data.evac_zone
             existing_ez.updated_at = datetime.now(timezone.utc)
         else:
             db.add(EvacZone(net_id=session.net_id, callsign=data.callsign, zone=data.evac_zone))
-        db.commit()
+        await db.commit()
 
     return checkin
 
 
 @app.post("/sessions/{session_id}/checkins", response_model=CheckinOut, status_code=201)
-def add_checkin(session_id: int, data: CheckinCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
-    net = db.query(Net).filter(Net.id == session.net_id).first()
-    return _create_checkin(session, net, data, db)
+async def add_checkin(session_id: int, data: CheckinCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
+    return await _create_checkin(session, net, data, db)
 
 
 class CheckinImportError(BaseModel):
@@ -3266,7 +3218,7 @@ async def import_checkins_csv(
     session_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Bulk-add checkins from an uploaded CSV (issue #26) -- built mainly for
     "Log a Net That Already Happened" (issue #20), where re-typing a whole
@@ -3276,8 +3228,8 @@ async def import_checkins_csv(
     Each row is validated and inserted independently; one bad row is
     recorded in the response and skipped rather than aborting the rest. See
     GET /checkins/import-sample for the expected column shape."""
-    session = _get_session_for_user(session_id, current_user, db)
-    net = db.query(Net).filter(Net.id == session.net_id).first()
+    session = await _get_session_for_user(session_id, current_user, db)
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
 
     raw = (await file.read()).decode("utf-8-sig", errors="replace")
     reader = csv.reader(io.StringIO(raw))
@@ -3311,7 +3263,7 @@ async def import_checkins_csv(
                 dmr_talkgroup=(row.get("dmr_talkgroup") or "").strip() or None,
                 dmr_region=(row.get("dmr_region") or "").strip() or None,
             )
-            _create_checkin(session, net, data, db)
+            await _create_checkin(session, net, data, db)
             imported += 1
         except HTTPException as e:
             errors.append(CheckinImportError(row=row_num, callsign=callsign, reason=str(e.detail)))
@@ -3339,14 +3291,14 @@ def download_checkin_import_sample(current_user: User = Depends(get_current_user
 
 
 @app.delete("/checkins/{checkin_id}", status_code=204)
-def delete_checkin(checkin_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    checkin = db.query(Checkin).filter(Checkin.id == checkin_id).first()
+async def delete_checkin(checkin_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    checkin = (await db.execute(select(Checkin).filter(Checkin.id == checkin_id))).scalar_one_or_none()
     if not checkin:
         raise HTTPException(404, "Checkin not found")
     # Verify ownership via session → net
-    _get_session_for_user(checkin.session_id, current_user, db)
-    db.delete(checkin)
-    db.commit()
+    await _get_session_for_user(checkin.session_id, current_user, db)
+    await db.delete(checkin)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -3354,80 +3306,77 @@ def delete_checkin(checkin_id: int, current_user: User = Depends(get_current_use
 # ---------------------------------------------------------------------------
 
 @app.get("/nets/{net_id}/evac-zones", response_model=list[EvacZoneOut])
-def list_evac_zones(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_evac_zones(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Return all known evacuation zones for this net, sorted by zone then callsign."""
-    _get_editable_net(net_id, current_user, db)
+    await _get_editable_net(net_id, current_user, db)
     return (
-        db.query(EvacZone)
-        .filter(EvacZone.net_id == net_id)
-        .order_by(EvacZone.zone, EvacZone.callsign)
-        .all()
+        (await db.execute(select(EvacZone).filter(EvacZone.net_id == net_id).order_by(EvacZone.zone, EvacZone.callsign))).scalars().all()
     )
 
 
 @app.patch("/nets/{net_id}/evac-zones/{callsign}", response_model=EvacZoneOut)
-def update_evac_zone(
+async def update_evac_zone(
     net_id: int,
     callsign: str,
     data: EvacZoneUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Manually set or update the evac zone for a callsign on this net."""
-    _get_editable_net(net_id, current_user, db)
+    await _get_editable_net(net_id, current_user, db)
     callsign = callsign.upper().strip()
-    existing = db.query(EvacZone).filter(EvacZone.net_id == net_id, EvacZone.callsign == callsign).first()
+    existing = (await db.execute(select(EvacZone).filter(EvacZone.net_id == net_id, EvacZone.callsign == callsign))).scalar_one_or_none()
     if existing:
         existing.zone = data.zone
         existing.updated_at = datetime.now(timezone.utc)
     else:
         existing = EvacZone(net_id=net_id, callsign=callsign, zone=data.zone)
         db.add(existing)
-    db.commit()
-    db.refresh(existing)
+    await db.commit()
+    await db.refresh(existing)
     return existing
 
 
 @app.delete("/nets/{net_id}/evac-zones/{callsign}", status_code=204)
-def delete_evac_zone(
+async def delete_evac_zone(
     net_id: int,
     callsign: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Remove a callsign's evac zone record."""
-    _get_editable_net(net_id, current_user, db)
-    ez = db.query(EvacZone).filter(EvacZone.net_id == net_id, EvacZone.callsign == callsign.upper()).first()
+    await _get_editable_net(net_id, current_user, db)
+    ez = (await db.execute(select(EvacZone).filter(EvacZone.net_id == net_id, EvacZone.callsign == callsign.upper()))).scalar_one_or_none()
     if ez:
-        db.delete(ez)
-        db.commit()
+        await db.delete(ez)
+        await db.commit()
 
 
 @app.patch("/checkins/{checkin_id}/traffic", response_model=CheckinOut)
-def toggle_traffic(checkin_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def toggle_traffic(checkin_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Toggle has_traffic flag on an existing checkin."""
-    checkin = db.query(Checkin).filter(Checkin.id == checkin_id).first()
+    checkin = (await db.execute(select(Checkin).filter(Checkin.id == checkin_id))).scalar_one_or_none()
     if not checkin:
         raise HTTPException(404, "Checkin not found")
-    _get_session_for_user(checkin.session_id, current_user, db)
+    await _get_session_for_user(checkin.session_id, current_user, db)
     checkin.has_traffic = not checkin.has_traffic
-    db.commit()
-    db.refresh(checkin)
+    await db.commit()
+    await db.refresh(checkin)
     return checkin
 
 
 @app.patch("/checkins/{checkin_id}/traffic-called", response_model=CheckinOut)
-def toggle_traffic_called(checkin_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def toggle_traffic_called(checkin_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Toggle traffic_called flag on an existing checkin -- tracks whether the
     operator has already passed this station's traffic, and persists across
     session close/reopen (unlike the old client-side-only tracking)."""
-    checkin = db.query(Checkin).filter(Checkin.id == checkin_id).first()
+    checkin = (await db.execute(select(Checkin).filter(Checkin.id == checkin_id))).scalar_one_or_none()
     if not checkin:
         raise HTTPException(404, "Checkin not found")
-    _get_session_for_user(checkin.session_id, current_user, db)
+    await _get_session_for_user(checkin.session_id, current_user, db)
     checkin.traffic_called = not checkin.traffic_called
-    db.commit()
-    db.refresh(checkin)
+    await db.commit()
+    await db.refresh(checkin)
     return checkin
 
 
@@ -3447,10 +3396,10 @@ def toggle_traffic_called(checkin_id: int, current_user: User = Depends(get_curr
 # sign-on IS a shift-history entry; nothing extra to store for that.
 # ---------------------------------------------------------------------------
 
-def _get_activation_session(session_id: int, user: User, db: Session) -> NetSession:
+async def _get_activation_session(session_id: int, user: User, db: AsyncSession) -> NetSession:
     """Fetch a session, requiring net access and that it's an activation."""
-    session = _get_session_for_user(session_id, user, db)
-    net = db.query(Net).filter(Net.id == session.net_id).first()
+    session = await _get_session_for_user(session_id, user, db)
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
     if not net or not net.is_ares:
         raise HTTPException(400, "Tactical positions require an ARES/ACES net")
     if not session.is_activation:
@@ -3458,26 +3407,23 @@ def _get_activation_session(session_id: int, user: User, db: Session) -> NetSess
     return session
 
 
-def _get_position_for_user(position_id: int, user: User, db: Session) -> TacticalPosition:
-    position = db.query(TacticalPosition).filter(TacticalPosition.id == position_id).first()
+async def _get_position_for_user(position_id: int, user: User, db: AsyncSession) -> TacticalPosition:
+    position = (await db.execute(select(TacticalPosition).filter(TacticalPosition.id == position_id))).scalar_one_or_none()
     if not position:
         raise HTTPException(404, "Tactical position not found")
-    _get_session_for_user(position.session_id, user, db)  # raises 403/404 if no access
+    await _get_session_for_user(position.session_id, user, db)  # raises 403/404 if no access
     return position
 
 
-def _current_occupant(position_id: int, db: Session) -> Optional[Checkin]:
+async def _current_occupant(position_id: int, db: AsyncSession) -> Optional[Checkin]:
     return (
-        db.query(Checkin)
-        .filter(Checkin.tactical_position_id == position_id, Checkin.signed_off_at.is_(None))
-        .order_by(Checkin.checked_in_at.desc())
-        .first()
+        (await db.execute(select(Checkin).filter(Checkin.tactical_position_id == position_id, Checkin.signed_off_at.is_(None)).order_by(Checkin.checked_in_at.desc()))).scalar_one_or_none()
     )
 
 
-def _position_to_out(position: TacticalPosition, db: Session) -> TacticalPositionOut:
+async def _position_to_out(position: TacticalPosition, db: AsyncSession) -> TacticalPositionOut:
     out = TacticalPositionOut.model_validate(position)
-    current = _current_occupant(position.id, db)
+    current = await _current_occupant(position.id, db)
     if current:
         out.current_checkin_id = current.id
         out.current_callsign = current.callsign
@@ -3487,20 +3433,17 @@ def _position_to_out(position: TacticalPosition, db: Session) -> TacticalPositio
 
 
 @app.get("/sessions/{session_id}/tactical-positions", response_model=list[TacticalPositionOut])
-def list_tactical_positions(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_activation_session(session_id, current_user, db)
+async def list_tactical_positions(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_activation_session(session_id, current_user, db)
     positions = (
-        db.query(TacticalPosition)
-        .filter(TacticalPosition.session_id == session.id)
-        .order_by(TacticalPosition.is_net_control.desc(), TacticalPosition.created_at)
-        .all()
+        (await db.execute(select(TacticalPosition).filter(TacticalPosition.session_id == session.id).order_by(TacticalPosition.is_net_control.desc(), TacticalPosition.created_at))).scalars().all()
     )
-    return [_position_to_out(p, db) for p in positions]
+    return [await _position_to_out(p, db) for p in positions]
 
 
 @app.post("/sessions/{session_id}/tactical-positions", response_model=TacticalPositionOut, status_code=201)
-def create_tactical_position(session_id: int, data: TacticalPositionCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_activation_session(session_id, current_user, db)
+async def create_tactical_position(session_id: int, data: TacticalPositionCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_activation_session(session_id, current_user, db)
     position = TacticalPosition(
         session_id=session.id,
         tactical_callsign=data.tactical_callsign,
@@ -3510,44 +3453,41 @@ def create_tactical_position(session_id: int, data: TacticalPositionCreate, curr
         scheduled_start=data.scheduled_start,
     )
     db.add(position)
-    db.commit()
-    db.refresh(position)
-    return _position_to_out(position, db)
+    await db.commit()
+    await db.refresh(position)
+    return await _position_to_out(position, db)
 
 
 @app.patch("/tactical-positions/{position_id}", response_model=TacticalPositionOut)
-def update_tactical_position(position_id: int, data: TacticalPositionUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def update_tactical_position(position_id: int, data: TacticalPositionUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Edit a position's plan (location, planned operator, scheduled sign-on). This is
     the only way to plan ahead for Net Control specifically -- it's auto-created at
     session start with no creation form of its own, so without this there'd be no way
     to set who's expected next or when (issue #21 follow-up)."""
-    position = _get_position_for_user(position_id, current_user, db)
+    position = await _get_position_for_user(position_id, current_user, db)
     position.location = (data.location or "").strip() or None
     position.assigned_callsign = (data.assigned_callsign or "").strip().upper() or None
     position.assigned_name = (data.assigned_name or "").strip() or None
     position.scheduled_start = data.scheduled_start
-    db.commit()
-    db.refresh(position)
-    return _position_to_out(position, db)
+    await db.commit()
+    await db.refresh(position)
+    return await _position_to_out(position, db)
 
 
 @app.delete("/tactical-positions/{position_id}", status_code=204)
-def delete_tactical_position(position_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    position = _get_position_for_user(position_id, current_user, db)
+async def delete_tactical_position(position_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    position = await _get_position_for_user(position_id, current_user, db)
     if position.is_net_control:
         raise HTTPException(400, "Cannot remove the Net Control position — hand it off instead")
-    db.delete(position)  # checkins keep their history; tactical_position_id -> NULL via ON DELETE SET NULL
-    db.commit()
+    await db.delete(position)  # checkins keep their history; tactical_position_id -> NULL via ON DELETE SET NULL
+    await db.commit()
 
 
 @app.get("/tactical-positions/{position_id}/shifts", response_model=list[CheckinOut])
-def list_tactical_shifts(position_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    position = _get_position_for_user(position_id, current_user, db)
+async def list_tactical_shifts(position_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    position = await _get_position_for_user(position_id, current_user, db)
     shifts = (
-        db.query(Checkin)
-        .filter(Checkin.tactical_position_id == position.id)
-        .order_by(Checkin.checked_in_at)
-        .all()
+        (await db.execute(select(Checkin).filter(Checkin.tactical_position_id == position.id).order_by(Checkin.checked_in_at))).scalars().all()
     )
     out = [CheckinOut.model_validate(c) for c in shifts]
     for o in out:
@@ -3556,13 +3496,13 @@ def list_tactical_shifts(position_id: int, current_user: User = Depends(get_curr
 
 
 @app.post("/tactical-positions/{position_id}/sign-on", response_model=CheckinOut, status_code=201)
-def sign_on_tactical_position(position_id: int, data: TacticalSignOn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    position = _get_position_for_user(position_id, current_user, db)
-    session = db.query(NetSession).filter(NetSession.id == position.session_id).first()
+async def sign_on_tactical_position(position_id: int, data: TacticalSignOn, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    position = await _get_position_for_user(position_id, current_user, db)
+    session = (await db.execute(select(NetSession).filter(NetSession.id == position.session_id))).scalar_one_or_none()
     if session.ended_at is not None:
         raise HTTPException(400, "Cannot sign on to a position on an ended session")
 
-    outgoing = _current_occupant(position.id, db)
+    outgoing = await _current_occupant(position.id, db)
     if outgoing:
         outgoing.signed_off_at = utcnow()
 
@@ -3574,22 +3514,22 @@ def sign_on_tactical_position(position_id: int, data: TacticalSignOn, current_us
         tactical_position_id=position.id,
     )
     db.add(checkin)
-    db.commit()
-    db.refresh(checkin)
+    await db.commit()
+    await db.refresh(checkin)
     out = CheckinOut.model_validate(checkin)
     out.tactical_callsign = position.tactical_callsign
     return out
 
 
 @app.post("/tactical-positions/{position_id}/sign-off", response_model=CheckinOut)
-def sign_off_tactical_position(position_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    position = _get_position_for_user(position_id, current_user, db)
-    outgoing = _current_occupant(position.id, db)
+async def sign_off_tactical_position(position_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    position = await _get_position_for_user(position_id, current_user, db)
+    outgoing = await _current_occupant(position.id, db)
     if not outgoing:
         raise HTTPException(404, "This position is not currently occupied")
     outgoing.signed_off_at = utcnow()
-    db.commit()
-    db.refresh(outgoing)
+    await db.commit()
+    await db.refresh(outgoing)
     out = CheckinOut.model_validate(outgoing)
     out.tactical_callsign = position.tactical_callsign
     return out
@@ -3607,29 +3547,26 @@ def sign_off_tactical_position(position_id: int, current_user: User = Depends(ge
 # removes that entry once the handoff is confirmed.
 # ---------------------------------------------------------------------------
 
-def _get_shift_for_user(shift_id: int, user: User, db: Session) -> NetControlShift:
-    shift = db.query(NetControlShift).filter(NetControlShift.id == shift_id).first()
+async def _get_shift_for_user(shift_id: int, user: User, db: AsyncSession) -> NetControlShift:
+    shift = (await db.execute(select(NetControlShift).filter(NetControlShift.id == shift_id))).scalar_one_or_none()
     if not shift:
         raise HTTPException(404, "Shift not found")
-    _get_session_for_user(shift.session_id, user, db)  # raises 403/404 if no access
+    await _get_session_for_user(shift.session_id, user, db)  # raises 403/404 if no access
     return shift
 
 
 @app.get("/sessions/{session_id}/net-control-shifts", response_model=list[NetControlShiftOut])
-def list_net_control_shifts(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_activation_session(session_id, current_user, db)
+async def list_net_control_shifts(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_activation_session(session_id, current_user, db)
     shifts = (
-        db.query(NetControlShift)
-        .filter(NetControlShift.session_id == session.id)
-        .order_by(NetControlShift.scheduled_start)
-        .all()
+        (await db.execute(select(NetControlShift).filter(NetControlShift.session_id == session.id).order_by(NetControlShift.scheduled_start))).scalars().all()
     )
     return [NetControlShiftOut.model_validate(s) for s in shifts]
 
 
 @app.post("/sessions/{session_id}/net-control-shifts", response_model=NetControlShiftOut, status_code=201)
-def create_net_control_shift(session_id: int, data: NetControlShiftCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_activation_session(session_id, current_user, db)
+async def create_net_control_shift(session_id: int, data: NetControlShiftCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_activation_session(session_id, current_user, db)
     shift = NetControlShift(
         session_id=session.id,
         callsign=data.callsign,
@@ -3637,70 +3574,67 @@ def create_net_control_shift(session_id: int, data: NetControlShiftCreate, curre
         scheduled_start=data.scheduled_start,
     )
     db.add(shift)
-    db.commit()
-    db.refresh(shift)
+    await db.commit()
+    await db.refresh(shift)
     return NetControlShiftOut.model_validate(shift)
 
 
 @app.delete("/net-control-shifts/{shift_id}", status_code=204)
-def delete_net_control_shift(shift_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    shift = _get_shift_for_user(shift_id, current_user, db)
-    db.delete(shift)
-    db.commit()
+async def delete_net_control_shift(shift_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    shift = await _get_shift_for_user(shift_id, current_user, db)
+    await db.delete(shift)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
 # Expected Stations
 # ---------------------------------------------------------------------------
 
-def _preferred_names_for_net(net_id: int, db: Session) -> dict:
+async def _preferred_names_for_net(net_id: int, db: AsyncSession) -> dict:
     """callsign -> preferred_name for every station remark on this net that has one set."""
-    rows = (
-        db.query(StationRemark.callsign, StationRemark.preferred_name)
+    rows = (await db.execute(
+        select(StationRemark.callsign, StationRemark.preferred_name)
         .filter(StationRemark.net_id == net_id, StationRemark.preferred_name.isnot(None))
-        .all()
-    )
+    )).all()
     return {r.callsign: r.preferred_name for r in rows}
 
 
-def _tactical_callsigns_for_session(session_id: int, db: Session) -> dict:
+async def _tactical_callsigns_for_session(session_id: int, db: AsyncSession) -> dict:
     """tactical_position_id -> tactical_callsign for this session's positions
     (issue #21) — avoids an N+1 lookup per checkin row in list_checkins()."""
-    rows = (
-        db.query(TacticalPosition.id, TacticalPosition.tactical_callsign)
+    rows = (await db.execute(
+        select(TacticalPosition.id, TacticalPosition.tactical_callsign)
         .filter(TacticalPosition.session_id == session_id)
-        .all()
-    )
+    )).all()
     return {r.id: r.tactical_callsign for r in rows}
 
 
-def _tactical_callsigns_for_net(net_id: int, db: Session) -> dict:
+async def _tactical_callsigns_for_net(net_id: int, db: AsyncSession) -> dict:
     """Same as _tactical_callsigns_for_session, but across every session on
     this net — for the multi-session net-wide CSV export."""
-    rows = (
-        db.query(TacticalPosition.id, TacticalPosition.tactical_callsign)
+    rows = (await db.execute(
+        select(TacticalPosition.id, TacticalPosition.tactical_callsign)
         .join(NetSession, NetSession.id == TacticalPosition.session_id)
         .filter(NetSession.net_id == net_id)
-        .all()
-    )
+    )).all()
     return {r.id: r.tactical_callsign for r in rows}
 
 
 @app.get("/nets/{net_id}/expected", response_model=list[ExpectedStation])
-def expected_stations(
+async def expected_stations(
     net_id: int,
     weeks: int = Query(4, ge=1, le=52),
     min_checkins: int = Query(2, ge=1),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return callsigns that checked in >= min_checkins times in the past N weeks for this net."""
-    _get_editable_net(net_id, current_user, db)
+    await _get_editable_net(net_id, current_user, db)
 
     cutoff = datetime.now(timezone.utc) - timedelta(weeks=weeks)
 
-    rows = (
-        db.query(
+    rows = (await db.execute(
+        select(
             Checkin.callsign,
             func.max(Checkin.name).label("name"),
             func.count(Checkin.id).label("cnt"),
@@ -3711,8 +3645,7 @@ def expected_stations(
         .group_by(Checkin.callsign)
         .having(func.count(Checkin.id) >= min_checkins)
         .order_by(func.count(Checkin.id).desc())
-        .all()
-    )
+    )).all()
 
     import re as _re
     def _suffix(cs: str) -> str:
@@ -3720,7 +3653,7 @@ def expected_stations(
         m = _re.search(r'\d([A-Z]+)$', cs.upper())
         return m.group(1) if m else cs
 
-    preferred_names = _preferred_names_for_net(net_id, db)
+    preferred_names = await _preferred_names_for_net(net_id, db)
     stations = [
         ExpectedStation(
             callsign=r.callsign,
@@ -3739,14 +3672,14 @@ def expected_stations(
 # ---------------------------------------------------------------------------
 
 @app.get("/sessions/{session_id}/summary", response_model=SessionSummary)
-def session_summary(
+async def session_summary(
     session_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    session = _get_session_for_user(session_id, current_user, db)
-    net = db.query(Net).filter(Net.id == session.net_id).first()
-    checkins = db.query(Checkin).filter(Checkin.session_id == session_id).all()
+    session = await _get_session_for_user(session_id, current_user, db)
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
+    checkins = (await db.execute(select(Checkin).filter(Checkin.session_id == session_id))).scalars().all()
 
     duration_minutes = None
     if session.started_at and session.ended_at:
@@ -3755,19 +3688,18 @@ def session_summary(
 
     # New stations: callsigns that appear in this session but not in any prior session for this net
     this_callsigns = {c.callsign for c in checkins}
-    prior = (
-        db.query(Checkin.callsign)
+    prior = (await db.execute(
+        select(Checkin.callsign)
         .join(NetSession, NetSession.id == Checkin.session_id)
         .filter(NetSession.net_id == session.net_id, NetSession.id != session_id)
         .distinct()
-        .all()
-    )
+    )).all()
     prior_callsigns = {r.callsign for r in prior}
     new_stations = len(this_callsigns - prior_callsigns)
 
     operator_callsign = None
     if session.operator_id:
-        op = db.query(User).filter(User.id == session.operator_id).first()
+        op = (await db.execute(select(User).filter(User.id == session.operator_id))).scalar_one_or_none()
         operator_callsign = op.callsign if op else None
 
     return SessionSummary(
@@ -3785,28 +3717,28 @@ def session_summary(
 
 
 @app.get("/sessions/{session_id}/ics205")
-def session_ics205(
+async def session_ics205(
     session_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return a printable HTML ICS-205 / net log for this session."""
-    session = _get_session_for_user(session_id, current_user, db)
-    net = db.query(Net).filter(Net.id == session.net_id).first()
-    checkins = db.query(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at).all()
-    traffic_msgs = db.query(TrafficMessage).filter(TrafficMessage.session_id == session_id).order_by(TrafficMessage.created_at).all()
+    session = await _get_session_for_user(session_id, current_user, db)
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
+    checkins = (await db.execute(select(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at))).scalars().all()
+    traffic_msgs = (await db.execute(select(TrafficMessage).filter(TrafficMessage.session_id == session_id).order_by(TrafficMessage.created_at))).scalars().all()
 
     op_callsign = ""
     if session.operator_id:
-        op = db.query(User).filter(User.id == session.operator_id).first()
+        op = (await db.execute(select(User).filter(User.id == session.operator_id))).scalar_one_or_none()
         op_callsign = op.callsign if op else ""
 
     started = session.started_at.strftime("%Y-%m-%d %H%MZ") if session.started_at else ""
     ended   = session.ended_at.strftime("%H%MZ") if session.ended_at else "—"
     freq    = net.frequency if net and net.frequency else "—"
 
-    preferred_names = _preferred_names_for_net(session.net_id, db)
-    tactical_callsigns = _tactical_callsigns_for_session(session_id, db) if session.is_activation else {}
+    preferred_names = await _preferred_names_for_net(session.net_id, db)
+    tactical_callsigns = await _tactical_callsigns_for_session(session_id, db) if session.is_activation else {}
 
     checkin_rows = ""
     for i, c in enumerate(checkins, 1):
@@ -3908,23 +3840,23 @@ def session_ics205(
 # ---------------------------------------------------------------------------
 
 @app.get("/sessions/{session_id}/traffic-messages", response_model=list[TrafficMessageOut])
-def list_traffic_messages(
+async def list_traffic_messages(
     session_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    _get_session_for_user(session_id, current_user, db)
-    return db.query(TrafficMessage).filter(TrafficMessage.session_id == session_id).order_by(TrafficMessage.created_at).all()
+    await _get_session_for_user(session_id, current_user, db)
+    return (await db.execute(select(TrafficMessage).filter(TrafficMessage.session_id == session_id).order_by(TrafficMessage.created_at))).scalars().all()
 
 
 @app.post("/sessions/{session_id}/traffic-messages", response_model=TrafficMessageOut, status_code=201)
-def create_traffic_message(
+async def create_traffic_message(
     session_id: int,
     body: TrafficMessageCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    _get_session_for_user(session_id, current_user, db)
+    await _get_session_for_user(session_id, current_user, db)
     msg = TrafficMessage(
         session_id=session_id,
         origin_callsign=body.origin_callsign.upper().strip(),
@@ -3935,41 +3867,41 @@ def create_traffic_message(
         notes=body.notes,
     )
     db.add(msg)
-    db.commit()
-    db.refresh(msg)
+    await db.commit()
+    await db.refresh(msg)
     return msg
 
 
 @app.patch("/traffic-messages/{msg_id}", response_model=TrafficMessageOut)
-def update_traffic_message(
+async def update_traffic_message(
     msg_id: int,
     body: TrafficMessageUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    msg = db.query(TrafficMessage).filter(TrafficMessage.id == msg_id).first()
+    msg = (await db.execute(select(TrafficMessage).filter(TrafficMessage.id == msg_id))).scalar_one_or_none()
     if not msg:
         raise HTTPException(404, "Message not found")
-    _get_session_for_user(msg.session_id, current_user, db)
+    await _get_session_for_user(msg.session_id, current_user, db)
     for field, val in body.model_dump(exclude_none=True).items():
         setattr(msg, field, val)
-    db.commit()
-    db.refresh(msg)
+    await db.commit()
+    await db.refresh(msg)
     return msg
 
 
 @app.delete("/traffic-messages/{msg_id}", status_code=204)
-def delete_traffic_message(
+async def delete_traffic_message(
     msg_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    msg = db.query(TrafficMessage).filter(TrafficMessage.id == msg_id).first()
+    msg = (await db.execute(select(TrafficMessage).filter(TrafficMessage.id == msg_id))).scalar_one_or_none()
     if not msg:
         raise HTTPException(404, "Message not found")
-    _get_session_for_user(msg.session_id, current_user, db)
-    db.delete(msg)
-    db.commit()
+    await _get_session_for_user(msg.session_id, current_user, db)
+    await db.delete(msg)
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -3977,43 +3909,43 @@ def delete_traffic_message(
 # ---------------------------------------------------------------------------
 
 @app.get("/nets/{net_id}/stations/{callsign}/remark", response_model=Optional[StationRemarkOut])
-def get_station_remark(
+async def get_station_remark(
     net_id: int,
     callsign: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    _get_editable_net(net_id, current_user, db)
-    remark = db.query(StationRemark).filter(
+    await _get_editable_net(net_id, current_user, db)
+    remark = (await db.execute(select(StationRemark).filter(
         StationRemark.net_id == net_id,
         StationRemark.callsign == callsign.upper(),
-    ).first()
+    ))).scalar_one_or_none()
     return remark  # None returns as null → 200 with null body; frontend handles
 
 
 @app.put("/nets/{net_id}/stations/{callsign}/remark", response_model=Optional[StationRemarkOut])
-def upsert_station_remark(
+async def upsert_station_remark(
     net_id: int,
     callsign: str,
     body: StationRemarkUpsert,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    _get_editable_net(net_id, current_user, db)
+    await _get_editable_net(net_id, current_user, db)
     cs = callsign.upper().strip()
     remark_text = (body.remark or "").strip() or None
     preferred_name = (body.preferred_name or "").strip() or None
 
-    existing = db.query(StationRemark).filter(
+    existing = (await db.execute(select(StationRemark).filter(
         StationRemark.net_id == net_id,
         StationRemark.callsign == cs,
-    ).first()
+    ))).scalar_one_or_none()
 
     if not remark_text and not preferred_name:
         # Nothing left to store -- clear the row rather than leaving an empty one.
         if existing:
-            db.delete(existing)
-            db.commit()
+            await db.delete(existing)
+            await db.commit()
         return None
 
     if existing:
@@ -4031,26 +3963,26 @@ def upsert_station_remark(
             updated_by=current_user.id,
         )
         db.add(remark)
-    db.commit()
-    db.refresh(remark)
+    await db.commit()
+    await db.refresh(remark)
     return remark
 
 
 @app.delete("/nets/{net_id}/stations/{callsign}/remark", status_code=204)
-def delete_station_remark(
+async def delete_station_remark(
     net_id: int,
     callsign: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    _get_editable_net(net_id, current_user, db)
-    remark = db.query(StationRemark).filter(
+    await _get_editable_net(net_id, current_user, db)
+    remark = (await db.execute(select(StationRemark).filter(
         StationRemark.net_id == net_id,
         StationRemark.callsign == callsign.upper(),
-    ).first()
+    ))).scalar_one_or_none()
     if remark:
-        db.delete(remark)
-        db.commit()
+        await db.delete(remark)
+        await db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -4058,19 +3990,19 @@ def delete_station_remark(
 # ---------------------------------------------------------------------------
 
 @app.get("/nets/{net_id}/history", response_model=list[CallsignHistoryItem])
-def net_history(
+async def net_history(
     net_id: int,
     limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return checkin counts per callsign across all sessions of a net.
     Also includes recent_checkins: count of checkins in the past 14 days.
     """
-    _get_editable_net(net_id, current_user, db)
+    await _get_editable_net(net_id, current_user, db)
 
-    rows = (
-        db.query(
+    rows = (await db.execute(
+        select(
             Checkin.callsign,
             func.max(Checkin.name).label("name"),
             func.count(Checkin.id).label("total_checkins"),
@@ -4081,8 +4013,7 @@ def net_history(
         .group_by(Checkin.callsign)
         .order_by(func.count(Checkin.id).desc())
         .limit(limit)
-        .all()
-    )
+    )).all()
 
     now = datetime.now(timezone.utc)
 
@@ -4090,37 +4021,38 @@ def net_history(
     cutoff_2w = now - timedelta(days=14)
     recent_2w = {
         r.callsign: r.cnt
-        for r in db.query(Checkin.callsign, func.count(Checkin.id).label("cnt"))
-        .join(NetSession, NetSession.id == Checkin.session_id)
-        .filter(NetSession.net_id == net_id, Checkin.checked_in_at >= cutoff_2w)
-        .group_by(Checkin.callsign).all()
+        for r in (await db.execute(
+            select(Checkin.callsign, func.count(Checkin.id).label("cnt"))
+            .join(NetSession, NetSession.id == Checkin.session_id)
+            .filter(NetSession.net_id == net_id, Checkin.checked_in_at >= cutoff_2w)
+            .group_by(Checkin.callsign)
+        )).all()
     }
 
     # Recent 28-day counts
     cutoff_4w = now - timedelta(days=28)
     recent_4w = {
         r.callsign: r.cnt
-        for r in db.query(Checkin.callsign, func.count(Checkin.id).label("cnt"))
-        .join(NetSession, NetSession.id == Checkin.session_id)
-        .filter(NetSession.net_id == net_id, Checkin.checked_in_at >= cutoff_4w)
-        .group_by(Checkin.callsign).all()
+        for r in (await db.execute(
+            select(Checkin.callsign, func.count(Checkin.id).label("cnt"))
+            .join(NetSession, NetSession.id == Checkin.session_id)
+            .filter(NetSession.net_id == net_id, Checkin.checked_in_at >= cutoff_4w)
+            .group_by(Checkin.callsign)
+        )).all()
     }
 
     # Who checked in to the most recent ended session?
     last_session = (
-        db.query(NetSession)
-        .filter(NetSession.net_id == net_id, NetSession.ended_at.isnot(None))
-        .order_by(NetSession.started_at.desc())
-        .first()
+        (await db.execute(select(NetSession).filter(NetSession.net_id == net_id, NetSession.ended_at.isnot(None)).order_by(NetSession.started_at.desc()))).scalar_one_or_none()
     )
     last_session_callsigns: set = set()
     if last_session:
         last_session_callsigns = {
             c.callsign for c in
-            db.query(Checkin).filter(Checkin.session_id == last_session.id).all()
+            (await db.execute(select(Checkin).filter(Checkin.session_id == last_session.id))).scalars().all()
         }
 
-    preferred_names = _preferred_names_for_net(net_id, db)
+    preferred_names = await _preferred_names_for_net(net_id, db)
     return [
         CallsignHistoryItem(
             callsign=r.callsign,
@@ -4140,12 +4072,12 @@ def net_history(
 # ---------------------------------------------------------------------------
 
 @app.get("/sessions/{session_id}/export")
-def export_session_csv(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = _get_session_for_user(session_id, current_user, db)
-    checkins = db.query(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at).all()
-    net = db.query(Net).filter(Net.id == session.net_id).first()
-    preferred_names = _preferred_names_for_net(session.net_id, db)
-    tactical_callsigns = _tactical_callsigns_for_session(session_id, db) if session.is_activation else {}
+async def export_session_csv(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await _get_session_for_user(session_id, current_user, db)
+    checkins = (await db.execute(select(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at))).scalars().all()
+    net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
+    preferred_names = await _preferred_names_for_net(session.net_id, db)
+    tactical_callsigns = await _tactical_callsigns_for_session(session_id, db) if session.is_activation else {}
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -4172,18 +4104,17 @@ def export_session_csv(session_id: int, current_user: User = Depends(get_current
 
 
 @app.get("/nets/{net_id}/export")
-def export_net_csv(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_net_for_user(net_id, current_user, db)
-    preferred_names = _preferred_names_for_net(net_id, db)
-    tactical_callsigns = _tactical_callsigns_for_net(net_id, db) if net.is_ares else {}
+async def export_net_csv(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_net_for_user(net_id, current_user, db)
+    preferred_names = await _preferred_names_for_net(net_id, db)
+    tactical_callsigns = await _tactical_callsigns_for_net(net_id, db) if net.is_ares else {}
 
-    rows = (
-        db.query(Checkin, NetSession)
+    rows = (await db.execute(
+        select(Checkin, NetSession)
         .join(NetSession, NetSession.id == Checkin.session_id)
         .filter(NetSession.net_id == net_id)
         .order_by(NetSession.started_at.desc(), Checkin.checked_in_at)
-        .all()
-    )
+    )).all()
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -4238,11 +4169,11 @@ class CallsignSearchResult(BaseModel):
 
 
 @app.get("/callsign/search", response_model=list[CallsignSearchResult])
-def search_callsigns(
+async def search_callsigns(
     q: str = Query(..., min_length=2, max_length=12),
     net_id: Optional[int] = Query(None),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Search checkin history for callsigns whose suffix matches q.
     Searches the current net first (if net_id provided), then all nets owned by the user.
@@ -4256,9 +4187,9 @@ def search_callsigns(
         m = _re.search(r'\d([A-Z]+)$', cs.upper())
         return m.group(1) if m else cs
 
-    def _run_query(extra_filter) -> list[CallsignSearchResult]:
-        rows = (
-            db.query(
+    async def _run_query(extra_filter) -> list[CallsignSearchResult]:
+        rows = (await db.execute(
+            select(
                 Checkin.callsign,
                 func.max(Checkin.name).label("name"),
             )
@@ -4269,8 +4200,7 @@ def search_callsigns(
             # suffix match: callsign ends with q (case-insensitive)
             .filter(Checkin.callsign.ilike(f"%{q}"))
             .group_by(Checkin.callsign)
-            .all()
-        )
+        )).all()
         results = [
             CallsignSearchResult(callsign=r.callsign, name=r.name, license_class=None)
             for r in rows
@@ -4280,12 +4210,12 @@ def search_callsigns(
 
     # 1. Search current net's history first
     if net_id:
-        results = _run_query(Net.id == net_id)
+        results = await _run_query(Net.id == net_id)
         if results:
             return results
 
     # 2. Fall back to all nets owned by this user
-    results = _run_query(True)
+    results = await _run_query(True)
     return results
 
 
@@ -4294,9 +4224,9 @@ _CALLSIGN_CACHE_TTL_FOUND = 30 * 24 * 3600      # 30 days — licenses rarely ch
 _CALLSIGN_CACHE_TTL_NOT_FOUND = 7 * 24 * 3600   # 7 days — callsign might get issued
 
 
-def _callsign_cache_read(callsign: str, db: Session) -> Optional[CallsignLookupResult]:
+async def _callsign_cache_read(callsign: str, db: AsyncSession) -> Optional[CallsignLookupResult]:
     """Return a cached lookup result if still within TTL, else None."""
-    row = db.query(CallsignCache).filter(CallsignCache.callsign == callsign).first()
+    row = (await db.execute(select(CallsignCache).filter(CallsignCache.callsign == callsign))).scalar_one_or_none()
     if not row:
         return None
     ttl = _CALLSIGN_CACHE_TTL_FOUND if row.status == "found" else _CALLSIGN_CACHE_TTL_NOT_FOUND
@@ -4318,9 +4248,9 @@ def _callsign_cache_read(callsign: str, db: Session) -> Optional[CallsignLookupR
     )
 
 
-def _callsign_cache_write(result: CallsignLookupResult, db: Session) -> None:
+async def _callsign_cache_write(result: CallsignLookupResult, db: AsyncSession) -> None:
     """Upsert a lookup result into the local cache."""
-    row = db.query(CallsignCache).filter(CallsignCache.callsign == result.callsign).first()
+    row = (await db.execute(select(CallsignCache).filter(CallsignCache.callsign == result.callsign))).scalar_one_or_none()
     if row:
         row.status = result.status
         row.name = result.name
@@ -4341,7 +4271,7 @@ def _callsign_cache_write(result: CallsignLookupResult, db: Session) -> None:
             expires=result.expires,
             source=result.source,
         ))
-    db.commit()
+    await db.commit()
 
 
 import re as _re
@@ -4356,7 +4286,7 @@ def _is_gmrs_callsign(cs: str) -> bool:
 async def lookup_callsign(
     callsign: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Resolve a callsign to FCC license data.
@@ -4378,7 +4308,7 @@ async def lookup_callsign(
     # ── GMRS branch ──────────────────────────────────────────────────────────
     if _is_gmrs_callsign(callsign):
         # 1. Local gmrs_licenses table (fast, no external call)
-        row = db.query(GmrsLicense).filter(GmrsLicense.callsign == callsign).first()
+        row = (await db.execute(select(GmrsLicense).filter(GmrsLicense.callsign == callsign))).scalar_one_or_none()
         log.info("GMRS lookup: callsign=%s row_found=%s status=%r", callsign, row is not None, row.status if row else None)
         if row:
             status = "found" if (row.status or "").strip() == "A" else "not_found"
@@ -4396,12 +4326,12 @@ async def lookup_callsign(
         # 2. FCC ULS API fallback (when local DB hasn't been synced yet, or callsign
         #    is very newly issued between weekly syncs)
         log.info("GMRS %s not in local DB — trying FCC ULS API", callsign)
-        cached = _callsign_cache_read(callsign, db)
+        cached = await _callsign_cache_read(callsign, db)
         if cached:
             return cached
 
-        def _save(result: CallsignLookupResult) -> CallsignLookupResult:
-            _callsign_cache_write(result, db)
+        async def _save(result: CallsignLookupResult) -> CallsignLookupResult:
+            await _callsign_cache_write(result, db)
             return result
 
         async with httpx.AsyncClient(timeout=8.0) as client:
@@ -4420,7 +4350,7 @@ async def lookup_callsign(
                     )
                     if match and match.get("statusDesc", "").lower() == "active":
                         name = (match.get("licenseeName") or "").strip().title() or None
-                        return _save(CallsignLookupResult(
+                        return await _save(CallsignLookupResult(
                             callsign=match["callsign"],
                             status="found",
                             name=name,
@@ -4438,17 +4368,17 @@ async def lookup_callsign(
                 log.warning("FCC ULS error for GMRS %s: %s", callsign, exc)
 
         log.warning("GMRS lookup exhausted for %s", callsign)
-        return _save(CallsignLookupResult(callsign=callsign, status="not_found"))
+        return await _save(CallsignLookupResult(callsign=callsign, status="not_found"))
 
     # ── Ham branch ───────────────────────────────────────────────────────────
     # Return cached result if still fresh
-    cached = _callsign_cache_read(callsign, db)
+    cached = await _callsign_cache_read(callsign, db)
     if cached:
         return cached
 
-    def _save(result: CallsignLookupResult) -> CallsignLookupResult:
+    async def _save(result: CallsignLookupResult) -> CallsignLookupResult:
         """Persist to cache then return."""
-        _callsign_cache_write(result, db)
+        await _callsign_cache_write(result, db)
         return result
 
     async with httpx.AsyncClient(timeout=8.0) as client:
@@ -4472,7 +4402,7 @@ async def lookup_callsign(
                 if match and match.get("statusDesc", "").lower() == "active":
                     name = (match.get("licenseeName") or "").strip().title() or None
                     # FCC returns "JOHN DOE" — title-case it to "John Doe"
-                    return _save(CallsignLookupResult(
+                    return await _save(CallsignLookupResult(
                         callsign=match["callsign"],
                         status="found",
                         name=name,
@@ -4508,7 +4438,7 @@ async def lookup_callsign(
                     fname = (cs.get("fname") or "").strip()
                     lname = (cs.get("name") or "").strip()
                     name = f"{fname} {lname}".strip() or None
-                    return _save(CallsignLookupResult(
+                    return await _save(CallsignLookupResult(
                         callsign=cs["call"],
                         status="found",
                         name=name,
@@ -4565,7 +4495,7 @@ async def lookup_callsign(
                         state_zip = parts[-1].strip().split()
                         state = state_zip[0] if state_zip else None
 
-                    return _save(CallsignLookupResult(
+                    return await _save(CallsignLookupResult(
                         callsign=_safe_get(current, "callsign") or callsign,
                         status="found",
                         name=name,
@@ -4583,7 +4513,7 @@ async def lookup_callsign(
             log.warning("callook.info error for %s: %s", callsign, exc)
 
     log.warning("All sources exhausted for %s — returning not_found", callsign)
-    return _save(CallsignLookupResult(callsign=callsign, status="not_found"))
+    return await _save(CallsignLookupResult(callsign=callsign, status="not_found"))
 
 
 # ---------------------------------------------------------------------------
@@ -4699,20 +4629,18 @@ def _signup_to_out(s: NetControlSignup, current_user: User) -> SignupOut:
     )
 
 
-def _duty_for_date(net_id: int, slot_date: date, db: Session) -> tuple:
+async def _duty_for_date(net_id: int, slot_date: date, db: AsyncSession) -> tuple:
     """Return (net_control_signup, broadcaster_signup) ORM rows for this net on slot_date,
     across all of its schedules. A signup with role='both' fills both."""
     signups = (
-        db.query(NetControlSignup)
-        .filter(NetControlSignup.net_id == net_id, NetControlSignup.slot_date == slot_date)
-        .all()
+        (await db.execute(select(NetControlSignup).filter(NetControlSignup.net_id == net_id, NetControlSignup.slot_date == slot_date))).scalars().all()
     )
     nc = next((s for s in signups if s.role in ("net_control", "both")), None)
     bc = next((s for s in signups if s.role in ("broadcaster", "both")), None)
     return nc, bc
 
 
-def _duty_labels_for_session(net: Net, session: NetSession, db: Session) -> dict:
+async def _duty_labels_for_session(net: Net, session: NetSession, db: AsyncSession) -> dict:
     """Net Control / Broadcaster display info for a session, sourced from the schedule
     sign-up matching the session's date when one exists, falling back to whoever
     actually started the session for Net Control. Also includes the sign-up (if any)
@@ -4724,9 +4652,9 @@ def _duty_labels_for_session(net: Net, session: NetSession, db: Session) -> dict
     mainly for offline-entered nets where whoever backfills the log may not be
     who actually ran it) takes the same precedence over the schedule sign-up."""
     session_date = session.started_at.date()
-    nc, bc = _duty_for_date(net.id, session_date, db)
-    next_nc, next_bc = _duty_for_date(net.id, session_date + timedelta(days=7), db)
-    operator = db.query(User).filter(User.id == session.operator_id).first() if session.operator_id else None
+    nc, bc = await _duty_for_date(net.id, session_date, db)
+    next_nc, next_bc = await _duty_for_date(net.id, session_date + timedelta(days=7), db)
+    operator = (await db.execute(select(User).filter(User.id == session.operator_id))).scalar_one_or_none() if session.operator_id else None
     # On a GMRS net, prefer the operator's separate GMRS callsign (issue #23) over
     # their amateur one, when they have one set — only relevant for the "whoever
     # started the session" fallback; an explicit schedule sign-up's callsign
@@ -4767,15 +4695,15 @@ def _schedule_to_out(s: NetSchedule) -> ScheduleOut:
 
 
 @app.get("/nets/{net_id}/schedules", response_model=list[ScheduleOut])
-def list_schedules(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_editable_net(net_id, current_user, db)
-    schedules = db.query(NetSchedule).filter(NetSchedule.net_id == net_id).order_by(NetSchedule.day_of_week).all()
+async def list_schedules(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_editable_net(net_id, current_user, db)
+    schedules = (await db.execute(select(NetSchedule).filter(NetSchedule.net_id == net_id).order_by(NetSchedule.day_of_week))).scalars().all()
     return [_schedule_to_out(s) for s in schedules]
 
 
 @app.post("/nets/{net_id}/schedules", response_model=ScheduleOut, status_code=201)
-def create_schedule(net_id: int, data: ScheduleCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_editable_net(net_id, current_user, db)
+async def create_schedule(net_id: int, data: ScheduleCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_editable_net(net_id, current_user, db)
     sched = NetSchedule(
         net_id=net_id,
         day_of_week=data.day_of_week,
@@ -4784,40 +4712,40 @@ def create_schedule(net_id: int, data: ScheduleCreate, current_user: User = Depe
         notes=data.notes,
     )
     db.add(sched)
-    db.commit()
-    db.refresh(sched)
+    await db.commit()
+    await db.refresh(sched)
     return _schedule_to_out(sched)
 
 
 @app.delete("/schedules/{schedule_id}", status_code=204)
-def delete_schedule(schedule_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    sched = db.query(NetSchedule).filter(NetSchedule.id == schedule_id).first()
+async def delete_schedule(schedule_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    sched = (await db.execute(select(NetSchedule).filter(NetSchedule.id == schedule_id))).scalar_one_or_none()
     if not sched:
         raise HTTPException(404, "Schedule not found")
-    _get_editable_net(sched.net_id, current_user, db)
-    db.delete(sched)
-    db.commit()
+    await _get_editable_net(sched.net_id, current_user, db)
+    await db.delete(sched)
+    await db.commit()
 
 
 @app.get("/nets/{net_id}/upcoming", response_model=list[UpcomingSlot])
-def upcoming_slots(
+async def upcoming_slots(
     net_id: int,
     weeks: int = Query(8, ge=1, le=26),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return the next `weeks` scheduled dates across all schedules for a net, with signup info."""
-    _get_editable_net(net_id, current_user, db)
-    schedules = db.query(NetSchedule).filter(NetSchedule.net_id == net_id).all()
+    await _get_editable_net(net_id, current_user, db)
+    schedules = (await db.execute(select(NetSchedule).filter(NetSchedule.net_id == net_id))).scalars().all()
 
     # Gather all upcoming dates across all schedules
     slots: list[UpcomingSlot] = []
     for sched in schedules:
         for slot_date in _next_occurrences(sched.day_of_week, weeks):
-            signup_rows = db.query(NetControlSignup).filter(
+            signup_rows = (await db.execute(select(NetControlSignup).filter(
                 NetControlSignup.schedule_id == sched.id,
                 NetControlSignup.slot_date == slot_date,
-            ).all()
+            ))).scalars().all()
             slots.append(UpcomingSlot(
                 slot_date=slot_date,
                 day_name=DAYS[sched.day_of_week],
@@ -4854,21 +4782,21 @@ def _dmr_cache_key(net_id: int) -> str:
     return f"dmr_cache_{net_id}"
 
 
-def _dmr_cache_write(net_id: int, entries: list, db: Session) -> None:
+async def _dmr_cache_write(net_id: int, entries: list, db: AsyncSession) -> None:
     """Write relay entries to both the in-memory dict and SystemSetting (survives restarts)."""
     now = _time.time()
     _dmr_push_cache[net_id] = {"entries": entries, "pushed_at": now}
-    _set_setting(_dmr_cache_key(net_id), json.dumps({"entries": entries, "pushed_at": now}), db)
-    db.commit()
+    await _set_setting(_dmr_cache_key(net_id), json.dumps({"entries": entries, "pushed_at": now}), db)
+    await db.commit()
 
 
-def _dmr_cache_read(net_id: int, db: Session) -> Optional[dict]:
+async def _dmr_cache_read(net_id: int, db: AsyncSession) -> Optional[dict]:
     """Return the relay cache for net_id, restoring from DB if the in-memory dict was wiped."""
     cached = _dmr_push_cache.get(net_id)
     if cached:
         return cached
     # Fallback: load from SystemSetting (e.g., after a server restart)
-    raw = _get_setting(_dmr_cache_key(net_id), db)
+    raw = await _get_setting(_dmr_cache_key(net_id), db)
     if raw:
         try:
             data = json.loads(raw)
@@ -5023,23 +4951,23 @@ def _assert_ham_net(net: Net):
 
 
 @app.get("/nets/{net_id}/dmr/config", response_model=Optional[DmrConfigOut])
-def get_dmr_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_net_for_user(net_id, current_user, db)
+async def get_dmr_config(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     return cfg  # None → null in JSON → frontend shows "not configured"
 
 
 @app.put("/nets/{net_id}/dmr/config", response_model=DmrConfigOut)
-def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_editable_net(net_id, current_user, db)
+async def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
     # BrandMeister is a DMR-only network -- can't return any other mode's
     # traffic. The UI already hides this combination; this is defense in
     # depth for a direct API call (issue #26).
     if data.source_type == "brandmeister" and data.mode != "dmr":
         raise HTTPException(400, "BrandMeister only supports DMR mode")
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     if cfg:
         cfg.source_type     = data.source_type
         cfg.mode             = data.mode
@@ -5058,27 +4986,27 @@ def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Dep
             direct_mode     = data.direct_mode,
         )
         db.add(cfg)
-    db.commit()
-    db.refresh(cfg)
+    await db.commit()
+    await db.refresh(cfg)
     return cfg
 
 
 @app.delete("/nets/{net_id}/dmr/config", status_code=204)
-def delete_dmr_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_editable_net(net_id, current_user, db)
+async def delete_dmr_config(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     if cfg:
-        db.delete(cfg)
-        db.commit()
+        await db.delete(cfg)
+        await db.commit()
 
 
 @app.get("/nets/{net_id}/dmr/lastheard", response_model=list[DmrHeardEntry])
-def dmr_lastheard(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def dmr_lastheard(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Backend-proxy last-heard fetch. Only used when direct_mode=False."""
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     if not cfg:
         raise HTTPException(404, "DMR not configured for this net")
     entries = _dmr_fetch_proxy(cfg)
@@ -5096,16 +5024,16 @@ class DmrPushPayload(BaseModel):
 
 
 @app.post("/nets/{net_id}/dmr/push", status_code=204)
-def dmr_push(
+async def dmr_push(
     net_id: int,
     data: DmrPushPayload,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Accept last-heard data pushed from a local relay script (bypasses CORS entirely)."""
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     if not cfg:
         raise HTTPException(404, "DMR not configured for this net")
     # Filter out NCS callsign server-side too
@@ -5113,7 +5041,7 @@ def dmr_push(
     entries = [e.model_dump() for e in data.entries]
     if skip:
         entries = [e for e in entries if (e.get("callsign") or "").upper() != skip]
-    _dmr_cache_write(net_id, entries, db)
+    await _dmr_cache_write(net_id, entries, db)
 
 
 class DmrRawPushPayload(BaseModel):
@@ -5128,20 +5056,20 @@ class DmrRawPushPayload(BaseModel):
 
 
 @app.post("/nets/{net_id}/dmr/push/raw", status_code=204)
-def dmr_push_raw(
+async def dmr_push_raw(
     net_id: int,
     data: DmrRawPushPayload,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Accept raw hotspot JSON from a relay script and normalize server-side.
 
     Prefer this endpoint over /dmr/push — it keeps normalization logic in the backend
     so relay scripts stay simple fetch-and-forward proxies.
     """
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     if not cfg:
         raise HTTPException(404, "DMR not configured for this net")
 
@@ -5165,22 +5093,22 @@ def dmr_push_raw(
     if skip:
         entries = [e for e in entries if e["callsign"].upper() != skip]
 
-    _dmr_cache_write(net_id, entries, db)
+    await _dmr_cache_write(net_id, entries, db)
 
 
 @app.get("/nets/{net_id}/dmr/cache")
-def dmr_cache(
+async def dmr_cache(
     net_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return relay-pushed DMR data with freshness info."""
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(DmrConfig).filter(DmrConfig.net_id == net_id))).scalar_one_or_none()
     if not cfg:
         raise HTTPException(404, "DMR not configured for this net")
-    cached = _dmr_cache_read(net_id, db)
+    cached = await _dmr_cache_read(net_id, db)
     if not cached:
         raise HTTPException(404, "No relay data for this net — is the relay script running?")
     age = int(_time.time() - cached["pushed_at"])
@@ -5211,20 +5139,20 @@ def _aprs_cache_key(net_id: int) -> str:
     return f"aprs_cache_{net_id}"
 
 
-def _aprs_cache_write(net_id: int, entries: list, db: Session) -> None:
+async def _aprs_cache_write(net_id: int, entries: list, db: AsyncSession) -> None:
     """Write position entries to both the in-memory dict and SystemSetting (survives restarts)."""
     now = _time.time()
     _aprs_push_cache[net_id] = {"entries": entries, "pushed_at": now}
-    _set_setting(_aprs_cache_key(net_id), json.dumps({"entries": entries, "pushed_at": now}), db)
-    db.commit()
+    await _set_setting(_aprs_cache_key(net_id), json.dumps({"entries": entries, "pushed_at": now}), db)
+    await db.commit()
 
 
-def _aprs_cache_read(net_id: int, db: Session) -> Optional[dict]:
+async def _aprs_cache_read(net_id: int, db: AsyncSession) -> Optional[dict]:
     """Return the position cache for net_id, restoring from DB if the in-memory dict was wiped."""
     cached = _aprs_push_cache.get(net_id)
     if cached:
         return cached
-    raw = _get_setting(_aprs_cache_key(net_id), db)
+    raw = await _get_setting(_aprs_cache_key(net_id), db)
     if raw:
         try:
             data = json.loads(raw)
@@ -5295,31 +5223,31 @@ def _aprs_fetch_aprsfi(cfg: AprsConfig, callsigns: list[str]) -> list[dict]:
         raise HTTPException(502, f"aprs.fi fetch failed: {exc}")
 
 
-def _aprs_active_session_callsigns(net_id: int, db: Session) -> list[str]:
+async def _aprs_active_session_callsigns(net_id: int, db: AsyncSession) -> list[str]:
     """Callsigns checked into the net's current live session, if any — the
     watch-list aprs.fi mode queries positions for."""
-    session = db.query(NetSession).filter(NetSession.net_id == net_id, NetSession.ended_at.is_(None)).first()
+    session = (await db.execute(select(NetSession).filter(NetSession.net_id == net_id, NetSession.ended_at.is_(None)))).scalar_one_or_none()
     if not session:
         return []
-    rows = db.query(Checkin.callsign).filter(Checkin.session_id == session.id).distinct().all()
-    return [r[0] for r in rows]
+    rows = (await db.execute(select(Checkin.callsign).filter(Checkin.session_id == session.id).distinct())).scalars().all()
+    return list(rows)
 
 
-def _aprs_positions_for_net(net_id: int, cfg: AprsConfig, db: Session) -> list[dict]:
+async def _aprs_positions_for_net(net_id: int, cfg: AprsConfig, db: AsyncSession) -> list[dict]:
     """Shared by the authenticated positions endpoint and the public live
     page (main.py:public_active/public_session_detail) — same cache-or-
     refresh logic either way, so the public page stays live without needing
     an authenticated viewer's browser to keep the poll warm."""
     if cfg.source_type == "aprs_fi":
-        cached = _aprs_cache_read(net_id, db)
+        cached = await _aprs_cache_read(net_id, db)
         if cached and (_time.time() - cached["pushed_at"]) <= _APRS_CACHE_TTL:
             entries = cached["entries"]
         else:
-            callsigns = _aprs_active_session_callsigns(net_id, db)
+            callsigns = await _aprs_active_session_callsigns(net_id, db)
             entries = _aprs_fetch_aprsfi(cfg, callsigns)
-            _aprs_cache_write(net_id, entries, db)
+            await _aprs_cache_write(net_id, entries, db)
     else:  # relay — nothing to fetch on demand, just serve whatever's been pushed
-        cached = _aprs_cache_read(net_id, db)
+        cached = await _aprs_cache_read(net_id, db)
         entries = cached["entries"] if cached else []
 
     skip = (cfg.filter_callsign or "").upper()
@@ -5328,7 +5256,7 @@ def _aprs_positions_for_net(net_id: int, cfg: AprsConfig, db: Session) -> list[d
     return entries
 
 
-def _public_aprs_positions(net: Net, db: Session) -> list[dict]:
+async def _public_aprs_positions(net: Net, db: AsyncSession) -> list[dict]:
     """Positions for the public live page (used by public_active_sessions /
     public_session_detail, defined earlier in this file) — only computed at
     all if the net has opted in via aprs_map_enabled. Configuring APRS and
@@ -5337,25 +5265,25 @@ def _public_aprs_positions(net: Net, db: Session) -> list[dict]:
     even has its positions fetched for this path."""
     if not net or not net.aprs_map_enabled:
         return []
-    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net.id).first()
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net.id))).scalar_one_or_none()
     if not cfg:
         return []
-    return _aprs_positions_for_net(net.id, cfg, db)
+    return await _aprs_positions_for_net(net.id, cfg, db)
 
 
 @app.get("/nets/{net_id}/aprs/config", response_model=Optional[AprsConfigOut])
-def get_aprs_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_net_for_user(net_id, current_user, db)
+async def get_aprs_config(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
     return cfg  # None → null in JSON → frontend shows "not configured"
 
 
 @app.put("/nets/{net_id}/aprs/config", response_model=AprsConfigOut)
-def save_aprs_config(net_id: int, data: AprsConfigCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_editable_net(net_id, current_user, db)
+async def save_aprs_config(net_id: int, data: AprsConfigCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
     if cfg:
         cfg.source_type = data.source_type
         cfg.aprs_fi_api_key = data.aprs_fi_api_key or None
@@ -5368,69 +5296,69 @@ def save_aprs_config(net_id: int, data: AprsConfigCreate, current_user: User = D
             filter_callsign=(data.filter_callsign or "").upper().strip() or None,
         )
         db.add(cfg)
-    db.commit()
-    db.refresh(cfg)
+    await db.commit()
+    await db.refresh(cfg)
     return cfg
 
 
 @app.delete("/nets/{net_id}/aprs/config", status_code=204)
-def delete_aprs_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_editable_net(net_id, current_user, db)
+async def delete_aprs_config(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
     if cfg:
-        db.delete(cfg)
-        db.commit()
+        await db.delete(cfg)
+        await db.commit()
 
 
 @app.get("/nets/{net_id}/aprs/positions", response_model=list[AprsPositionEntry])
-def aprs_positions(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def aprs_positions(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Current station positions for the map panel — fetches fresh from
     aprs.fi if that's the configured source and the cache is stale, or just
     reads the relay-pushed cache otherwise. One call covers both source
     types, unlike DMR's fallback chain."""
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
     if not cfg:
         raise HTTPException(404, "APRS not configured for this net")
-    return _aprs_positions_for_net(net_id, cfg, db)
+    return await _aprs_positions_for_net(net_id, cfg, db)
 
 
 @app.post("/nets/{net_id}/aprs/push", status_code=204)
-def aprs_push(
+async def aprs_push(
     net_id: int,
     data: AprsPushPayload,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Accept already-parsed positions pushed from aprs_relay.py — the one
     push endpoint (see the module note above on why DMR's two-endpoint
     split isn't repeated here)."""
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
     if not cfg:
         raise HTTPException(404, "APRS not configured for this net")
     skip = (cfg.filter_callsign or "").upper()
     entries = [e.model_dump() for e in data.entries]
     if skip:
         entries = [e for e in entries if (e.get("callsign") or "").upper() != skip]
-    _aprs_cache_write(net_id, entries, db)
+    await _aprs_cache_write(net_id, entries, db)
 
 
 @app.get("/nets/{net_id}/aprs/cache")
-def aprs_cache(
+async def aprs_cache(
     net_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Return relay-pushed APRS data with freshness info — a diagnostic
     endpoint (mirrors /dmr/cache) for confirming aprs_relay.py is actually
     running; the map panel's own polling uses /aprs/positions instead."""
-    net = _get_net_for_user(net_id, current_user, db)
+    net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cached = _aprs_cache_read(net_id, db)
+    cached = await _aprs_cache_read(net_id, db)
     if not cached:
         raise HTTPException(404, "No relay data for this net — is aprs_relay.py running?")
     age = int(_time.time() - cached["pushed_at"])
@@ -5443,11 +5371,11 @@ def aprs_cache(
 
 
 @app.get("/nets/{net_id}/aprs/relay-script")
-def download_aprs_relay_script(
+async def download_aprs_relay_script(
     net_id: int,
     request: Request,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Serves the real aprs_relay.py from disk, verbatim, with the
     --server/--net-id/--my-callsign argparse defaults pre-filled for this
@@ -5457,7 +5385,7 @@ def download_aprs_relay_script(
     button is — the APRS-IS passcode algorithm and TNC2 parser are
     substantial enough that keeping a single, unit-tested implementation
     is worth the slightly less turnkey download."""
-    net = _get_editable_net(net_id, current_user, db)
+    net = await _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
 
     script_path = STATIC_DIR.parent / "aprs_relay.py"
@@ -5492,14 +5420,14 @@ def download_aprs_relay_script(
 # ---------------------------------------------------------------------------
 
 @app.post("/nets/{net_id}/signups", response_model=SignupOut, status_code=201)
-def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    net = _get_editable_net(net_id, current_user, db)
+async def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_editable_net(net_id, current_user, db)
 
     # Verify the schedule belongs to this net
-    sched = db.query(NetSchedule).filter(
+    sched = (await db.execute(select(NetSchedule).filter(
         NetSchedule.id == data.schedule_id,
         NetSchedule.net_id == net_id,
-    ).first()
+    ))).scalar_one_or_none()
     if not sched:
         raise HTTPException(404, "Schedule not found for this net")
 
@@ -5512,12 +5440,10 @@ def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(
 
     # A 'both' signup occupies the date exclusively; net_control/broadcaster only conflict
     # with the same role or an existing 'both' signup.
-    existing_roles = {
-        r for (r,) in db.query(NetControlSignup.role).filter(
-            NetControlSignup.schedule_id == data.schedule_id,
-            NetControlSignup.slot_date == data.slot_date,
-        ).all()
-    }
+    existing_roles = set((await db.execute(select(NetControlSignup.role).filter(
+        NetControlSignup.schedule_id == data.schedule_id,
+        NetControlSignup.slot_date == data.slot_date,
+    ))).scalars().all())
     conflicting = (
         "both" in existing_roles
         or data.role == "both" and existing_roles
@@ -5532,13 +5458,10 @@ def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(
         if net.owner_id != current_user.id:
             raise HTTPException(403, "Only the net owner can assign other operators")
         assigned = (
-            db.query(User)
-            .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
-            .filter(
+            (await db.execute(select(User).join(OrganizationMembership, OrganizationMembership.user_id == User.id).filter(
                 User.id == data.assigned_user_id, User.is_active == True,
                 OrganizationMembership.org_id == net.org_id, OrganizationMembership.approved == True,
-            )
-            .first()
+            ))).scalar_one_or_none()
         )
         if not assigned:
             raise HTTPException(404, "Assigned user not found")
@@ -5567,8 +5490,8 @@ def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(
         notes=data.notes,
     )
     db.add(signup)
-    db.commit()
-    db.refresh(signup)
+    await db.commit()
+    await db.refresh(signup)
 
     role_label = {
         "net_control": "Net Control",
@@ -5630,26 +5553,23 @@ def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(
 
 
 @app.delete("/signups/{signup_id}", status_code=204)
-def delete_signup(signup_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    signup = db.query(NetControlSignup).filter(NetControlSignup.id == signup_id).first()
+async def delete_signup(signup_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    signup = (await db.execute(select(NetControlSignup).filter(NetControlSignup.id == signup_id))).scalar_one_or_none()
     if not signup:
         raise HTTPException(404, "Signup not found")
     # Net owner can delete any signup; operators can only delete their own
-    net = db.query(Net).filter(Net.id == signup.net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == signup.net_id))).scalar_one_or_none()
     if signup.user_id != current_user.id and (not net or net.owner_id != current_user.id):
         raise HTTPException(403, "Not authorised to remove this signup")
-    db.delete(signup)
-    db.commit()
+    await db.delete(signup)
+    await db.commit()
 
 
 @app.get("/nets/{net_id}/signups", response_model=list[SignupOut])
-def list_signups(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    _get_editable_net(net_id, current_user, db)
+async def list_signups(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_editable_net(net_id, current_user, db)
     signups = (
-        db.query(NetControlSignup)
-        .filter(NetControlSignup.net_id == net_id)
-        .order_by(NetControlSignup.slot_date)
-        .all()
+        (await db.execute(select(NetControlSignup).filter(NetControlSignup.net_id == net_id).order_by(NetControlSignup.slot_date))).scalars().all()
     )
     return [_signup_to_out(s, current_user) for s in signups]
 
@@ -5659,10 +5579,10 @@ def list_signups(net_id: int, current_user: User = Depends(get_current_user), db
 # ---------------------------------------------------------------------------
 
 @app.get("/nets/{net_id}/shares")
-def get_net_shares(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_net_shares(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Return the current sharing config for a net (owner or admin only)."""
-    _get_owned_net(net_id, current_user, db)
-    shares = db.query(NetShare).filter(NetShare.net_id == net_id).all()
+    await _get_owned_net(net_id, current_user, db)
+    shares = (await db.execute(select(NetShare).filter(NetShare.net_id == net_id))).scalars().all()
     all_share = next((s for s in shares if s.user_id is None), None)
     return {
         "share_with_all": all_share is not None,
@@ -5673,28 +5593,28 @@ def get_net_shares(net_id: int, current_user: User = Depends(get_current_user), 
 
 
 @app.put("/nets/{net_id}/shares", status_code=204)
-def update_net_shares(net_id: int, data: NetShareUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def update_net_shares(net_id: int, data: NetShareUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Replace the sharing config for a net (owner or admin only)."""
-    _get_owned_net(net_id, current_user, db)
+    await _get_owned_net(net_id, current_user, db)
     # Wipe existing shares for this net
-    db.query(NetShare).filter(NetShare.net_id == net_id).delete()
+    await db.execute(delete(NetShare).where(NetShare.net_id == net_id))
     if data.share_with_all:
         db.add(NetShare(net_id=net_id, user_id=None, can_edit=data.can_edit_all))
     else:
         editor_ids = set(data.editor_user_ids)
         for uid in data.user_ids:
             db.add(NetShare(net_id=net_id, user_id=uid, can_edit=uid in editor_ids))
-    db.commit()
+    await db.commit()
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _net_to_out(net: Net, user: User, db: Session) -> NetOut:
+async def _net_to_out(net: Net, user: User, db: AsyncSession) -> NetOut:
     """Build a NetOut with sharing metadata attached."""
-    shares = db.query(NetShare).filter(NetShare.net_id == net.id).all()
-    owner = db.query(User).filter(User.id == net.owner_id).first()
+    shares = (await db.execute(select(NetShare).filter(NetShare.net_id == net.id))).scalars().all()
+    owner = (await db.execute(select(User).filter(User.id == net.owner_id))).scalar_one_or_none()
     all_share = next((s for s in shares if s.user_id is None), None)
     out = NetOut.model_validate(net)
     out.is_owner = (net.owner_id == user.id or user.is_admin)
@@ -5708,7 +5628,7 @@ def _net_to_out(net: Net, user: User, db: Session) -> NetOut:
     return out
 
 
-def _get_owned_net(net_id: int, user: User, db: Session) -> Net:
+async def _get_owned_net(net_id: int, user: User, db: AsyncSession) -> Net:
     """Fetch a net; require owner or admin. Non-admins are further scoped to
     their current org (issue #1) — a net in a different org 404s rather than
     403s, so its existence isn't leaked across tenants. Super admins bypass
@@ -5717,7 +5637,7 @@ def _get_owned_net(net_id: int, user: User, db: Session) -> Net:
     reserved for destructive/sensitive actions: deleting the net, and
     managing sharing itself (an editor granting themselves or others further
     access would be a privilege-escalation chain)."""
-    net = db.query(Net).filter(Net.id == net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == net_id))).scalar_one_or_none()
     if not net:
         raise HTTPException(404, "Net not found")
     if user.is_admin:
@@ -5729,7 +5649,7 @@ def _get_owned_net(net_id: int, user: User, db: Session) -> Net:
     return net
 
 
-def _get_editable_net(net_id: int, user: User, db: Session) -> Net:
+async def _get_editable_net(net_id: int, user: User, db: AsyncSession) -> Net:
     """Like _get_owned_net, but also allows a user explicitly granted edit
     rights via sharing (NetShare.can_edit) — issue follow-up: previously
     sharing only ever granted view/check-in access, with no way to let a
@@ -5738,23 +5658,23 @@ def _get_editable_net(net_id: int, user: User, db: Session) -> Net:
     kind of net-configuration endpoint; delete_net and the sharing endpoints
     themselves stay on the stricter _get_owned_net."""
     try:
-        return _get_owned_net(net_id, user, db)
+        return await _get_owned_net(net_id, user, db)
     except HTTPException as e:
         if e.status_code == 403:
-            share = db.query(NetShare).filter(
+            share = (await db.execute(select(NetShare).filter(
                 NetShare.net_id == net_id,
                 NetShare.can_edit == True,
                 or_(NetShare.user_id == user.id, NetShare.user_id == None),
-            ).first()
+            ))).scalar_one_or_none()
             if share:
-                return db.query(Net).filter(Net.id == net_id).first()
+                return (await db.execute(select(Net).filter(Net.id == net_id))).scalar_one_or_none()
         raise
 
 
-def _get_net_for_user(net_id: int, user: User, db: Session) -> Net:
+async def _get_net_for_user(net_id: int, user: User, db: AsyncSession) -> Net:
     """Fetch a net; allow owner, admin, or user the net is shared with.
     Org-scoped for non-admins the same way as _get_owned_net above."""
-    net = db.query(Net).filter(Net.id == net_id).first()
+    net = (await db.execute(select(Net).filter(Net.id == net_id))).scalar_one_or_none()
     if not net:
         raise HTTPException(404, "Net not found")
     if user.is_admin:
@@ -5765,21 +5685,19 @@ def _get_net_for_user(net_id: int, user: User, db: Session) -> Net:
         return net
     # Check shares: shared with all (user_id IS NULL) or shared with this user
     share = (
-        db.query(NetShare)
-        .filter(
+        (await db.execute(select(NetShare).filter(
             NetShare.net_id == net_id,
             or_(NetShare.user_id == user.id, NetShare.user_id == None),
-        )
-        .first()
+        ))).scalar_one_or_none()
     )
     if not share:
         raise HTTPException(403, "Access denied")
     return net
 
 
-def _get_session_for_user(session_id: int, user: User, db: Session) -> NetSession:
-    session = db.query(NetSession).filter(NetSession.id == session_id).first()
+async def _get_session_for_user(session_id: int, user: User, db: AsyncSession) -> NetSession:
+    session = (await db.execute(select(NetSession).filter(NetSession.id == session_id))).scalar_one_or_none()
     if not session:
         raise HTTPException(404, "Session not found")
-    _get_net_for_user(session.net_id, user, db)
+    await _get_net_for_user(session.net_id, user, db)
     return session

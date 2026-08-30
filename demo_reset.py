@@ -23,6 +23,7 @@ Environment variables (read from .env)
                       Default: /opt/netcontrol/data/l_gmrs.zip
 """
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -83,11 +84,11 @@ def drop_and_recreate_schema():
     log("Schema reset done")
 
 
-def create_tables():
+async def create_tables():
     """Recreate all tables via SQLAlchemy models."""
     log("Creating tables…")
-    from database import engine, init_db
-    init_db()
+    from database import init_db
+    await init_db()
     log("Tables created")
 
 
@@ -104,7 +105,7 @@ def run_migrations():
         log("Migrations applied")
 
 
-def create_demo_user():
+async def create_demo_user():
     """Insert the demo admin account."""
     log(f"Creating demo user {DEMO_CALLSIGN}…")
     try:
@@ -118,25 +119,23 @@ def create_demo_user():
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     hashed = pwd_context.hash(DEMO_PASSWORD)
 
-    db = SessionLocal()
-    try:
-        user = User(
-            callsign=DEMO_CALLSIGN,
-            name=DEMO_NAME,
-            email=DEMO_EMAIL,
-            hashed_password=hashed,
-            is_active=True,
-            is_admin=True,
-        )
-        db.add(user)
-        db.commit()
-        log(f"Demo user created — callsign: {DEMO_CALLSIGN} / email: {DEMO_EMAIL}")
-    except Exception as exc:
-        db.rollback()
-        log(f"ERROR creating demo user: {exc}")
-        raise
-    finally:
-        db.close()
+    async with SessionLocal() as db:
+        try:
+            user = User(
+                callsign=DEMO_CALLSIGN,
+                name=DEMO_NAME,
+                email=DEMO_EMAIL,
+                hashed_password=hashed,
+                is_active=True,
+                is_admin=True,
+            )
+            db.add(user)
+            await db.commit()
+            log(f"Demo user created — callsign: {DEMO_CALLSIGN} / email: {DEMO_EMAIL}")
+        except Exception as exc:
+            await db.rollback()
+            log(f"ERROR creating demo user: {exc}")
+            raise
 
 
 def load_gmrs_data():
@@ -163,13 +162,13 @@ def load_gmrs_data():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
+async def main():
     log("=== Demo reset starting ===")
     try:
         drop_and_recreate_schema()
-        create_tables()
+        await create_tables()
         run_migrations()
-        create_demo_user()
+        await create_demo_user()
         load_gmrs_data()
         log("=== Demo reset complete ===")
     except Exception as exc:
@@ -178,4 +177,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

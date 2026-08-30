@@ -12,7 +12,7 @@ from models import CallsignCache
 
 
 class TestCallsignCacheHit:
-    def test_fresh_cache_returned_immediately(self, client, admin_headers, db):
+    async def test_fresh_cache_returned_immediately(self, client, admin_headers, db):
         """A fresh cached entry should be returned without external API calls."""
         db.add(CallsignCache(
             callsign="W1AW",
@@ -25,7 +25,7 @@ class TestCallsignCacheHit:
             source="FCC ULS",
             cached_at=datetime.now(timezone.utc),
         ))
-        db.commit()
+        await db.commit()
 
         resp = client.get("/callsign/W1AW/lookup", headers=admin_headers)
         assert resp.status_code == 200
@@ -38,7 +38,7 @@ class TestCallsignCacheHit:
         assert data["grid"] == "FN31"
         assert data["source"] == "FCC ULS"
 
-    def test_cache_hit_is_case_insensitive(self, client, admin_headers, db):
+    async def test_cache_hit_is_case_insensitive(self, client, admin_headers, db):
         """Lowercase callsign in the URL should normalize to uppercase and hit cache."""
         db.add(CallsignCache(
             callsign="W1AW",
@@ -47,20 +47,20 @@ class TestCallsignCacheHit:
             license_class="E",
             cached_at=datetime.now(timezone.utc),
         ))
-        db.commit()
+        await db.commit()
 
         resp = client.get("/callsign/w1aw/lookup", headers=admin_headers)
         assert resp.status_code == 200
         assert resp.json()["callsign"] == "W1AW"
 
-    def test_not_found_result_cached_and_returned(self, client, admin_headers, db):
+    async def test_not_found_result_cached_and_returned(self, client, admin_headers, db):
         """A cached not_found entry within TTL should be returned immediately."""
         db.add(CallsignCache(
             callsign="W1FAKE",
             status="not_found",
             cached_at=datetime.now(timezone.utc),
         ))
-        db.commit()
+        await db.commit()
 
         resp = client.get("/callsign/W1FAKE/lookup", headers=admin_headers)
         assert resp.status_code == 200

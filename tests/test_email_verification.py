@@ -140,17 +140,18 @@ class TestVerifyEmailEndpoint:
         resp = client.get(f"/auth/verify-email?token={token}", follow_redirects=False)
         assert resp.headers["location"] == "/?verified=0"
 
-    def test_expired_token_redirects_with_failure(self, client, db, smtp_configured, sent_emails, app_base_url):
+    async def test_expired_token_redirects_with_failure(self, client, db, smtp_configured, sent_emails, app_base_url):
         from datetime import datetime, timedelta, timezone
+        from sqlalchemy import select
         from models import User
 
         register(client, "W1FIRST", "First User", "first@example.com")
         register(client, "W2SECOND", "Second User", "second@example.com")
         token = _extract_token_from_email(sent_emails)
 
-        user = db.query(User).filter(User.callsign == "W2SECOND").first()
+        user = (await db.execute(select(User).filter(User.callsign == "W2SECOND"))).scalar_one_or_none()
         user.verification_sent_at = datetime.now(timezone.utc) - timedelta(days=8)
-        db.commit()
+        await db.commit()
 
         resp = client.get(f"/auth/verify-email?token={token}", follow_redirects=False)
         assert resp.headers["location"] == "/?verified=0"

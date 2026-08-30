@@ -22,6 +22,7 @@ Environment variables (read from .env)
                    Reminders are silently skipped if SMTP isn't configured.
 """
 
+import asyncio
 import os
 import smtplib
 import sys
@@ -29,6 +30,8 @@ from datetime import date, datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from sqlalchemy import select
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -115,25 +118,24 @@ def occurrence_start_utc(schedule: NetSchedule, occ_date: date):
 
 # ── Core logic (importable for tests) ───────────────────────────────────────
 
-def send_due_reminders(db, now_utc: datetime = None) -> int:
+async def send_due_reminders(db, now_utc: datetime = None) -> int:
     """Send reminder emails for any signup whose reminder window has opened
     but who hasn't been reminded yet. Returns the number of emails sent.
     `now_utc` is overridable for testing; defaults to the real current time."""
     now_utc = now_utc or datetime.now(timezone.utc)
     today = now_utc.date()   # UTC calendar date, kept consistent with now_utc for the window math below
 
-    schedules = (
-        db.query(NetSchedule)
+    schedules = (await db.execute(
+        select(NetSchedule)
         .join(Net, NetSchedule.net_id == Net.id)
         .filter(Net.reminder_enabled == True)
         .filter(Net.reminder_minutes_before.isnot(None))
         .filter(NetSchedule.day_of_week == today.weekday())
-        .all()
-    )
+    )).scalars().all()
 
     sent = 0
     for sched in schedules:
-        net = db.query(Net).filter(Net.id == sched.net_id).first()
+        net = (await db.execute(select(Net).filter(Net.id == sched.net_id))).scalar_one_or_none()
         if not net:
             continue
 
@@ -146,15 +148,14 @@ def send_due_reminders(db, now_utc: datetime = None) -> int:
         if not (reminder_due_at <= now_utc < start_utc):
             continue   # reminder window hasn't opened yet, or the net has already started
 
-        signups = (
-            db.query(NetControlSignup)
+        signups = (await db.execute(
+            select(NetControlSignup)
             .filter(
                 NetControlSignup.schedule_id == sched.id,
                 NetControlSignup.slot_date == today,
                 NetControlSignup.reminder_sent_at.is_(None),
             )
-            .all()
-        )
+        )).scalars().all()
 
         for signup in signups:
             if not signup.email:
@@ -184,21 +185,18 @@ def send_due_reminders(db, now_utc: datetime = None) -> int:
             signup.reminder_sent_at = now_utc
             sent += 1
 
-        db.commit()
+        await db.commit()
 
     return sent
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
-    db = SessionLocal()
-    try:
-        sent = send_due_reminders(db)
+async def main():
+    async with SessionLocal() as db:
+        sent = await send_due_reminders(db)
         log(f"Done — {sent} reminder(s) sent")
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -23,6 +23,14 @@ entry on Net Repository's side — in place if it's still pending review, or
 directly (no new moderation) if it was already published. So every local
 edit to a public-listed net just needs another POST /nets/submit; there's
 nothing extra to do here to keep the two in sync.
+
+Async: converted alongside main.py's sync->async SQLAlchemy migration.
+push_net() deliberately queries the owner/schedules explicitly via `db`
+rather than touching net.owner/net.schedules relationship attributes --
+those are lazy-loaded by default, which raises MissingGreenlet under
+AsyncSession unless already eager-loaded by the caller's own query.
+Explicit queries here mean callers don't need to think about eager-loading
+at all.
 """
 
 import logging
@@ -30,6 +38,7 @@ import os
 from typing import Optional
 
 import httpx
+from sqlalchemy import select
 
 _log = logging.getLogger("ham_net_tracker.net_repository")
 
@@ -48,15 +57,15 @@ _SETTING_REQUEST_STATUS = "net_repository_key_request_status"
 # depending on main.py; see send_reminders.py)
 # ---------------------------------------------------------------------------
 
-def _get_setting(key: str, db) -> Optional[str]:
+async def _get_setting(key: str, db) -> Optional[str]:
     from models import SystemSetting
-    row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == key))).scalar_one_or_none()
     return row.value if row else None
 
 
-def _set_setting(key: str, value: Optional[str], db) -> None:
+async def _set_setting(key: str, value: Optional[str], db) -> None:
     from models import SystemSetting
-    row = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+    row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == key))).scalar_one_or_none()
     if row:
         row.value = value
     else:
@@ -67,49 +76,54 @@ def _set_setting(key: str, value: Optional[str], db) -> None:
 # Configuration
 # ---------------------------------------------------------------------------
 
-def get_api_key(db) -> str:
+async def get_api_key(db) -> str:
     """NET_REPOSITORY_API_KEY env var takes precedence (explicit operator
     override); otherwise falls back to a key obtained via the self-service
     request flow (Admin > Net Repository), stored in the database."""
     if NET_REPOSITORY_API_KEY:
         return NET_REPOSITORY_API_KEY
-    return _get_setting(_SETTING_API_KEY, db) or ""
+    return await _get_setting(_SETTING_API_KEY, db) or ""
 
 
-def net_repository_configured(db) -> bool:
-    return bool(NET_REPOSITORY_URL) and bool(get_api_key(db))
+async def net_repository_configured(db) -> bool:
+    return bool(NET_REPOSITORY_URL) and bool(await get_api_key(db))
 
 
-def get_key_source(db) -> Optional[str]:
+async def get_key_source(db) -> Optional[str]:
     """'env' if NET_REPOSITORY_API_KEY is set, 'self-service' if a key was
     obtained via request_api_key()/check_key_request_status(), else None."""
     if NET_REPOSITORY_API_KEY:
         return "env"
-    return "self-service" if _get_setting(_SETTING_API_KEY, db) else None
+    return "self-service" if await _get_setting(_SETTING_API_KEY, db) else None
 
 
-def get_request_status(db) -> str:
+async def get_request_status(db) -> str:
     """Last-known status of a self-service key request: 'none' | 'pending' |
     'claimed' | 'rejected'."""
-    return _get_setting(_SETTING_REQUEST_STATUS, db) or "none"
+    return await _get_setting(_SETTING_REQUEST_STATUS, db) or "none"
 
 
 # ---------------------------------------------------------------------------
 # Push a net
 # ---------------------------------------------------------------------------
 
-def push_net(net, db) -> bool:
+async def push_net(net, db) -> bool:
     """POST a net to Net Repository's submission queue. Returns True if the
     request was sent and accepted (202 — including the already-submitted/
     duplicate case), False if not configured, the net isn't public, or the
     request failed. Never raises — a Net Repository outage or misconfiguration
     must not block creating or editing a net locally."""
-    if not net_repository_configured(db):
+    if not await net_repository_configured(db):
         return False
     if not net.public_listed:
         return False
 
-    owner_callsign = net.owner.callsign if net.owner else None
+    from models import User, NetSchedule
+
+    owner = (await db.execute(select(User).filter(User.id == net.owner_id))).scalar_one_or_none()
+    owner_callsign = owner.callsign if owner else None
+    schedule_rows = (await db.execute(select(NetSchedule).filter(NetSchedule.net_id == net.id))).scalars().all()
+
     payload = {
         "name": net.name,
         "net_type": net.net_type,
@@ -121,7 +135,7 @@ def push_net(net, db) -> bool:
         "region": net.region,
         "state": net.state,
         "country": "US",
-        "website": net.website or _get_setting("website_url", db),
+        "website": net.website or await _get_setting("website_url", db),
         "dmr_talkgroup": net.dmr_talkgroup,
         "is_ares": net.is_ares,
         "contact_callsign": owner_callsign,
@@ -133,14 +147,20 @@ def push_net(net, db) -> bool:
                 "start_time": s.start_time,
                 "timezone": s.timezone,
             }
-            for s in net.schedules
+            for s in schedule_rows
         ],
     }
     try:
+        # Deliberately still a plain sync httpx.post, not AsyncClient -- matches
+        # every other httpx call site in this codebase (DMR/APRS fetch, Turnstile/
+        # reCAPTCHA verify), all left sync-blocking-in-the-event-loop as a known,
+        # disclosed follow-up rather than part of this DB-focused async migration.
+        # Also keeps the existing pushed_nets test fixture (monkeypatches the
+        # module-level httpx.post) working unchanged.
         resp = httpx.post(
             f"{NET_REPOSITORY_URL}/nets/submit",
             json=payload,
-            headers={"Authorization": f"Bearer {get_api_key(db)}"},
+            headers={"Authorization": f"Bearer {await get_api_key(db)}"},
             timeout=10,
         )
         resp.raise_for_status()
@@ -152,7 +172,7 @@ def push_net(net, db) -> bool:
         return False
 
 
-def push_session_stats(net, session, checkin_count: int, db) -> bool:
+async def push_session_stats(net, session, checkin_count: int, db) -> bool:
     """POST a closed session's stats to Net Repository (POST /nets/stats) —
     session count, average check-ins, and last-session date roll up into
     that net's public directory listing there. Only meaningful for a net
@@ -161,7 +181,7 @@ def push_session_stats(net, session, checkin_count: int, db) -> bool:
     yet, which is expected and logged quietly rather than as a warning.
     Never raises — a Net Repository outage or misconfiguration must not
     block ending a session locally."""
-    if not net_repository_configured(db):
+    if not await net_repository_configured(db):
         return False
     if not net.public_listed:
         return False
@@ -175,7 +195,7 @@ def push_session_stats(net, session, checkin_count: int, db) -> bool:
         resp = httpx.post(
             f"{NET_REPOSITORY_URL}/nets/stats",
             json=payload,
-            headers={"Authorization": f"Bearer {get_api_key(db)}"},
+            headers={"Authorization": f"Bearer {await get_api_key(db)}"},
             timeout=10,
         )
         if resp.status_code == 404:
@@ -196,8 +216,8 @@ def push_session_stats(net, session, checkin_count: int, db) -> bool:
 # Self-service API key requests
 # ---------------------------------------------------------------------------
 
-def request_api_key(name: str, contact_callsign: Optional[str], instance_url: Optional[str],
-                     request_notes: Optional[str], db) -> dict:
+async def request_api_key(name: str, contact_callsign: Optional[str], instance_url: Optional[str],
+                           request_notes: Optional[str], db) -> dict:
     """POST /keys/request on Net Repository. Stores the returned claim token
     (needed to poll for approval) in SystemSetting — it's never shown back to
     the admin, only used internally by check_key_request_status(). Returns
@@ -221,9 +241,9 @@ def request_api_key(name: str, contact_callsign: Optional[str], instance_url: Op
         _log.warning("Failed to request a Net Repository API key: %s", exc)
         return {"ok": False, "message": f"Request failed: {exc}"}
 
-    _set_setting(_SETTING_CLAIM_TOKEN, data["claim_token"], db)
-    _set_setting(_SETTING_REQUEST_STATUS, "pending", db)
-    db.commit()
+    await _set_setting(_SETTING_CLAIM_TOKEN, data["claim_token"], db)
+    await _set_setting(_SETTING_REQUEST_STATUS, "pending", db)
+    await db.commit()
     _log.info("Requested a Net Repository API key (request_id=%s)", data.get("request_id"))
     return {
         "ok": True,
@@ -232,7 +252,7 @@ def request_api_key(name: str, contact_callsign: Optional[str], instance_url: Op
     }
 
 
-def check_key_request_status(db) -> dict:
+async def check_key_request_status(db) -> dict:
     """Polls GET /keys/request/status using the stored claim token. If the
     request has been approved and claimed, stores the issued API key and
     clears the claim token (it's single-use on Net Repository's side once
@@ -242,9 +262,9 @@ def check_key_request_status(db) -> dict:
     if not NET_REPOSITORY_URL:
         return {"ok": False, "status": "none", "message": "NET_REPOSITORY_URL is not configured."}
 
-    claim_token = _get_setting(_SETTING_CLAIM_TOKEN, db)
+    claim_token = await _get_setting(_SETTING_CLAIM_TOKEN, db)
     if not claim_token:
-        cached_status = _get_setting(_SETTING_REQUEST_STATUS, db) or "none"
+        cached_status = await _get_setting(_SETTING_REQUEST_STATUS, db) or "none"
         return {"ok": True, "status": cached_status, "message": "No pending request."}
 
     try:
@@ -260,13 +280,13 @@ def check_key_request_status(db) -> dict:
         return {"ok": False, "status": "unknown", "message": f"Status check failed: {exc}"}
 
     status = data.get("status", "unknown")
-    _set_setting(_SETTING_REQUEST_STATUS, status, db)
+    await _set_setting(_SETTING_REQUEST_STATUS, status, db)
 
     result = {"ok": True, "status": status, "message": data.get("message", "")}
 
     if status == "claimed":
         if data.get("api_key"):
-            _set_setting(_SETTING_API_KEY, data["api_key"], db)
+            await _set_setting(_SETTING_API_KEY, data["api_key"], db)
             _log.info("Net Repository API key request approved — key received and saved.")
             # Net Repository only ever returns the raw key on the ONE poll that
             # claims it (like this one) — later polls report "claimed" with no
@@ -277,19 +297,19 @@ def check_key_request_status(db) -> dict:
             result["api_key"] = data["api_key"]
         # Claimed either just now (key present) or by an earlier poll (key
         # already saved then) — either way the claim token has no further use.
-        _set_setting(_SETTING_CLAIM_TOKEN, None, db)
+        await _set_setting(_SETTING_CLAIM_TOKEN, None, db)
     elif status == "rejected":
-        _set_setting(_SETTING_CLAIM_TOKEN, None, db)
+        await _set_setting(_SETTING_CLAIM_TOKEN, None, db)
 
-    db.commit()
+    await db.commit()
     return result
 
 
-def clear_stored_key(db) -> None:
+async def clear_stored_key(db) -> None:
     """Admin action: forget the self-service key and any in-flight request,
     to start over. Does not affect NET_REPOSITORY_API_KEY if set via .env —
     that always takes precedence over the stored value regardless."""
-    _set_setting(_SETTING_API_KEY, None, db)
-    _set_setting(_SETTING_CLAIM_TOKEN, None, db)
-    _set_setting(_SETTING_REQUEST_STATUS, None, db)
-    db.commit()
+    await _set_setting(_SETTING_API_KEY, None, db)
+    await _set_setting(_SETTING_CLAIM_TOKEN, None, db)
+    await _set_setting(_SETTING_REQUEST_STATUS, None, db)
+    await db.commit()

@@ -135,8 +135,8 @@ class TestPushNetFunction:
         resp = client.post("/nets", json={"name": "Test Net", "public_listed": True}, headers=admin_headers)
         assert resp.status_code == 201  # net creation still succeeds
 
-    def test_not_configured_returns_false(self, db):
-        assert net_repository.net_repository_configured(db) is False
+    async def test_not_configured_returns_false(self, db):
+        assert await net_repository.net_repository_configured(db) is False
 
 
 class TestSessionStatsPush:
@@ -286,9 +286,9 @@ class TestCheckStatusEndpoint:
             "ok": True, "status": "none", "message": "No pending request.", "request_id": None, "api_key": None,
         }
 
-    def test_still_pending(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
-        net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
-        db.commit()
+    async def test_still_pending(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
+        await net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
+        await db.commit()
 
         class FakeResponse:
             def raise_for_status(self):
@@ -308,9 +308,9 @@ class TestCheckStatusEndpoint:
         status_resp = client.get("/admin/net-repository/status", headers=admin_headers)
         assert status_resp.json()["request_status"] == "pending"
 
-    def test_approved_and_claimed_stores_key(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
-        net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
-        db.commit()
+    async def test_approved_and_claimed_stores_key(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
+        await net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
+        await db.commit()
 
         class FakeResponse:
             def raise_for_status(self):
@@ -347,9 +347,9 @@ class TestCheckStatusEndpoint:
         assert "api_key" not in status_data
         assert "nr_freshlyissuedkey" not in str(status_data)
 
-    def test_rejected_clears_claim_token(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
-        net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
-        db.commit()
+    async def test_rejected_clears_claim_token(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
+        await net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
+        await db.commit()
 
         class FakeResponse:
             def raise_for_status(self):
@@ -367,10 +367,10 @@ class TestCheckStatusEndpoint:
         status_resp = client.get("/admin/net-repository/status", headers=admin_headers)
         assert status_resp.json()["request_status"] == "rejected"
 
-    def test_key_actually_usable_after_claim(self, client, admin_headers, net_repo_url_only, monkeypatch, db, pushed_nets):
+    async def test_key_actually_usable_after_claim(self, client, admin_headers, net_repo_url_only, monkeypatch, db, pushed_nets):
         """The whole point: once claimed, pushes start working without a restart."""
-        net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
-        db.commit()
+        await net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
+        await db.commit()
 
         class FakeStatusResponse:
             def raise_for_status(self):
@@ -393,7 +393,7 @@ class TestClearKeyEndpoint:
         resp = client.delete("/admin/net-repository/key", headers=user_headers)
         assert resp.status_code == 403
 
-    def test_clear_key_resets_status(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
+    async def test_clear_key_resets_status(self, client, admin_headers, net_repo_url_only, monkeypatch, db):
         class FakeResponse:
             def raise_for_status(self):
                 pass
@@ -402,8 +402,8 @@ class TestClearKeyEndpoint:
                 return {"status": "claimed", "message": "Here you go.", "api_key": "nr_freshlyissuedkey"}
 
         import httpx
-        net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
-        db.commit()
+        await net_repository._set_setting(net_repository._SETTING_CLAIM_TOKEN, "nrc_abc123", db)
+        await db.commit()
         monkeypatch.setattr(httpx, "get", lambda url, headers=None, timeout=None: FakeResponse())
         client.post("/admin/net-repository/check-status", headers=admin_headers)
 

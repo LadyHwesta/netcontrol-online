@@ -7,6 +7,8 @@ Tests for scheduled net reminders (send_reminders.py):
 import sys
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import select
+
 sys.path.insert(0, ".")
 from send_reminders import send_due_reminders  # noqa: E402
 
@@ -70,63 +72,63 @@ class TestNetReminderSettings:
 
 
 class TestSendDueReminders:
-    def test_reminder_sent_within_window(self, client, admin_headers, db):
+    async def test_reminder_sent_within_window(self, client, admin_headers, db):
         net = _reminder_net(client, admin_headers, minutes_before=30)
         start = NOW + timedelta(minutes=10)   # inside the 30-minute window
         _schedule_and_signup(client, admin_headers, net["id"], start)
 
-        sent = send_due_reminders(db, now_utc=NOW)
+        sent = await send_due_reminders(db, now_utc=NOW)
         assert sent == 1
 
-        row = db.query(NetControlSignup).filter(NetControlSignup.net_id == net["id"]).first()
+        row = (await db.execute(select(NetControlSignup).filter(NetControlSignup.net_id == net["id"]))).scalar_one_or_none()
         assert row.reminder_sent_at is not None
 
-    def test_no_reminder_before_window_opens(self, client, admin_headers, db):
+    async def test_no_reminder_before_window_opens(self, client, admin_headers, db):
         net = _reminder_net(client, admin_headers, minutes_before=5)
         start = NOW + timedelta(minutes=30)   # well outside a 5-minute window
         _schedule_and_signup(client, admin_headers, net["id"], start)
 
-        sent = send_due_reminders(db, now_utc=NOW)
+        sent = await send_due_reminders(db, now_utc=NOW)
         assert sent == 0
 
-        row = db.query(NetControlSignup).filter(NetControlSignup.net_id == net["id"]).first()
+        row = (await db.execute(select(NetControlSignup).filter(NetControlSignup.net_id == net["id"]))).scalar_one_or_none()
         assert row.reminder_sent_at is None
 
-    def test_no_reminder_after_net_started(self, client, admin_headers, db):
+    async def test_no_reminder_after_net_started(self, client, admin_headers, db):
         net = _reminder_net(client, admin_headers, minutes_before=30)
         start = NOW - timedelta(minutes=1)   # already started
         _schedule_and_signup(client, admin_headers, net["id"], start)
 
-        sent = send_due_reminders(db, now_utc=NOW)
+        sent = await send_due_reminders(db, now_utc=NOW)
         assert sent == 0
 
-    def test_reminder_not_sent_twice(self, client, admin_headers, db):
+    async def test_reminder_not_sent_twice(self, client, admin_headers, db):
         net = _reminder_net(client, admin_headers, minutes_before=30)
         start = NOW + timedelta(minutes=10)
         _schedule_and_signup(client, admin_headers, net["id"], start)
 
-        first = send_due_reminders(db, now_utc=NOW)
-        second = send_due_reminders(db, now_utc=NOW + timedelta(minutes=2))
+        first = await send_due_reminders(db, now_utc=NOW)
+        second = await send_due_reminders(db, now_utc=NOW + timedelta(minutes=2))
         assert first == 1
         assert second == 0
 
-    def test_no_reminder_when_disabled(self, client, admin_headers, db):
+    async def test_no_reminder_when_disabled(self, client, admin_headers, db):
         net = client.post("/nets", json={"name": "No Reminders", "is_ares": False}, headers=admin_headers).json()
         start = NOW + timedelta(minutes=10)
         _schedule_and_signup(client, admin_headers, net["id"], start)
 
-        sent = send_due_reminders(db, now_utc=NOW)
+        sent = await send_due_reminders(db, now_utc=NOW)
         assert sent == 0
 
-    def test_no_reminder_without_email(self, client, admin_headers, db):
+    async def test_no_reminder_without_email(self, client, admin_headers, db):
         net = _reminder_net(client, admin_headers, minutes_before=30)
         start = NOW + timedelta(minutes=10)
         _schedule_and_signup(client, admin_headers, net["id"], start, email=None)
 
-        sent = send_due_reminders(db, now_utc=NOW)
+        sent = await send_due_reminders(db, now_utc=NOW)
         assert sent == 0
 
-    def test_both_roles_remind_independently(self, client, admin_headers, db):
+    async def test_both_roles_remind_independently(self, client, admin_headers, db):
         net = client.post("/nets", json={
             "name": "Newsline Net", "is_ares": False, "has_broadcast": True,
             "reminder_enabled": True, "reminder_minutes_before": 30,
@@ -138,5 +140,5 @@ class TestSendDueReminders:
             "callsign": "K2ABC", "name": "Bob", "email": "bc@example.com",
         }, headers=admin_headers)
 
-        sent = send_due_reminders(db, now_utc=NOW)
+        sent = await send_due_reminders(db, now_utc=NOW)
         assert sent == 2
