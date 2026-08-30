@@ -436,6 +436,12 @@ MIGRATIONS = [
     # ── Digital voice modes beyond DMR (issue #26) ──
     ("dmr_configs: mode column",
      "ALTER TABLE dmr_configs ADD COLUMN IF NOT EXISTS mode VARCHAR(10) NOT NULL DEFAULT 'dmr'"),
+
+    # ── Welcome messages (org banner + instance-wide login/popup messages) ──
+    ("organizations: banner_message column",
+     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS banner_message TEXT"),
+    # login_message/welcome_popup_message live in system_settings (key/value,
+    # already an existing table) -- no schema change needed for those.
 ]
 
 # ---------------------------------------------------------------------------

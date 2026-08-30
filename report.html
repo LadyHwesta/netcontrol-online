@@ -39,6 +39,7 @@
       <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
     </div>
   </header>
+  <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
   <main>
     <nav id="sidebar">
       <div class="sidebar-section">Navigation</div>
@@ -85,9 +86,9 @@
 </div>
   <script src="/static/js/state.js?v=9"></script>
   <script src="/static/js/utils.js?v=8"></script>
-  <script src="/static/js/auth.js?v=12"></script>
+  <script src="/static/js/auth.js?v=29"></script>
   <script src="/static/js/theme.js?v=1"></script>
-  <script src="/static/js/branding.js?v=9"></script>
+  <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/report.js?v=7"></script>
   <script src="/static/js/pwa.js?v=1"></script>
   <script>
@@ -104,6 +105,7 @@
         if (navAdmin) navAdmin.style.display = '';
       }
       await loadBranding();
+      loadOrgBanner();   // fire-and-forget; non-blocking
 
     }
     initPage();

@@ -85,22 +85,23 @@ async def list_my_orgs(current_user: User = Depends(get_current_user), db: Async
         .filter(OrganizationMembership.user_id == current_user.id, OrganizationMembership.approved == True)
         .order_by(Organization.name)
     )).all()
-    return [MyOrgOut(id=org.id, name=org.name, slug=org.slug, website_url=org.website_url, role=role) for org, role in rows]
+    return [MyOrgOut(id=org.id, name=org.name, slug=org.slug, website_url=org.website_url, banner_message=org.banner_message, role=role) for org, role in rows]
 
 
 class OrganizationUpdate(BaseModel):
     name: str
     website_url: Optional[str] = None
+    banner_message: Optional[str] = None
 
 
 @router.patch("/orgs/{org_id}", response_model=OrganizationOut)
 async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
-    """Rename an org / fix its website — previously there was no way to do
-    this at all once created (issue #1 follow-up; an org's name is its own
-    property, independent of the instance-wide Branding settings, so
-    changing Branding doesn't retroactively rename any org). Slug is
-    intentionally not editable here — it's baked into public
-    /directory/<slug> and /live/<slug> URLs."""
+    """Rename an org / fix its website / set its banner message — previously
+    there was no way to do any of this at all once created (issue #1
+    follow-up; an org's name is its own property, independent of the
+    instance-wide Branding settings, so changing Branding doesn't
+    retroactively rename any org). Slug is intentionally not editable here
+    — it's baked into public /directory/<slug> and /live/<slug> URLs."""
     org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
@@ -112,6 +113,7 @@ async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depend
         raise HTTPException(400, "Organization website URL must start with http:// or https://")
     org.name = name
     org.website_url = website or None
+    org.banner_message = (data.banner_message or "").strip() or None
     await db.commit()
     await db.refresh(org)
     return org
@@ -539,3 +541,54 @@ def delete_logo(current_user: User = Depends(get_current_user)):
         raise HTTPException(403, "Admin only")
     for old in helpers.UPLOADS_DIR.glob("logo.*"):
         old.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Announcements — instance-wide welcome messages (super admin only)
+#
+# Distinct from an org's own banner_message (set via PATCH /orgs/{id} above,
+# by an org admin, shown only to that org's members): these two apply
+# across every org on the instance, set only by a super admin.
+# ---------------------------------------------------------------------------
+
+ANNOUNCEMENT_KEYS = ("login_message", "welcome_popup_message")
+
+
+class AnnouncementsOut(BaseModel):
+    login_message: Optional[str] = None          # shown on the login screen, before signing in
+    welcome_popup_message: Optional[str] = None   # shown as a dismissible popup right after logging in
+
+
+class AnnouncementsUpdate(BaseModel):
+    login_message: Optional[str] = None
+    welcome_popup_message: Optional[str] = None
+
+
+@router.get("/system/announcements", response_model=AnnouncementsOut)
+async def get_announcements(db: AsyncSession = Depends(get_db)):
+    """Public endpoint — the login screen needs this before the user has
+    signed in at all, so it can't be gated on auth. Also reused post-login
+    to check the welcome-popup message (fine either way — nothing here is
+    sensitive)."""
+    return AnnouncementsOut(
+        login_message=await helpers._get_setting("login_message", db),
+        welcome_popup_message=await helpers._get_setting("welcome_popup_message", db),
+    )
+
+
+@router.put("/admin/announcements", response_model=AnnouncementsOut)
+async def update_announcements(
+    data: AnnouncementsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Super admin only — instance-wide, not scoped to the caller's current org."""
+    if not current_user.is_admin:
+        raise HTTPException(403, "Admin only")
+    await helpers._set_setting("login_message", (data.login_message or "").strip() or None, db)
+    await helpers._set_setting("welcome_popup_message", (data.welcome_popup_message or "").strip() or None, db)
+    await db.commit()
+    return AnnouncementsOut(
+        login_message=await helpers._get_setting("login_message", db),
+        welcome_popup_message=await helpers._get_setting("welcome_popup_message", db),
+    )

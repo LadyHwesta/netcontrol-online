@@ -86,6 +86,12 @@ class Organization(Base):
     # "Default Organization" from the backward-compat migration doesn't need
     # a fabricated value.
     website_url = Column(String(300), nullable=True)
+    # Org-admin-set announcement shown at the top of every authenticated page
+    # to this org's members (issue follow-up — welcome messages). Distinct
+    # from the instance-wide login/welcome-popup messages, which are
+    # super-admin-set and stored in SystemSetting instead, since those apply
+    # across every org rather than being a property of one.
+    banner_message = Column(Text, nullable=True)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
     memberships = relationship("OrganizationMembership", back_populates="org", cascade="all, delete-orphan")

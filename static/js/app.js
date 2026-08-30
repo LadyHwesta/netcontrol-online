@@ -75,7 +75,11 @@ if (window._setpwToken) {
 }
 
 // Auto-login if token stored
-if (token && !window._setpwToken) enterApp();
+if (token && !window._setpwToken) {
+  enterApp();
+} else {
+  loadLoginMessage();   // fire-and-forget; non-blocking — staying on the login screen
+}
 
 // Bot protection: Turnstile / reCAPTCHA / ALTCHA (issue #1 follow-up) —
 // no-op if CAPTCHA_PROVIDER isn't configured

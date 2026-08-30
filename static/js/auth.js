@@ -1,6 +1,44 @@
 // ============================================================
 // AUTH
 // ============================================================
+
+// Super-admin-set login screen message (issue follow-up — welcome messages).
+// Public endpoint -- called while still on the auth page, before signing in.
+async function loadLoginMessage() {
+  const el = document.getElementById('login-message');
+  try {
+    const data = await apiFetch('/system/announcements');
+    if (data.login_message) {
+      el.textContent = data.login_message;
+      el.style.display = '';
+    }
+  } catch { /* leave hidden — a login-screen message failing to load shouldn't block login itself */ }
+}
+
+// Post-login welcome popup (same source as the login message above, but the
+// welcome_popup_message field). Shown once per distinct message -- tracked
+// client-side by comparing the fetched text against the last one dismissed,
+// so editing the message in Admin makes it pop up again for everyone, but
+// re-logging in with an unchanged message doesn't nag returning users.
+async function checkWelcomePopup() {
+  try {
+    const data = await apiFetch('/system/announcements');
+    const msg = data.welcome_popup_message;
+    if (msg && msg !== localStorage.getItem('nt_seen_welcome_popup')) {
+      document.getElementById('welcome-popup-text').textContent = msg;
+      document.getElementById('welcome-popup').style.display = 'flex';
+      window._pendingWelcomePopupMsg = msg;   // stashed until dismissed, not written to localStorage yet
+    }
+  } catch { /* no popup this session — not worth surfacing an error for */ }
+}
+
+function closeWelcomePopup() {
+  if (window._pendingWelcomePopupMsg) {
+    localStorage.setItem('nt_seen_welcome_popup', window._pendingWelcomePopupMsg);
+  }
+  document.getElementById('welcome-popup').style.display = 'none';
+}
+
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach((el, i) => {
     el.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
@@ -275,6 +313,8 @@ async function enterApp() {
   const shortEl = document.getElementById('header-callsign-short');
   if (shortEl) shortEl.textContent = currentUser.callsign;
   await loadBranding();
+  loadOrgBanner();       // fire-and-forget; non-blocking
+  checkWelcomePopup();   // fire-and-forget; non-blocking
   restoreSidebarCollapse();
   restoreNetControlMode();
   loadOrgSwitcher();   // fire-and-forget; non-blocking — also decides nav-admin visibility

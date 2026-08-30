@@ -41,6 +41,7 @@ class OrganizationOut(BaseModel):
     name: str
     slug: str
     website_url: Optional[str] = None
+    banner_message: Optional[str] = None   # org-admin-set, shown at the top of every page to this org's members
 
     model_config = {"from_attributes": True}
 

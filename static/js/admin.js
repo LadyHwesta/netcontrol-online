@@ -15,6 +15,7 @@ async function loadOrgEditForm() {
     if (!org) return;
     document.getElementById('org-edit-name').value = org.name;
     document.getElementById('org-edit-website').value = org.website_url || '';
+    document.getElementById('org-edit-banner').value = org.banner_message || '';
     document.getElementById('org-edit-name').dataset.orgId = org.id;
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -25,10 +26,11 @@ async function saveOrgEdit() {
   const name = document.getElementById('org-edit-name').value.trim();
   if (!name) return toast('Organization name is required', 'error');
   const websiteUrl = document.getElementById('org-edit-website').value.trim();
+  const bannerMessage = document.getElementById('org-edit-banner').value.trim();
   try {
     await apiFetch(`/orgs/${orgId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name, website_url: websiteUrl || null }),
+      body: JSON.stringify({ name, website_url: websiteUrl || null, banner_message: bannerMessage || null }),
     });
     toast('Organization saved', 'success');
   } catch (e) { toast(e.message, 'error'); }
@@ -771,5 +773,25 @@ async function loadDbStats() {
   } else {
     slowTable.style.display = 'none';
   }
+}
+
+async function loadAnnouncements() {
+  try {
+    const data = await apiFetch('/system/announcements');
+    document.getElementById('announce-login').value = data.login_message || '';
+    document.getElementById('announce-popup').value = data.welcome_popup_message || '';
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function saveAnnouncements() {
+  const loginMessage = document.getElementById('announce-login').value.trim();
+  const welcomePopupMessage = document.getElementById('announce-popup').value.trim();
+  try {
+    await apiFetch('/admin/announcements', {
+      method: 'PUT',
+      body: JSON.stringify({ login_message: loginMessage || null, welcome_popup_message: welcomePopupMessage || null }),
+    });
+    toast('Announcements saved', 'success');
+  } catch (e) { toast(e.message, 'error'); }
 }
 

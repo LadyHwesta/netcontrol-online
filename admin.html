@@ -39,6 +39,7 @@
       <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
     </div>
   </header>
+  <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
   <main>
     <nav id="sidebar">
       <div class="sidebar-section">Navigation</div>
@@ -60,6 +61,7 @@
         <button class="tab-btn" id="admin-tab-email"      onclick="switchAdminTab('email')">📧 Email</button>
         <button class="tab-btn" id="admin-tab-netrepo"    onclick="switchAdminTab('netrepo')">🌐 Net Repository</button>
         <button class="tab-btn" id="admin-tab-dbstats"    onclick="switchAdminTab('dbstats')">🗄️ DB Stats</button>
+        <button class="tab-btn" id="admin-tab-announce"   onclick="switchAdminTab('announce')">📢 Announcements</button>
         <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')">🔀 Reassign</button>
       </div>
 
@@ -78,6 +80,10 @@
               <label>Website URL</label>
               <input class="form-control" id="org-edit-website" placeholder="https://your-club-website.org" />
             </div>
+          </div>
+          <div class="form-group">
+            <label>Banner Message <span class="text-muted" style="font-size:11px">(shown at the top of every page to your org's members — leave blank for none)</span></label>
+            <textarea class="form-control" id="org-edit-banner" rows="2" placeholder="e.g. Field Day setup starts 6am Saturday at the usual site"></textarea>
           </div>
           <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()">Save Organization</button>
         </div>
@@ -314,6 +320,25 @@
         </div>
       </div><!-- /admin-panel-dbstats -->
 
+      <!-- ── Announcements panel (super admin only, instance-wide) ─── -->
+      <div id="admin-panel-announce" style="display:none">
+        <div class="card">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">LOGIN SCREEN MESSAGE</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">Shown to everyone on the login screen, before they sign in. Leave blank for none.</p>
+          <div class="form-group">
+            <textarea class="form-control" id="announce-login" rows="3" placeholder="e.g. Scheduled maintenance Saturday 8-9am Pacific"></textarea>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">POST-LOGIN WELCOME POPUP</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px">Shown as a dismissible popup right after signing in. Each user sees it once per message — editing the text makes it pop up again for everyone. Leave blank for none.</p>
+          <div class="form-group">
+            <textarea class="form-control" id="announce-popup" rows="4" placeholder="e.g. Welcome! Please review the updated net script before Tuesday's net."></textarea>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveAnnouncements()">Save Announcements</button>
+      </div><!-- /admin-panel-announce -->
+
       <!-- ── Reassign panel (super admin only, issue #1 follow-up) ─── -->
       <div id="admin-panel-reassign" style="display:none">
         <div class="card" style="margin-bottom:16px">
@@ -416,10 +441,10 @@
 </div>
 <script src="/static/js/state.js?v=10"></script>
 <script src="/static/js/utils.js?v=8"></script>
-<script src="/static/js/auth.js?v=15"></script>
+<script src="/static/js/auth.js?v=29"></script>
 <script src="/static/js/theme.js?v=1"></script>
-<script src="/static/js/branding.js?v=9"></script>
-<script src="/static/js/admin.js?v=34"></script>
+<script src="/static/js/branding.js?v=23"></script>
+<script src="/static/js/admin.js?v=35"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {
@@ -430,6 +455,7 @@
     if (tab === 'email') loadAdminUsers(); // refreshes email status card
     if (tab === 'netrepo') loadNetRepoStatus();
     if (tab === 'dbstats') loadDbStats();
+    if (tab === 'announce') loadAnnouncements();
     if (tab === 'reassign') loadReassignTab();
   }
 
@@ -457,12 +483,13 @@
     const navAdmin = document.getElementById('nav-admin');
     if (navAdmin) navAdmin.style.display = '';
     await loadBranding();
+      loadOrgBanner();   // fire-and-forget; non-blocking
 
     loadOrgEditForm();   // fire-and-forget; non-blocking — shown for org admins and super admins alike
 
     if (orgAdminOnly) {
-      // Branding/Email/Net Repository/DB Stats/Reassign are super-admin-only, instance-wide concerns
-      ['branding', 'email', 'netrepo', 'dbstats', 'reassign'].forEach(t => {
+      // Branding/Email/Net Repository/DB Stats/Announcements/Reassign are super-admin-only, instance-wide concerns
+      ['branding', 'email', 'netrepo', 'dbstats', 'announce', 'reassign'].forEach(t => {
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
       document.querySelector('#content h2.section-title').textContent = 'Organization Admin';

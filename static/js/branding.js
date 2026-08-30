@@ -49,6 +49,26 @@ function applyBranding(b) {
   }
 }
 
+// Org-admin-set banner (issue follow-up — welcome messages), shown at the
+// top of every authenticated page to that org's members. Distinct from
+// instance-wide Branding above -- loaded via /orgs/mine (already scoped to
+// the caller's own approved orgs) rather than /branding, and rendered into
+// a shared #org-banner element every page includes right below its header.
+async function loadOrgBanner() {
+  const el = document.getElementById('org-banner');
+  if (!el || !currentUser) return;
+  try {
+    const mine = await apiFetch('/orgs/mine');
+    const org = mine.find(o => o.id === currentUser.current_org_id);
+    if (org && org.banner_message) {
+      el.textContent = org.banner_message;
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+    }
+  } catch { el.style.display = 'none'; }
+}
+
 async function loadAdminBranding() {
   try {
     const b = await apiFetch('/branding');
