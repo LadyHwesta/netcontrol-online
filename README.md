@@ -46,7 +46,7 @@ Setting up your own instance? See **[QUICKSTART.md](QUICKSTART.md)** for the fas
 - **User management** — registration with org-admin approval, email verification (when SMTP is configured), email notifications, admin panel
 - **Bot protection (optional)** — Cloudflare Turnstile, Google reCAPTCHA, or ALTCHA (open source, self-contained — no third-party service) on registration and login, off by default; set `CAPTCHA_PROVIDER` plus that provider's keys to enable
 - **Configurable branding** — set organization name, tagline, website URL, and logo from the Admin panel
-- **Database stats (Postgres deployments)** — Admin → DB Stats shows database size, connection counts, and largest tables; also surfaces slowest queries if the [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html) extension is enabled on the server. A no-op on SQLite deployments
+- **Database stats (Postgres deployments)** — Admin → DB Stats shows database size, connection counts, and largest tables; also surfaces slowest queries if the [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html) extension is enabled on the server (one-time server-level setup — see "Database Stats (Admin)" below). A no-op on SQLite deployments
 - **Welcome messages** — a super admin can set an instance-wide login screen message (Admin → Announcements) and a post-login welcome popup, each shown once per distinct message (editing the text re-notifies everyone). An org admin can separately set a banner message for just their own org's members, shown at the top of every page (set from the "Your Organization" card in Admin → Operators)
 - **Theme engine** — per-account color theme (LCARS, Dark, Light, High Contrast, or System/OS-matched), persisted server-side so it follows you across devices
 - **Digital voice integration** — connect a net to a WPSD/Pi-Star hotspot or a BrandMeister talk group; covers DMR, D-Star, YSF, NXDN, P25, and M17. See a live "last heard" panel during the session, quick-check-in heard stations, and log Talk Group + Region per check-in
@@ -144,6 +144,31 @@ sudo -u netcontrol python3 /opt/netcontrol/migrate.py
 ```
 
 `migrate.py` is the single source of truth for all schema changes. It is safe to re-run at any time — every step uses `IF NOT EXISTS` or is otherwise idempotent. When adding a new column or table to `models.py`, add the corresponding statement to `MIGRATIONS` in `migrate.py` — that's the only file that needs updating.
+
+## Database Stats (Admin)
+
+**Admin → DB Stats** (Postgres deployments only — a no-op on SQLite) shows database size, connection counts, and the largest tables with no setup at all. **Slowest queries** additionally needs the [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html) extension enabled on the Postgres *server* — this is a one-time, superuser-level step outside the app itself, not something `migrate.py` can do for you.
+
+On a self-managed Postgres (Ubuntu/Debian):
+
+```bash
+# 1. Add it to shared_preload_libraries -- find your config file with
+#    `sudo -u postgres psql -c "SHOW config_file"` if this path doesn't match.
+sudo nano /etc/postgresql/*/main/postgresql.conf
+#   shared_preload_libraries = 'pg_stat_statements'
+#   (append with a comma if the line already lists other libraries)
+
+# 2. Restart Postgres -- shared_preload_libraries only takes effect at
+#    startup, a reload isn't enough.
+sudo systemctl restart postgresql
+
+# 3. Enable the extension in this app's own database (once).
+sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements;"
+```
+
+Use your actual database name from `DATABASE_URL` in `.env` if it's not `ham_net_tracker`. Once enabled, the Slow Queries panel starts populating immediately — no app restart or `migrate.py` run needed, it reads `pg_stat_statements` directly.
+
+**Managed/cloud Postgres** (RDS, DigitalOcean Managed Databases, Cloud SQL, etc.) usually can't have `postgresql.conf` edited directly — `pg_stat_statements` is typically enabled instead through the provider's parameter group or extension allow-list in their dashboard, then `CREATE EXTENSION pg_stat_statements;` still needs to be run once against the database as shown above. Check your provider's docs for the parameter-group step; most major providers support this extension.
 
 ## Deployment
 

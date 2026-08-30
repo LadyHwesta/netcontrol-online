@@ -64,6 +64,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-30 — Database Stats Panel (v2.14.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <strong>Admin → DB Stats</strong> tab (Postgres deployments only — hidden/no-op on SQLite): database size, connection counts, and largest tables, plus a slowest-queries panel if the <a href="https://www.postgresql.org/docs/current/pgstatstatements.html" target="_blank" style="color:var(--lc-orange)">pg_stat_statements</a> extension is enabled on the server. Built natively instead of integrating a separate tool like pghero, which would mean running a second language runtime as its own service.</li>
+              <li>New <strong>Database Stats (Slow Queries)</strong> card in Help → Guide (admins only) — the one-time, server-level <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">pg_stat_statements</code> setup, condensed for in-app reference. Same ground the README's new "Database Stats (Admin)" section covers.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-29 — Digital Voice Integration: D-Star, YSF, NXDN, P25, M17 (v2.13.0, issue #26)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>DMR Integration is now <strong>📻 Digital Voice Integration</strong> — a new <strong>Mode</strong> selector (DMR / D-Star / YSF / NXDN / P25 / M17) sits next to Source in the net Edit form. A WPSD/Pi-Star hotspot's last-heard feed already reports whichever mode(s) it hears, so switching Mode on an already-configured hotspot just changes what's shown — nothing to reconfigure on the hotspot itself. BrandMeister stays DMR-only (it's a real, centralized DMR network API — no equivalent exists for the other modes, whose reflectors are individually operated with inconsistent software).</li>
@@ -969,6 +977,24 @@ python3 /opt/netcontrol/gmrs_sync.py --mode update</pre>
           <p style="margin:0 0 6px;font-size:12px;color:var(--text-muted)">Net owners enable reminders per-net in the Edit form, but sending them requires <code style="background:var(--surface);padding:1px 5px;border-radius:3px">send_reminders.py</code> running frequently via cron (it's idempotent, safe to run every few minutes):</p>
           <pre style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;overflow-x:auto;margin:0 0 4px">*/5 * * * *  /opt/netcontrol/venv/bin/python3 /opt/netcontrol/send_reminders.py >> /var/log/nettracker/reminders.log 2>&amp;1</pre>
         </div>
+
+        <div id="help-dbstats-section" class="card" style="display:none">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">DATABASE STATS (SLOW QUERIES)</h3>
+          <p style="margin:0 0 8px"><strong>Admin → DB Stats</strong> (Postgres only — hidden/no-op on SQLite) shows database size, connection counts, and largest tables with no setup. The <strong>Slowest Queries</strong> panel additionally needs the <a href="https://www.postgresql.org/docs/current/pgstatstatements.html" target="_blank" style="color:var(--lc-blue)">pg_stat_statements</a> extension enabled on the Postgres server — a one-time, superuser-level step outside the app, not something <code style="background:var(--surface);padding:1px 5px;border-radius:3px">migrate.py</code> can do.</p>
+          <p style="margin:0 0 6px;font-size:12px;color:var(--text-muted)">Self-managed Postgres (Ubuntu/Debian):</p>
+          <pre style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;overflow-x:auto;margin:0 0 8px"># 1. Add it to shared_preload_libraries (find your config file with
+#    `sudo -u postgres psql -c "SHOW config_file"` if this path is different)
+sudo nano /etc/postgresql/*/main/postgresql.conf
+#   shared_preload_libraries = 'pg_stat_statements'
+
+# 2. Restart Postgres -- a reload isn't enough, shared_preload_libraries
+#    only takes effect at startup
+sudo systemctl restart postgresql
+
+# 3. Enable the extension in this app's own database (once)
+sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements;"</pre>
+          <p style="margin:0">Use your real database name from <code style="background:var(--surface);padding:1px 5px;border-radius:3px">DATABASE_URL</code> in <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code> if it isn't <code style="background:var(--surface);padding:1px 5px;border-radius:3px">ham_net_tracker</code>. On managed/cloud Postgres (RDS, DigitalOcean, Cloud SQL, etc.) <code style="background:var(--surface);padding:1px 5px;border-radius:3px">postgresql.conf</code> usually can't be edited directly — enable the extension via your provider's parameter group / extension allow-list instead, then still run the <code style="background:var(--surface);padding:1px 5px;border-radius:3px">CREATE EXTENSION</code> step above. No app restart or migration needed either way — the panel reads live once it's enabled.</p>
+        </div>
         </div><!-- /help-panel-guide -->
       </div>
     </div>
@@ -1007,9 +1033,11 @@ python3 /opt/netcontrol/gmrs_sync.py --mode update</pre>
       if (currentUser.is_admin) {
         const adminSec = document.getElementById('help-admin-section');
         const dbSec = document.getElementById('help-db-section');
+        const dbStatsSec = document.getElementById('help-dbstats-section');
         const netrepoSec = document.getElementById('help-netrepo-section');
         if (adminSec) adminSec.style.display = '';
         if (dbSec) dbSec.style.display = '';
+        if (dbStatsSec) dbStatsSec.style.display = '';
         if (netrepoSec) netrepoSec.style.display = '';
       }
     }
