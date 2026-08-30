@@ -63,6 +63,17 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-29 — APRS Station Map (v2.12.0, issue #22)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <strong>🗺️ APRS Map</strong> section in the net Edit form (ham nets only, same edit-rights as DMR) — pick <strong>aprs.fi</strong> (a free online API key, looks up positions for whoever's currently checked in) or a <strong>relay script</strong> that speaks real APRS-IS: point it at the public APRS-IS network for online use, or at a local Direwolf/TNC/igate for offline use. A <strong>filter callsign</strong> excludes your own NCS station from the map, same as DMR.</li>
+              <li>Authenticated live sessions get a collapsible <strong>APRS Station Map</strong> panel (self-hosted Leaflet + OpenStreetMap tiles, no API key, no CDN) that polls every 30s, hidden automatically for GMRS nets (no APRS allocation).</li>
+              <li>A separate <strong>"Show map on public live page"</strong> toggle controls whether positions also appear on the public, no-login live page — configuring APRS and exposing it publicly are deliberately two different decisions, since field-team positions can be sensitive.</li>
+              <li>New standalone <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">aprs_relay.py</code> script (download it from the net's APRS config section, pre-filled with this server and net ID) — implements the APRS-IS login/passcode handshake and parses standard uncompressed position packets. Compressed-format and Mic-E packets, and historical track/trail rendering, are not supported yet.</li>
+              <li><strong>Upgrading an existing install:</strong> adds a new column to <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">nets</code> and a new <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">aprs_configs</code> table — run <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">migrate.py</code> (see Help → Database Migrations) or let <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">./deploy.sh</code> do it automatically.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-29 — Net Repository Setup in the Help Page (v2.11.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <strong>Net Repository</strong> card in Help → Guide (admins only) — the one-time <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> and Admin panel setup for pushing publicly-listed nets to a central community directory. Same ground the README's Net Repository Integration section already covers, now available in-app without leaving the browser.</li>
@@ -795,7 +806,7 @@ Thank you all for checking in. This net is now closed.</pre>
           <p style="margin:0 0 8px">When creating a net, select <strong>GMRS</strong> as the net type. GMRS nets behave like ham nets with a few differences:</p>
           <p style="margin:0 0 8px"><strong>Shared callsigns</strong> — a GMRS licence covers an entire family. The same callsign can check in multiple times in a single session. Use the <strong>Name</strong> field to identify each individual operator (e.g. "Dad", "Mom", "Mobile 1").</p>
           <p style="margin:0 0 8px"><strong>Callsign lookup</strong> — GMRS callsigns (format: 3–4 letters followed by 3–4 digits, e.g. <code style="background:var(--surface);padding:1px 5px;border-radius:3px">WSMC512</code>) are looked up in a local copy of the FCC ULS GMRS database. The database is refreshed daily; new licences may take up to 24 hours to appear.</p>
-          <p style="margin:0">ARES mode and DMR integration are not available for GMRS nets and are hidden automatically.</p>
+          <p style="margin:0">ARES mode, DMR integration, and the APRS station map are not available for GMRS nets and are hidden automatically.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px">

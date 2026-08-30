@@ -14,6 +14,7 @@
   <meta name="robots" content="noindex, follow" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=1">
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -280,6 +281,14 @@
         No check-ins yet.
       </div>
     </div>
+    <!-- APRS station map (issue #22) — shown only when the net owner has
+         opted in via aprs_map_enabled AND there's at least one position to
+         show; the toggle is a deliberate, separate decision from whether
+         APRS is configured at all (field-team positions can be sensitive). -->
+    <div id="detail-aprs-map-card" class="card" style="display:none;margin-top:14px">
+      <div class="section-title" style="margin-bottom:10px">🗺️ APRS Station Map</div>
+      <div id="detail-aprs-map-container" style="height:320px;border-radius:8px;overflow:hidden"></div>
+    </div>
   </div>
 </main>
 
@@ -287,6 +296,8 @@
   NetControl Online &bull; <a href="/">Operator Login</a>
 </footer>
 
+<script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
+<script src="/static/js/aprs-map.js?v=1"></script>
 <script>
   const API = '';
   let listInterval = null;
@@ -431,6 +442,15 @@
   function renderDetail(s) {
     document.getElementById('detail-net-name').textContent = s.net_name;
 
+    const mapCard = document.getElementById('detail-aprs-map-card');
+    if (s.aprs_map_enabled && s.aprs_positions && s.aprs_positions.length > 0) {
+      mapCard.style.display = '';
+      initAprsMap('detail-aprs-map-container', s.aprs_positions);
+      setTimeout(() => invalidateAprsMapSize('detail-aprs-map-container'), 0);
+    } else {
+      mapCard.style.display = 'none';
+    }
+
     document.getElementById('detail-header').innerHTML = `
       ${s.frequency ? `<div class="detail-stat"><div class="label">Frequency</div><div class="value">📡 ${esc(s.frequency)}</div></div>` : ''}
       ${s.ncs_callsign ? `<div class="detail-stat"><div class="label">Net Control</div><div class="value">🎙 ${esc(s.ncs_callsign)}${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</div></div>` : ''}
@@ -471,6 +491,7 @@
     document.getElementById('view-detail').style.display = '';
     document.getElementById('detail-checkins').innerHTML = '';
     document.getElementById('detail-empty').style.display = 'none';
+    document.getElementById('detail-aprs-map-card').style.display = 'none';
     document.getElementById('detail-refresh-status').textContent = 'Loading…';
     startDetailPolling();
   }

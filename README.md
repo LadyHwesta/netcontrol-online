@@ -385,6 +385,43 @@ python3 dmr_relay.py
 
 The script uses a long-lived API token (no password stored, no re-authentication needed). Leave it running for the duration of the net. The app shows "Via relay script (Xs ago)" in the DMR panel when using cached relay data. Revoke the token any time from the API Tokens page.
 
+## APRS Station Map
+
+Net owners (ham nets only — GMRS has no APRS allocation) can show a live map of stations reporting APRS beacons, on the net's Edit form under **🗺️ APRS Map**. Two source types are supported:
+
+| Source | How it works | Use when |
+|--------|-------------|----------|
+| **aprs.fi** | Server polls the [aprs.fi](https://aprs.fi/page/api) API for whoever's currently checked in | You want zero extra infrastructure and don't mind a third-party API key |
+| **Relay script** | `aprs_relay.py` speaks real APRS-IS and pushes positions to the server | Online (public APRS-IS network) or offline (local Direwolf/TNC/igate) — same script either way |
+
+A **filter callsign** (defaults to the net owner's callsign) excludes your own NCS station from the map. A separate **"Show map on public live page"** toggle controls whether positions also appear on the public, no-login live page — configuring APRS and exposing it publicly are deliberately two different decisions, since field-team positions can be sensitive. The authenticated live-session map is unaffected either way.
+
+### APRS relay script
+
+Download `aprs_relay.py` from the net's APRS config section — it comes pre-filled with this server's URL, the net ID, and your callsign, so you only need to paste an API token.
+
+**Setup:**
+
+1. Go to **🪙 API Tokens** in the sidebar and create a token (e.g. "APRS Relay"). Copy the token — it is shown only once.
+2. Download `aprs_relay.py` from the net's APRS config section.
+3. Run it, pointed at either the public APRS-IS network or a local igate:
+
+```bash
+pip install requests   # or: sudo apt install python3-requests
+
+# Online — public APRS-IS network, watching specific field-team callsigns
+python3 aprs_relay.py --token nt_YOUR_TOKEN --my-callsign W1AW \
+    --callsigns W1AW-9,K1ABC-9,N1XYZ-9
+
+# Offline — local Direwolf/TNC/igate on the LAN
+python3 aprs_relay.py --token nt_YOUR_TOKEN --my-callsign W1AW \
+    --host 192.168.1.10 --port 8001
+```
+
+`--callsigns` builds an APRS-IS server-side buddy filter so the feed isn't a firehose — omit it only when pointed at a small local igate feed you already trust. Leave it running for the duration of the net; revoke the token any time from the API Tokens page.
+
+Only standard *uncompressed* position packets are parsed in this version — compressed-format and Mic-E packets aren't decoded yet, and the map always shows each station's latest known position rather than a historical track.
+
 ### API Tokens
 
 Long-lived API tokens are available for service accounts and scripts. They are prefixed with `nt_` and work anywhere a Bearer token is accepted. Tokens are stored as SHA-256 hashes — the raw value is shown only at creation.

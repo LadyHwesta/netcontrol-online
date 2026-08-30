@@ -19,8 +19,9 @@ async function openNet(netId) {
   document.getElementById('zone-roster-panel').style.display = currentNetIsAres ? '' : 'none';
   document.getElementById('traffic-log-panel').style.display = currentNetIsAres ? '' : 'none';
 
-  // Hide DMR panel entirely for GMRS nets
+  // Hide DMR/APRS panels entirely for GMRS nets — neither has a GMRS allocation
   document.getElementById('dmr-heard-panel').style.display = currentNetIsGmrs ? 'none' : '';
+  document.getElementById('aprs-map-panel').style.display = 'none';  // shown by initAprsForSession once we know APRS is configured
 
   // Stash the raw script text; it's rendered (with variable substitution) per-session
   // in loadSessionLive, since {{net_control}}/{{broadcaster}} depend on that session's duty.
@@ -54,6 +55,7 @@ async function openNet(netId) {
 function backToSessions() {
   stopClock();
   stopDmrPolling();
+  stopAprsMapPolling();
   openNet(currentNetId);
 }
 
@@ -474,11 +476,14 @@ async function loadSessionLive(sessionId) {
     // DMR: init or stop polling based on session state
     if (!ended) {
       await initDmrForSession(currentNetId);
+      await initAprsForSession(currentNetId);
     } else {
       stopDmrPolling();
       document.getElementById('dmr-heard-panel').style.display = 'none';
       document.getElementById('ci-dmr-tg-group').style.display = 'none';
       document.getElementById('ci-dmr-region-group').style.display = 'none';
+      stopAprsMapPolling();
+      document.getElementById('aprs-map-panel').style.display = 'none';
     }
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -498,6 +503,7 @@ async function endSession() {
     toast(offline ? 'Log closed' : 'Session ended');
     stopClock();
     stopDmrPolling();
+    stopAprsMapPolling();
     currentSessionId = null;
     document.getElementById('live-session-panel').style.display = 'none';
     document.getElementById('sessions-list-container').style.display = '';

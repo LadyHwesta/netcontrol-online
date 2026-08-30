@@ -138,6 +138,7 @@ class Net(Base):
     reminder_enabled = Column(Boolean, default=False, nullable=False)  # email signed-up operators before net start
     reminder_minutes_before = Column(Integer, nullable=True)  # lead time in minutes, e.g. 30
     public_listed = Column(Boolean, default=False, nullable=False)  # shown in the public /directory (no login)
+    aprs_map_enabled = Column(Boolean, default=False, nullable=False)  # shows an APRS station map on the public live page (issue #22)
     # Optional metadata — not used locally, only forwarded to Net Repository
     # (net_repository.py) to make the public directory listing more useful/searchable.
     band = Column(String(10), nullable=True)         # e.g. "2m", "70cm"
@@ -161,6 +162,7 @@ class Net(Base):
     evac_zones = relationship("EvacZone", back_populates="net", cascade="all, delete-orphan")
     shares = relationship("NetShare", back_populates="net", cascade="all, delete-orphan")
     dmr_config = relationship("DmrConfig", back_populates="net", uselist=False, cascade="all, delete-orphan")
+    aprs_config = relationship("AprsConfig", back_populates="net", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Net name={self.name}>"
@@ -536,3 +538,25 @@ class DmrConfig(Base):
 
     def __repr__(self):
         return f"<DmrConfig net={self.net_id} type={self.source_type}>"
+
+
+class AprsConfig(Base):
+    """Per-net APRS station-map integration configuration (issue #22).
+    Mirrors DmrConfig's shape — one row per net, presence of the row is the
+    on/off switch (no separate boolean)."""
+    __tablename__ = "aprs_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False, unique=True)
+    # aprs_fi | relay
+    source_type = Column(String(20), nullable=False, default="relay")
+    # aprs.fi: free API key from https://aprs.fi/page/api
+    aprs_fi_api_key = Column(String(100), nullable=True)
+    # Callsign to exclude from the map (usually NCS operator)
+    filter_callsign = Column(String(12), nullable=True)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    net = relationship("Net", back_populates="aprs_config")
+
+    def __repr__(self):
+        return f"<AprsConfig net={self.net_id} type={self.source_type}>"

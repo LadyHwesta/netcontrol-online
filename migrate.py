@@ -415,6 +415,19 @@ MIGRATIONS = [
     # access (issue follow-up) ──
     ("net_shares: can_edit flag",
      "ALTER TABLE net_shares ADD COLUMN IF NOT EXISTS can_edit BOOLEAN NOT NULL DEFAULT FALSE"),
+
+    # ── APRS station map (issue #22) ──
+    ("nets: aprs_map_enabled flag",
+     "ALTER TABLE nets ADD COLUMN IF NOT EXISTS aprs_map_enabled BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("table: aprs_configs",
+     """CREATE TABLE IF NOT EXISTS aprs_configs (
+         id SERIAL PRIMARY KEY,
+         net_id INTEGER NOT NULL REFERENCES nets(id) ON DELETE CASCADE,
+         source_type VARCHAR(20) NOT NULL DEFAULT 'relay',
+         aprs_fi_api_key VARCHAR(100),
+         filter_callsign VARCHAR(12),
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         CONSTRAINT uq_aprs_config_net UNIQUE (net_id))"""),
 ]
 
 # ---------------------------------------------------------------------------

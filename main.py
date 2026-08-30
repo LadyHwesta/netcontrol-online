@@ -81,7 +81,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from database import get_db, init_db
-from models import ApiToken, CallsignCache, Checkin, DmrConfig, EvacZone, GmrsLicense, Net, NetControlShift, NetControlSignup, NetSchedule, NetSession, NetShare, Organization, OrganizationMembership, StationRemark, SystemSetting, TacticalPosition, TrafficMessage, User, utcnow
+from models import ApiToken, AprsConfig, CallsignCache, Checkin, DmrConfig, EvacZone, GmrsLicense, Net, NetControlShift, NetControlSignup, NetSchedule, NetSession, NetShare, Organization, OrganizationMembership, StationRemark, SystemSetting, TacticalPosition, TrafficMessage, User, utcnow
 import net_repository
 
 load_dotenv()
@@ -428,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.11.2", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.12.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -672,6 +672,7 @@ class NetCreate(BaseModel):
     reminder_enabled: bool = False   # email signed-up Net Control / Broadcaster before start
     reminder_minutes_before: Optional[int] = None   # lead time, e.g. 30
     public_listed: bool = False    # shown in the public /directory (no login required)
+    aprs_map_enabled: bool = False   # shows an APRS station map on the public live page (issue #22)
     # Optional directory metadata — not used locally, only forwarded to Net Repository
     band: Optional[str] = None
     mode: Optional[str] = None
@@ -700,6 +701,7 @@ class NetOut(BaseModel):
     has_broadcast: bool = False
     broadcast_label: Optional[str] = None
     public_listed: bool = False
+    aprs_map_enabled: bool = False
     reminder_enabled: bool = False
     reminder_minutes_before: Optional[int] = None
     band: Optional[str] = None
@@ -965,6 +967,36 @@ class DmrHeardEntry(BaseModel):
     region: Optional[str] = None
     heard_at: Optional[str] = None
     duration: Optional[str] = None
+
+
+class AprsConfigCreate(BaseModel):
+    source_type: str = "relay"              # aprs_fi | relay
+    aprs_fi_api_key: Optional[str] = None   # for aprs_fi
+    filter_callsign: Optional[str] = None
+
+
+class AprsConfigOut(BaseModel):
+    source_type: str
+    aprs_fi_api_key: Optional[str] = None
+    filter_callsign: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AprsPositionEntry(BaseModel):
+    callsign: str
+    lat: float
+    lon: float
+    comment: Optional[str] = None
+    symbol: Optional[str] = None
+    course: Optional[int] = None
+    speed: Optional[float] = None
+    altitude: Optional[float] = None
+    heard_at: Optional[str] = None
+
+
+class AprsPushPayload(BaseModel):
+    entries: list[AprsPositionEntry]
 
 
 class EvacZoneOut(BaseModel):
@@ -2077,6 +2109,8 @@ def public_active_sessions(org: Optional[str] = None, db: Session = Depends(get_
             "frequency": net.frequency,
             "started_at": s.started_at.isoformat(),
             "checkin_count": count,
+            "aprs_map_enabled": net.aprs_map_enabled,
+            "aprs_positions": _public_aprs_positions(net, db),
             **_duty_labels_for_session(net, s, db),
         })
     return result
@@ -2112,6 +2146,8 @@ def public_session_detail(session_id: int, db: Session = Depends(get_db)):
             {"callsign": c.callsign, "name": c.name}
             for c in checkins
         ],
+        "aprs_map_enabled": net.aprs_map_enabled if net else False,
+        "aprs_positions": _public_aprs_positions(net, db) if net else [],
         **duty,
     }
 
@@ -2437,6 +2473,7 @@ def create_net(data: NetCreate, current_user: User = Depends(get_current_user), 
         reminder_enabled=data.reminder_enabled,
         reminder_minutes_before=(data.reminder_minutes_before or 30) if data.reminder_enabled else None,
         public_listed=data.public_listed,
+        aprs_map_enabled=data.aprs_map_enabled if net_type == "ham" else False,
         band=data.band or None,
         mode=data.mode or None,
         ctcss_tone=data.ctcss_tone or None,
@@ -2475,6 +2512,7 @@ def update_net(net_id: int, data: NetCreate, current_user: User = Depends(get_cu
     net.reminder_enabled = data.reminder_enabled
     net.reminder_minutes_before = (data.reminder_minutes_before or 30) if data.reminder_enabled else None
     net.public_listed = data.public_listed
+    net.aprs_map_enabled = data.aprs_map_enabled if net_type == "ham" else False
     net.band = data.band or None
     net.mode = data.mode or None
     net.ctcss_tone = data.ctcss_tone or None
@@ -4899,9 +4937,10 @@ def _dmr_fetch_proxy(cfg: DmrConfig) -> list[dict]:
 
 
 def _assert_ham_net(net: Net):
-    """Raise 400 if the net is GMRS — DMR is not permitted on GMRS frequencies."""
+    """Raise 400 if the net is GMRS — shared by every ham-only integration
+    (DMR, APRS — issue #22) since GMRS has no allocation for either."""
     if net and net.net_type == "gmrs":
-        raise HTTPException(400, "DMR integration is not available for GMRS nets")
+        raise HTTPException(400, "This integration is not available for GMRS nets")
 
 
 @app.get("/nets/{net_id}/dmr/config", response_model=Optional[DmrConfigOut])
@@ -5056,6 +5095,301 @@ def dmr_cache(
             f"Relay data is stale ({age}s old). Is the relay script still running?",
         )
     return {"entries": cached["entries"], "age_seconds": age}
+
+
+# ---------------------------------------------------------------------------
+# APRS Station Map (issue #22)
+# ---------------------------------------------------------------------------
+# Mirrors the DMR integration above almost exactly (per-net config, presence
+# of a config row is the on/off switch, cache rides on SystemSetting + an
+# in-memory dict) with one deliberate simplification: DMR has two divergent
+# push endpoints and a three-tier direct/proxy/relay-cache frontend fallback
+# chain; APRS has ONE push endpoint (the relay script does its own TNC2
+# parsing and pushes normalized entries) and one positions endpoint that
+# internally handles both source types, so the frontend just makes one call.
+
+_aprs_push_cache: dict = {}
+_APRS_CACHE_TTL = 300  # seconds — matches the stale-data check in aprs_cache()
+
+
+def _aprs_cache_key(net_id: int) -> str:
+    return f"aprs_cache_{net_id}"
+
+
+def _aprs_cache_write(net_id: int, entries: list, db: Session) -> None:
+    """Write position entries to both the in-memory dict and SystemSetting (survives restarts)."""
+    now = _time.time()
+    _aprs_push_cache[net_id] = {"entries": entries, "pushed_at": now}
+    _set_setting(_aprs_cache_key(net_id), json.dumps({"entries": entries, "pushed_at": now}), db)
+    db.commit()
+
+
+def _aprs_cache_read(net_id: int, db: Session) -> Optional[dict]:
+    """Return the position cache for net_id, restoring from DB if the in-memory dict was wiped."""
+    cached = _aprs_push_cache.get(net_id)
+    if cached:
+        return cached
+    raw = _get_setting(_aprs_cache_key(net_id), db)
+    if raw:
+        try:
+            data = json.loads(raw)
+            _aprs_push_cache[net_id] = data
+            return data
+        except Exception:
+            pass
+    return None
+
+
+def _aprs_fetch_aprsfi(cfg: AprsConfig, callsigns: list[str]) -> list[dict]:
+    """Fetch current positions from aprs.fi (https://aprs.fi/page/api) for the given callsigns."""
+    if not callsigns or not cfg.aprs_fi_api_key:
+        return []
+    try:
+        r = httpx.get(
+            "https://api.aprs.fi/api/get",
+            params={"name": ",".join(callsigns), "what": "loc", "apikey": cfg.aprs_fi_api_key, "format": "json"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data.get("result") != "ok":
+            _email_log.warning("aprs.fi returned an error: %s", data.get("description"))
+            return []
+        entries = []
+        for e in data.get("entries", []):
+            try:
+                lat = float(e["lat"])
+                lon = float(e["lng"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            heard_raw = e.get("lasttime") or e.get("time")
+            heard_at = None
+            if heard_raw:
+                try:
+                    heard_at = datetime.fromtimestamp(int(heard_raw), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                except (ValueError, TypeError):
+                    pass
+
+            def _num(key, cast):
+                v = str(e.get(key, "")).strip()
+                if not v or v.lower() == "none":
+                    return None
+                try:
+                    return cast(v)
+                except (TypeError, ValueError):
+                    return None
+
+            entries.append({
+                "callsign": str(e.get("name", "")).upper().strip(),
+                "lat": lat,
+                "lon": lon,
+                "comment": e.get("comment") or None,
+                "symbol": e.get("symbol") or None,
+                "course": _num("course", int),
+                "speed": _num("speed", float),
+                "altitude": _num("altitude", float),
+                "heard_at": heard_at,
+            })
+        return entries
+    except httpx.ConnectError as exc:
+        raise HTTPException(502, f"Cannot reach aprs.fi: {exc}")
+    except httpx.TimeoutException:
+        raise HTTPException(504, "aprs.fi request timed out.")
+    except Exception as exc:
+        _email_log.warning("aprs.fi fetch error: %s", exc)
+        raise HTTPException(502, f"aprs.fi fetch failed: {exc}")
+
+
+def _aprs_active_session_callsigns(net_id: int, db: Session) -> list[str]:
+    """Callsigns checked into the net's current live session, if any — the
+    watch-list aprs.fi mode queries positions for."""
+    session = db.query(NetSession).filter(NetSession.net_id == net_id, NetSession.ended_at.is_(None)).first()
+    if not session:
+        return []
+    rows = db.query(Checkin.callsign).filter(Checkin.session_id == session.id).distinct().all()
+    return [r[0] for r in rows]
+
+
+def _aprs_positions_for_net(net_id: int, cfg: AprsConfig, db: Session) -> list[dict]:
+    """Shared by the authenticated positions endpoint and the public live
+    page (main.py:public_active/public_session_detail) — same cache-or-
+    refresh logic either way, so the public page stays live without needing
+    an authenticated viewer's browser to keep the poll warm."""
+    if cfg.source_type == "aprs_fi":
+        cached = _aprs_cache_read(net_id, db)
+        if cached and (_time.time() - cached["pushed_at"]) <= _APRS_CACHE_TTL:
+            entries = cached["entries"]
+        else:
+            callsigns = _aprs_active_session_callsigns(net_id, db)
+            entries = _aprs_fetch_aprsfi(cfg, callsigns)
+            _aprs_cache_write(net_id, entries, db)
+    else:  # relay — nothing to fetch on demand, just serve whatever's been pushed
+        cached = _aprs_cache_read(net_id, db)
+        entries = cached["entries"] if cached else []
+
+    skip = (cfg.filter_callsign or "").upper()
+    if skip:
+        entries = [e for e in entries if (e.get("callsign") or "").upper() != skip]
+    return entries
+
+
+def _public_aprs_positions(net: Net, db: Session) -> list[dict]:
+    """Positions for the public live page (used by public_active_sessions /
+    public_session_detail, defined earlier in this file) — only computed at
+    all if the net has opted in via aprs_map_enabled. Configuring APRS and
+    exposing it publicly are two separate decisions: field team positions
+    can be sensitive, so a net with APRS configured but not opted in never
+    even has its positions fetched for this path."""
+    if not net or not net.aprs_map_enabled:
+        return []
+    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net.id).first()
+    if not cfg:
+        return []
+    return _aprs_positions_for_net(net.id, cfg, db)
+
+
+@app.get("/nets/{net_id}/aprs/config", response_model=Optional[AprsConfigOut])
+def get_aprs_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    net = _get_net_for_user(net_id, current_user, db)
+    _assert_ham_net(net)
+    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    return cfg  # None → null in JSON → frontend shows "not configured"
+
+
+@app.put("/nets/{net_id}/aprs/config", response_model=AprsConfigOut)
+def save_aprs_config(net_id: int, data: AprsConfigCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    net = _get_editable_net(net_id, current_user, db)
+    _assert_ham_net(net)
+    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    if cfg:
+        cfg.source_type = data.source_type
+        cfg.aprs_fi_api_key = data.aprs_fi_api_key or None
+        cfg.filter_callsign = (data.filter_callsign or "").upper().strip() or None
+    else:
+        cfg = AprsConfig(
+            net_id=net_id,
+            source_type=data.source_type,
+            aprs_fi_api_key=data.aprs_fi_api_key or None,
+            filter_callsign=(data.filter_callsign or "").upper().strip() or None,
+        )
+        db.add(cfg)
+    db.commit()
+    db.refresh(cfg)
+    return cfg
+
+
+@app.delete("/nets/{net_id}/aprs/config", status_code=204)
+def delete_aprs_config(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    net = _get_editable_net(net_id, current_user, db)
+    _assert_ham_net(net)
+    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    if cfg:
+        db.delete(cfg)
+        db.commit()
+
+
+@app.get("/nets/{net_id}/aprs/positions", response_model=list[AprsPositionEntry])
+def aprs_positions(net_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Current station positions for the map panel — fetches fresh from
+    aprs.fi if that's the configured source and the cache is stale, or just
+    reads the relay-pushed cache otherwise. One call covers both source
+    types, unlike DMR's fallback chain."""
+    net = _get_net_for_user(net_id, current_user, db)
+    _assert_ham_net(net)
+    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    if not cfg:
+        raise HTTPException(404, "APRS not configured for this net")
+    return _aprs_positions_for_net(net_id, cfg, db)
+
+
+@app.post("/nets/{net_id}/aprs/push", status_code=204)
+def aprs_push(
+    net_id: int,
+    data: AprsPushPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Accept already-parsed positions pushed from aprs_relay.py — the one
+    push endpoint (see the module note above on why DMR's two-endpoint
+    split isn't repeated here)."""
+    net = _get_net_for_user(net_id, current_user, db)
+    _assert_ham_net(net)
+    cfg = db.query(AprsConfig).filter(AprsConfig.net_id == net_id).first()
+    if not cfg:
+        raise HTTPException(404, "APRS not configured for this net")
+    skip = (cfg.filter_callsign or "").upper()
+    entries = [e.model_dump() for e in data.entries]
+    if skip:
+        entries = [e for e in entries if (e.get("callsign") or "").upper() != skip]
+    _aprs_cache_write(net_id, entries, db)
+
+
+@app.get("/nets/{net_id}/aprs/cache")
+def aprs_cache(
+    net_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return relay-pushed APRS data with freshness info — a diagnostic
+    endpoint (mirrors /dmr/cache) for confirming aprs_relay.py is actually
+    running; the map panel's own polling uses /aprs/positions instead."""
+    net = _get_net_for_user(net_id, current_user, db)
+    _assert_ham_net(net)
+    cached = _aprs_cache_read(net_id, db)
+    if not cached:
+        raise HTTPException(404, "No relay data for this net — is aprs_relay.py running?")
+    age = int(_time.time() - cached["pushed_at"])
+    if age > _APRS_CACHE_TTL:
+        raise HTTPException(
+            404,
+            f"Relay data is stale ({age}s old). Is aprs_relay.py still running?",
+        )
+    return {"entries": cached["entries"], "age_seconds": age}
+
+
+@app.get("/nets/{net_id}/aprs/relay-script")
+def download_aprs_relay_script(
+    net_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Serves the real aprs_relay.py from disk, verbatim, with the
+    --server/--net-id/--my-callsign argparse defaults pre-filled for this
+    net so the user only has to paste an API token (and, for online mode,
+    a --callsigns watch-list) to run it. Deliberately NOT a second,
+    JS-embedded copy of the relay logic the way DMR's tokens.js download
+    button is — the APRS-IS passcode algorithm and TNC2 parser are
+    substantial enough that keeping a single, unit-tested implementation
+    is worth the slightly less turnkey download."""
+    net = _get_editable_net(net_id, current_user, db)
+    _assert_ham_net(net)
+
+    script_path = STATIC_DIR.parent / "aprs_relay.py"
+    try:
+        source = script_path.read_text()
+    except OSError:
+        raise HTTPException(500, "Relay script not found on server")
+
+    backend = _public_base_url(request)
+    source = source.replace(
+        'p.add_argument("--server",      default=os.getenv("NT_SERVER", ""))',
+        f'p.add_argument("--server",      default=os.getenv("NT_SERVER", {backend!r}))',
+    )
+    source = source.replace(
+        'p.add_argument("--net-id",      default=os.getenv("NT_NET_ID", ""), type=int)',
+        f'p.add_argument("--net-id",      default=os.getenv("NT_NET_ID", "{net_id}"), type=int)',
+    )
+    source = source.replace(
+        'p.add_argument("--my-callsign", default=os.getenv("NT_MY_CALLSIGN", ""))',
+        f'p.add_argument("--my-callsign", default=os.getenv("NT_MY_CALLSIGN", {current_user.callsign!r}))',
+    )
+
+    return StreamingResponse(
+        iter([source]),
+        media_type="text/x-python",
+        headers={"Content-Disposition": 'attachment; filename="aprs_relay.py"'},
+    )
 
 
 # ---------------------------------------------------------------------------

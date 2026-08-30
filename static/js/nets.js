@@ -84,6 +84,8 @@ function showNetForm() {
   document.querySelector('input[name="net-type"][value="ham"]').checked = true;
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
+  document.getElementById('net-aprs-section').style.display = 'none';
+  document.getElementById('net-aprs-map-enabled').checked = false;
   document.getElementById('net-form-card').style.display = '';
   onNetTypeChange();
   switchNetFormTab('details');
@@ -111,8 +113,11 @@ function onNetTypeChange() {
   if (isGmrs) {
     document.getElementById('net-ares').checked = false;
     document.getElementById('net-dmr-tg').value = '';
-    // DMR integration section should also stay hidden for GMRS
+    // DMR/APRS integration sections should also stay hidden for GMRS —
+    // neither has a GMRS allocation.
     document.getElementById('net-dmr-section').style.display = 'none';
+    document.getElementById('net-aprs-section').style.display = 'none';
+    document.getElementById('net-aprs-map-enabled').checked = false;
   }
 }
 
@@ -242,6 +247,7 @@ function cancelNetForm() {
   document.getElementById('net-form-card').style.display = 'none';
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
+  document.getElementById('net-aprs-section').style.display = 'none';
   editNetId = null;
   shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [] };
   switchNetFormTab('details');
@@ -271,6 +277,7 @@ async function editNet(id) {
   document.getElementById('net-region').value = n.region || '';
   document.getElementById('net-state').value = n.state || '';
   document.getElementById('net-website').value = n.website || '';
+  document.getElementById('net-aprs-map-enabled').checked = !!n.aprs_map_enabled;
   onPublicListedToggle();
   const netType = n.net_type || 'ham';
   const typeRadio = document.querySelector(`input[name="net-type"][value="${netType}"]`);
@@ -287,8 +294,10 @@ async function editNet(id) {
   if (n.is_owner) await loadSharesForNet(id);
   if (n.can_edit && netType === 'ham') {
     await loadDmrConfig(id);
+    await loadAprsConfig(id);
   } else {
     document.getElementById('net-dmr-section').style.display = 'none';
+    document.getElementById('net-aprs-section').style.display = 'none';
   }
 }
 
@@ -313,21 +322,24 @@ async function saveNet() {
   const region = document.getElementById('net-region').value.trim() || null;
   const state = document.getElementById('net-state').value.trim() || null;
   const website = document.getElementById('net-website').value.trim() || null;
+  const aprs_map_enabled = is_gmrs ? false : document.getElementById('net-aprs-map-enabled').checked;
   if (!name) return toast('Net name is required', 'error');
   try {
     if (editNetId) {
-      await apiFetch(`/nets/${editNetId}`, { method: 'PUT', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, band, mode, ctcss_tone, region, state, website }) });
+      await apiFetch(`/nets/${editNetId}`, { method: 'PUT', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
       // Sharing also has its own "Save Sharing" button below, but folding it into
       // this main save too means checking a share box and clicking the obvious
       // "save the form" button actually persists it -- previously that button
       // only saved the net's other fields, silently dropping any sharing change
-      // that hadn't separately been saved.
+      // that hadn't separately been saved. APRS config is folded in the same way
+      // from the start, rather than needing the same fix later.
       if (document.getElementById('net-sharing-section').style.display !== 'none') {
         await apiFetch(`/nets/${editNetId}/shares`, { method: 'PUT', body: JSON.stringify(_shareStatePayload()) });
       }
+      await saveAprsConfigIfVisible(editNetId);
       toast('Net updated');
     } else {
-      await apiFetch('/nets', { method: 'POST', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, band, mode, ctcss_tone, region, state, website }) });
+      await apiFetch('/nets', { method: 'POST', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
       toast('Net created');
     }
     cancelNetForm();
@@ -455,5 +467,6 @@ async function deleteNet(id) {
 }
 
 onEnter(['net-name', 'net-freq', 'net-dmr-tg', 'net-broadcast-label', 'net-reminder-minutes',
-         'net-band', 'net-mode', 'net-ctcss-tone', 'net-region', 'net-state', 'net-website'], saveNet);
+         'net-band', 'net-mode', 'net-ctcss-tone', 'net-region', 'net-state', 'net-website',
+         'aprs-fi-key', 'aprs-filter'], saveNet);
 
