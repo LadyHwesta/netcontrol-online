@@ -3,5 +3,5 @@
 -r requirements.txt
 pytest==8.3.4
 pytest-cov==6.0.0
-pytest-asyncio==1.4.0
+pytest-asyncio==1.3.0   # NOT 1.4.0+ -- that bumps its own pytest floor to >=8.4, conflicting with pytest==8.3.4 above
 aiosqlite==0.22.1   # async SQLite driver, test suite only (prod uses asyncpg)
