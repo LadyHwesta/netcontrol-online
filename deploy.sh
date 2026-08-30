@@ -64,13 +64,21 @@ git fetch origin "$GIT_BRANCH"
 git checkout "$GIT_BRANCH" 2>/dev/null || git checkout -t "origin/$GIT_BRANCH"
 git pull origin "$GIT_BRANCH"
 
+# Always keep production deps current, not just on first setup -- a pulled
+# commit can add/bump requirements.txt (e.g. a new DB driver) that the app
+# itself needs to even start, regardless of whether the test suite runs
+# below. Cheap when nothing changed: pip no-ops on already-satisfied pins.
+echo "Installing/updating dependencies..."
+"$PYTHON" -m pip install -q -r requirements.txt
+echo "✓ Dependencies up to date"
+
 if [ "$GIT_BRANCH" = "testing" ] || [ "$FORCE_TESTS" = true ]; then
-  if ! "$PYTHON" -c "import pytest" 2>/dev/null; then
-    echo "✗ pytest isn't installed for $PYTHON."
-    echo "  Install test dependencies once with:"
-    echo "    ${PYTHON} -m pip install -r requirements-dev.txt"
-    exit 1
-  fi
+  # Same reasoning as above, for test-only deps -- checking `import pytest`
+  # only proves *something* was installed once, not that requirements-dev.txt
+  # is current, so a dependency added since the last deploy (pytest-asyncio,
+  # aiosqlite, ...) would silently be missing until someone noticed the
+  # ImportError and reinstalled by hand.
+  "$PYTHON" -m pip install -q -r requirements-dev.txt
 
   echo "Running test suite..."
   "$PYTHON" -m pytest tests/ -q

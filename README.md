@@ -91,7 +91,7 @@ Or without one:
 pip install -r requirements-dev.txt
 ```
 
-Install `requirements-dev.txt` (which pulls in `requirements.txt` plus `pytest`) if this instance's `GIT_BRANCH` is `testing`, or if you plan to pass `deploy.sh --force-tests` — `deploy.sh` runs the test suite as a safety check before restarting in those cases, and fails with `No module named pytest` if only `requirements.txt` was installed. A `main` instance skips the suite by default (see "Branching model" below), so `requirements.txt` alone is enough there; install `requirements-dev.txt` anyway if you're not sure or just want it available.
+Either file works for this first-time setup — `deploy.sh` re-installs from `requirements.txt` (and `requirements-dev.txt` too, on a `testing` instance or with `--force-tests`) on every run, so dependencies added by a later pull are picked up automatically without a manual reinstall. Install `requirements-dev.txt` here if you want `pytest` available locally (e.g. to run the suite yourself before pushing) or this instance's `GIT_BRANCH` is `testing`; `requirements.txt` alone is enough for a `main` instance, which skips the suite by default (see "Branching model" below).
 
 ### 3. Create the database
 
