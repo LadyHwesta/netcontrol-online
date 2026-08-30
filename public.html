@@ -297,7 +297,7 @@
 </footer>
 
 <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
-<script src="/static/js/aprs-map.js?v=1"></script>
+<script src="/static/js/aprs-map.js?v=39"></script>
 <script>
   const API = '';
   let listInterval = null;
@@ -445,7 +445,7 @@
     const mapCard = document.getElementById('detail-aprs-map-card');
     if (s.aprs_map_enabled && s.aprs_positions && s.aprs_positions.length > 0) {
       mapCard.style.display = '';
-      initAprsMap('detail-aprs-map-container', s.aprs_positions);
+      initAprsMap('detail-aprs-map-container', s.aprs_positions, s.aprs_source);
       setTimeout(() => invalidateAprsMapSize('detail-aprs-map-container'), 0);
     } else {
       mapCard.style.display = 'none';

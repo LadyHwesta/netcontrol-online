@@ -7,13 +7,22 @@
 // ============================================================
 const _aprsMaps = {};         // containerId -> Leaflet map instance
 const _aprsMarkerLayers = {}; // containerId -> L.layerGroup
+const _aprsFiAttributionAdded = {}; // containerId -> bool
+
+// aprs.fi's terms require crediting them as the data source with a link
+// back, wherever their data is displayed -- https://aprs.fi/page/api. Added
+// to the same Leaflet attribution control as the OSM credit (bottom-right
+// corner), so it's a real visible link, not just text colored to blend in.
+const APRS_FI_ATTRIBUTION = 'Position data via <a href="https://aprs.fi" target="_blank" rel="noopener">aprs.fi</a>';
 
 // v1 shows only the latest known position per callsign -- no historical
 // track/trail rendering (documented follow-up in the issue #22 plan).
-function initAprsMap(containerId, positions) {
+// sourceType: the net's configured APRS source ("aprs_fi" | "relay" | null/
+// undefined for manual-only) -- only "aprs_fi" owes the credit above.
+function initAprsMap(containerId, positions, sourceType) {
   if (typeof L === 'undefined') return null;  // Leaflet failed to load
   if (_aprsMaps[containerId]) {
-    updateAprsMap(containerId, positions);
+    updateAprsMap(containerId, positions, sourceType);
     return _aprsMaps[containerId];
   }
 
@@ -25,13 +34,23 @@ function initAprsMap(containerId, positions) {
 
   _aprsMaps[containerId] = map;
   _aprsMarkerLayers[containerId] = L.layerGroup().addTo(map);
-  updateAprsMap(containerId, positions);
+  updateAprsMap(containerId, positions, sourceType);
   return map;
 }
 
-function updateAprsMap(containerId, positions) {
+function updateAprsMap(containerId, positions, sourceType) {
   const map = _aprsMaps[containerId];
   if (!map) return;
+
+  const wantsAttribution = sourceType === 'aprs_fi';
+  if (wantsAttribution && !_aprsFiAttributionAdded[containerId]) {
+    map.attributionControl.addAttribution(APRS_FI_ATTRIBUTION);
+    _aprsFiAttributionAdded[containerId] = true;
+  } else if (!wantsAttribution && _aprsFiAttributionAdded[containerId]) {
+    map.attributionControl.removeAttribution(APRS_FI_ATTRIBUTION);
+    _aprsFiAttributionAdded[containerId] = false;
+  }
+
   const layer = _aprsMarkerLayers[containerId];
   layer.clearLayers();
 
@@ -43,7 +62,12 @@ function updateAprsMap(containerId, positions) {
 
   const bounds = [];
   valid.forEach(p => {
-    const marker = L.marker([p.lat, p.lon]);
+    // Manual positions (issue follow-up) get a distinct color so they read
+    // as self-reported, not live APRS tracking -- L.marker has no built-in
+    // color option, so a manual pin uses a small circle marker instead.
+    const marker = p.source === 'manual'
+      ? L.circleMarker([p.lat, p.lon], { radius: 8, color: '#fff', weight: 2, fillColor: '#ff9900', fillOpacity: 1 })
+      : L.marker([p.lat, p.lon]);
     const lines = [`<strong>${esc(p.callsign)}</strong>`];
     const details = [];
     if (p.course != null) details.push(`${p.course}°`);
@@ -51,6 +75,7 @@ function updateAprsMap(containerId, positions) {
     if (p.altitude != null) details.push(`${p.altitude} ft`);
     if (details.length) lines.push(details.join(' · '));
     if (p.comment) lines.push(esc(p.comment));
+    if (p.source === 'manual') lines.push('<span style="color:#ff9900;font-size:11px">📍 Manually reported</span>');
     if (p.heard_at) lines.push(`<span style="color:#888;font-size:11px">${esc(p.heard_at)}</span>`);
     marker.bindPopup(lines.join('<br>'));
     marker.addTo(layer);

@@ -119,6 +119,37 @@ async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depend
     return org
 
 
+class OrgAprsKeyOut(BaseModel):
+    aprs_fi_api_key: Optional[str] = None
+
+
+class OrgAprsKeyUpdate(BaseModel):
+    aprs_fi_api_key: Optional[str] = None
+
+
+@router.get("/orgs/{org_id}/aprs-key", response_model=OrgAprsKeyOut)
+async def get_org_aprs_key(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    """Org admin only -- deliberately NOT part of OrganizationOut (returned
+    by GET /orgs, GET /orgs/mine, GET /public/organizations), since a real
+    secret has no business in those broadly-readable responses. One key per
+    org, shared by every net in it that uses aprs_fi as its APRS source
+    (issue follow-up) -- see routers/aprs.py's _aprs_positions_for_net."""
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    return OrgAprsKeyOut(aprs_fi_api_key=org.aprs_fi_api_key)
+
+
+@router.put("/orgs/{org_id}/aprs-key", response_model=OrgAprsKeyOut)
+async def update_org_aprs_key(org_id: int, data: OrgAprsKeyUpdate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    org.aprs_fi_api_key = (data.aprs_fi_api_key or "").strip() or None
+    await db.commit()
+    return OrgAprsKeyOut(aprs_fi_api_key=org.aprs_fi_api_key)
+
+
 class OrgJoinRequest(BaseModel):
     org_slug: Optional[str] = None
     org_name: Optional[str] = None

@@ -396,10 +396,14 @@ Net owners (ham nets only — GMRS has no APRS allocation) can show a live map o
 
 | Source | How it works | Use when |
 |--------|-------------|----------|
-| **aprs.fi** | Server polls the [aprs.fi](https://aprs.fi/page/api) API for whoever's currently checked in | You want zero extra infrastructure and don't mind a third-party API key |
+| **aprs.fi** | Server polls the [aprs.fi](https://aprs.fi/page/api) API for whoever's currently checked in | You want zero extra infrastructure. Needs a free API key — see below |
 | **Relay script** | `aprs_relay.py` speaks real APRS-IS and pushes positions to the server | Online (public APRS-IS network) or offline (local Direwolf/TNC/igate) — same script either way |
 
-A **filter callsign** (defaults to the net owner's callsign) excludes your own NCS station from the map. A separate **"Show map on public live page"** toggle controls whether positions also appear on the public, no-login live page — configuring APRS and exposing it publicly are deliberately two different decisions, since field-team positions can be sensitive. The authenticated live-session map is unaffected either way.
+A **filter callsign** (defaults to the net owner's callsign) excludes your own NCS station from the map. A separate **"Show map on public live page"** toggle controls whether positions also appear on the public, no-login live page — configuring APRS and exposing it publicly are deliberately two different decisions, since field-team positions can be sensitive. The authenticated live-session map shows regardless — it works even on a net with no APRS source configured at all, for manually-reported positions (below).
+
+**aprs.fi API key** is set once per organization, not per net — under **Admin → Operators → Your Organization**, shared by every net in your org using aprs.fi as its source. [aprs.fi's terms](https://aprs.fi/page/api) require crediting them as the data source with a link back whenever their data is shown; the map does this automatically (bottom-right corner, alongside the OpenStreetMap credit) whenever a net's source is aprs.fi — no separate setup needed.
+
+**Manually-reported positions** — an operator with no APRS capability who can read off their own GPS coordinates over the air can still show up on the map. Click the 📍 next to any checked-in callsign (in the live check-in list) to set or edit their position — works independently of APRS setup, and after the check-in itself, not just at check-in time. Shown on the map in a distinct color from real APRS-tracked stations.
 
 ### APRS relay script
 

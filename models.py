@@ -4,7 +4,7 @@ SQLAlchemy models for NetControl Online
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Date, Time, ForeignKey, Text, Boolean, UniqueConstraint, TypeDecorator
+    Column, Integer, String, DateTime, Date, Time, Float, ForeignKey, Text, Boolean, UniqueConstraint, TypeDecorator
 )
 from sqlalchemy.orm import relationship, declarative_base
 
@@ -92,6 +92,13 @@ class Organization(Base):
     # super-admin-set and stored in SystemSetting instead, since those apply
     # across every org rather than being a property of one.
     banner_message = Column(Text, nullable=True)
+    # aprs.fi API key (issue follow-up), shared by every net in this org that
+    # uses aprs_fi as its APRS source -- one key per org rather than
+    # re-entered per net. Org-admin-set; deliberately NOT exposed on
+    # OrganizationOut (unlike the fields above) since it's a real secret, not
+    # a public-facing setting -- see routers/orgs.py's dedicated
+    # GET/PUT /orgs/{id}/aprs-key for the org-admin-only read/write path.
+    aprs_fi_api_key = Column(String(100), nullable=True)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
     memberships = relationship("OrganizationMembership", back_populates="org", cascade="all, delete-orphan")
@@ -309,6 +316,13 @@ class Checkin(Base):
     # rows for the same position are that position's shift history, kept for free.
     tactical_position_id = Column(Integer, ForeignKey("tactical_positions.id", ondelete="SET NULL"), nullable=True)
     signed_off_at = Column(UTCDateTime, nullable=True)
+    # Manually-reported GPS position (issue follow-up) -- for an operator with
+    # no APRS capability but who can read off their own coordinates. Set
+    # after check-in via PATCH /checkins/{id}/position, not at check-in time
+    # itself (keeps the fast check-in form uncluttered); shown on the same
+    # station map as APRS-derived positions, tagged as "manual" there.
+    lat = Column(Float, nullable=True)
+    lon = Column(Float, nullable=True)
 
     session = relationship("NetSession", back_populates="checkins")
 
@@ -569,8 +583,9 @@ class AprsConfig(Base):
     net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False, unique=True)
     # aprs_fi | relay
     source_type = Column(String(20), nullable=False, default="relay")
-    # aprs.fi: free API key from https://aprs.fi/page/api
-    aprs_fi_api_key = Column(String(100), nullable=True)
+    # aprs.fi: the API key itself is org-level now (Organization.aprs_fi_api_key,
+    # issue follow-up -- multi-tenant instances shouldn't need the same key
+    # re-entered into every net in an org), not stored per-net any more.
     # Callsign to exclude from the map (usually NCS operator)
     filter_callsign = Column(String(12), nullable=True)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)

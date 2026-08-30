@@ -319,6 +319,49 @@ async def toggle_traffic_called(checkin_id: int, current_user: User = Depends(ge
     return checkin
 
 
+class CheckinPositionUpdate(BaseModel):
+    """Both null clears a previously-set position; a lat without a lon (or
+    vice versa) is rejected -- a position is a pair, not two independent
+    fields."""
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+    @field_validator("lat")
+    @classmethod
+    def valid_lat(cls, v):
+        if v is not None and not (-90 <= v <= 90):
+            raise ValueError("lat must be between -90 and 90")
+        return v
+
+    @field_validator("lon")
+    @classmethod
+    def valid_lon(cls, v):
+        if v is not None and not (-180 <= v <= 180):
+            raise ValueError("lon must be between -180 and 180")
+        return v
+
+
+@router.patch("/checkins/{checkin_id}/position", response_model=CheckinOut)
+async def set_checkin_position(checkin_id: int, data: CheckinPositionUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Manually-reported GPS position (issue follow-up) -- for an operator
+    with no APRS capability but who can read off their own coordinates over
+    the air. Deliberately separate from check-in creation itself (keeps the
+    fast check-in form uncluttered) and from the APRS integration (works
+    with zero APRS setup on the net at all); merged into the same station
+    map as APRS-derived positions by routers/aprs.py, tagged "manual" there."""
+    if (data.lat is None) != (data.lon is None):
+        raise HTTPException(400, "lat and lon must be set (or cleared) together")
+    checkin = (await db.execute(select(Checkin).filter(Checkin.id == checkin_id))).scalar_one_or_none()
+    if not checkin:
+        raise HTTPException(404, "Checkin not found")
+    await _get_session_for_user(checkin.session_id, current_user, db)
+    checkin.lat = data.lat
+    checkin.lon = data.lon
+    await db.commit()
+    await db.refresh(checkin)
+    return checkin
+
+
 @router.get("/nets/{net_id}/stations/{callsign}/remark", response_model=Optional[StationRemarkOut])
 async def get_station_remark(
     net_id: int,

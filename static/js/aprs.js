@@ -17,11 +17,9 @@ async function loadAprsConfig(netId) {
   if (sec) sec.style.display = '';  // always show when editing own/editable ham net
   if (currentAprsConfig) {
     document.getElementById('aprs-source').value = currentAprsConfig.source_type;
-    document.getElementById('aprs-fi-key').value = currentAprsConfig.aprs_fi_api_key || '';
     document.getElementById('aprs-filter').value = currentAprsConfig.filter_callsign || '';
   } else {
     document.getElementById('aprs-source').value = 'none';
-    document.getElementById('aprs-fi-key').value = '';
     document.getElementById('aprs-filter').value = currentUser ? currentUser.callsign : '';
   }
   onAprsSourceChange();
@@ -43,7 +41,6 @@ async function saveAprsConfigIfVisible(netId) {
   }
   const payload = {
     source_type: src,
-    aprs_fi_api_key: document.getElementById('aprs-fi-key').value.trim() || null,
     filter_callsign: document.getElementById('aprs-filter').value.trim().toUpperCase() || null,
   };
   currentAprsConfig = await apiFetch(`/nets/${netId}/aprs/config`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -61,15 +58,25 @@ function downloadAprsRelayScript() {
 let aprsMapPanelOpen = false;
 let aprsMapInterval = null;
 let lastAprsPositions = [];
+let currentAprsSourceType = null;   // "aprs_fi" | "relay" | null -- drives the aprs.fi attribution on the map
 
 async function initAprsForSession(netId) {
   // GMRS nets 400 on GET /aprs/config (no APRS allocation) -- caught here
   // the same way DMR's initDmrForSession relies on its own config fetch
-  // 400ing, so no separate net-type check is needed.
-  let cfg = null;
-  try { cfg = await apiFetch(`/nets/${netId}/aprs/config`); } catch { cfg = null; }
+  // 400ing, so no separate net-type check is needed. A ham net with no
+  // AprsConfig at all still gets the panel (issue follow-up) -- manually-
+  // reported positions work with zero APRS setup, so the fetch succeeding
+  // (even with a null body) is what matters here, not whether cfg exists.
+  let isHamNet = true;
+  currentAprsSourceType = null;
+  try {
+    const cfg = await apiFetch(`/nets/${netId}/aprs/config`);
+    currentAprsSourceType = cfg ? cfg.source_type : null;
+  } catch {
+    isHamNet = false;
+  }
   const panel = document.getElementById('aprs-map-panel');
-  if (cfg) {
+  if (isHamNet) {
     panel.style.display = '';
     startAprsMapPolling(netId);
   } else {
@@ -97,7 +104,7 @@ async function refreshAprsMap(netIdArg) {
     return;
   }
   if (aprsMapPanelOpen) {
-    initAprsMap('aprs-map-container', lastAprsPositions);
+    initAprsMap('aprs-map-container', lastAprsPositions, currentAprsSourceType);
     invalidateAprsMapSize('aprs-map-container');
   }
   const now = new Date().toLocaleTimeString();
@@ -115,7 +122,7 @@ function toggleAprsMapPanel() {
     // Lazily init the map only once the panel is actually visible --
     // Leaflet needs a non-zero-size, visible container to measure
     // correctly, which a display:none body doesn't provide.
-    initAprsMap('aprs-map-container', lastAprsPositions);
+    initAprsMap('aprs-map-container', lastAprsPositions, currentAprsSourceType);
     setTimeout(() => invalidateAprsMapSize('aprs-map-container'), 0);
   }
 }

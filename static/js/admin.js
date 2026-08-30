@@ -17,6 +17,12 @@ async function loadOrgEditForm() {
     document.getElementById('org-edit-website').value = org.website_url || '';
     document.getElementById('org-edit-banner').value = org.banner_message || '';
     document.getElementById('org-edit-name').dataset.orgId = org.id;
+    // Separate endpoint -- the aprs.fi key is a real secret, deliberately
+    // not part of OrganizationOut/GET /orgs above (see routers/orgs.py).
+    try {
+      const aprsKey = await apiFetch(`/orgs/${org.id}/aprs-key`);
+      document.getElementById('org-edit-aprs-key').value = aprsKey.aprs_fi_api_key || '';
+    } catch { /* not an org admin for this org, or none set -- leave blank */ }
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -27,10 +33,15 @@ async function saveOrgEdit() {
   if (!name) return toast('Organization name is required', 'error');
   const websiteUrl = document.getElementById('org-edit-website').value.trim();
   const bannerMessage = document.getElementById('org-edit-banner').value.trim();
+  const aprsKey = document.getElementById('org-edit-aprs-key').value.trim();
   try {
     await apiFetch(`/orgs/${orgId}`, {
       method: 'PATCH',
       body: JSON.stringify({ name, website_url: websiteUrl || null, banner_message: bannerMessage || null }),
+    });
+    await apiFetch(`/orgs/${orgId}/aprs-key`, {
+      method: 'PUT',
+      body: JSON.stringify({ aprs_fi_api_key: aprsKey || null }),
     });
     toast('Organization saved', 'success');
   } catch (e) { toast(e.message, 'error'); }

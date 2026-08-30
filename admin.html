@@ -85,6 +85,10 @@
             <label>Banner Message <span class="text-muted" style="font-size:11px">(shown at the top of every page to your org's members — leave blank for none)</span></label>
             <textarea class="form-control" id="org-edit-banner" rows="2" placeholder="e.g. Field Day setup starts 6am Saturday at the usual site"></textarea>
           </div>
+          <div class="form-group">
+            <label>aprs.fi API Key <span class="text-muted" style="font-size:11px">(shared by every net in your org using aprs.fi as its APRS source — free key from <a href="https://aprs.fi/page/api" target="_blank" style="color:var(--lc-orange)">aprs.fi/page/api</a>)</span></label>
+            <input class="form-control mono" id="org-edit-aprs-key" placeholder="Leave blank to disable aprs.fi lookups org-wide" />
+          </div>
           <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()">Save Organization</button>
         </div>
 
@@ -444,7 +448,7 @@
 <script src="/static/js/auth.js?v=29"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/branding.js?v=23"></script>
-<script src="/static/js/admin.js?v=35"></script>
+<script src="/static/js/admin.js?v=37"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {

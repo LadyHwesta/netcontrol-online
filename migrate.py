@@ -442,6 +442,34 @@ MIGRATIONS = [
      "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS banner_message TEXT"),
     # login_message/welcome_popup_message live in system_settings (key/value,
     # already an existing table) -- no schema change needed for those.
+
+    # ── Manually-reported GPS position on a checkin (issue follow-up) ──
+    ("checkins: lat/lon columns",
+     "ALTER TABLE checkins ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION"),
+    ("checkins: lon column",
+     "ALTER TABLE checkins ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION"),
+
+    # ── Org-level aprs.fi API key (issue follow-up) — one key per org rather
+    # than re-entered into every net's APRS config. The UPDATE below moves
+    # any already-configured per-net keys up to their org (picking one
+    # arbitrarily if multiple nets in the same org had different keys set —
+    # rare, and the org admin can just re-set it via Admin afterward); the
+    # old per-net aprs_configs.aprs_fi_api_key column is left in place,
+    # unused, rather than dropped -- no migration in this file drops a
+    # column, so not starting here either. ──
+    ("organizations: aprs_fi_api_key column",
+     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS aprs_fi_api_key VARCHAR(100)"),
+    ("organizations: copy up any existing per-net aprs.fi keys",
+     """UPDATE organizations o
+        SET aprs_fi_api_key = sub.key
+        FROM (
+            SELECT DISTINCT ON (n.org_id) n.org_id, ac.aprs_fi_api_key AS key
+            FROM aprs_configs ac
+            JOIN nets n ON n.id = ac.net_id
+            WHERE ac.aprs_fi_api_key IS NOT NULL
+            ORDER BY n.org_id, ac.id
+        ) sub
+        WHERE o.id = sub.org_id AND o.aprs_fi_api_key IS NULL"""),
 ]
 
 # ---------------------------------------------------------------------------

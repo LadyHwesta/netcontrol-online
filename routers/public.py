@@ -102,6 +102,7 @@ async def public_active_sessions(org: Optional[str] = None, db: AsyncSession = D
         if not net:
             continue
         count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == s.id))).scalar()
+        aprs_positions, aprs_source = await _public_aprs_positions(net, db)
         result.append({
             "session_id": s.id,
             "net_name": net.name,
@@ -109,7 +110,8 @@ async def public_active_sessions(org: Optional[str] = None, db: AsyncSession = D
             "started_at": s.started_at.isoformat(),
             "checkin_count": count,
             "aprs_map_enabled": net.aprs_map_enabled,
-            "aprs_positions": await _public_aprs_positions(net, db),
+            "aprs_positions": aprs_positions,
+            "aprs_source": aprs_source,   # "aprs_fi" | "relay" | None -- required aprs.fi credit on the map
             **await _duty_labels_for_session(net, s, db),
         })
     return result
@@ -133,6 +135,7 @@ async def public_session_detail(session_id: int, db: AsyncSession = Depends(get_
         "next_ncs_callsign": None, "next_ncs_name": None,
         "next_broadcaster_callsign": None, "next_broadcaster_name": None,
     }
+    aprs_positions, aprs_source = await _public_aprs_positions(net, db) if net else ([], None)
     return {
         "session_id": s.id,
         "net_name": net.name if net else "Unknown Net",
@@ -143,7 +146,8 @@ async def public_session_detail(session_id: int, db: AsyncSession = Depends(get_
             for c in checkins
         ],
         "aprs_map_enabled": net.aprs_map_enabled if net else False,
-        "aprs_positions": await _public_aprs_positions(net, db) if net else [],
+        "aprs_positions": aprs_positions,
+        "aprs_source": aprs_source,   # "aprs_fi" | "relay" | None -- required aprs.fi credit on the map
         **duty,
     }
 

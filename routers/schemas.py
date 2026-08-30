@@ -103,5 +103,9 @@ class CheckinOut(BaseModel):
     tactical_position_id: Optional[int] = None
     tactical_callsign: Optional[str] = None
     signed_off_at: Optional[datetime] = None
+    # Manually-reported GPS position (issue follow-up), set independently of
+    # check-in itself via PATCH /checkins/{id}/position -- both null if never set.
+    lat: Optional[float] = None
+    lon: Optional[float] = None
 
     model_config = {"from_attributes": True}

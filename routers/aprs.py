@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import AprsConfig, Checkin, Net, NetSession, User
+from models import AprsConfig, Checkin, Net, NetSession, Organization, User
 from routers.deps import get_current_user
 from routers.helpers import (
     STATIC_DIR, _assert_ham_net, _email_log, _get_editable_net, _get_net_for_user,
@@ -34,13 +34,13 @@ router = APIRouter()
 
 class AprsConfigCreate(BaseModel):
     source_type: str = "relay"              # aprs_fi | relay
-    aprs_fi_api_key: Optional[str] = None   # for aprs_fi
+    # aprs.fi's own API key is org-level now (Organization.aprs_fi_api_key,
+    # see routers/orgs.py's GET/PUT /orgs/{id}/aprs-key), not per-net.
     filter_callsign: Optional[str] = None
 
 
 class AprsConfigOut(BaseModel):
     source_type: str
-    aprs_fi_api_key: Optional[str] = None
     filter_callsign: Optional[str] = None
 
     model_config = {"from_attributes": True}
@@ -56,6 +56,10 @@ class AprsPositionEntry(BaseModel):
     speed: Optional[float] = None
     altitude: Optional[float] = None
     heard_at: Optional[str] = None
+    # aprs_fi | relay | manual -- stamped server-side (never trusted from a
+    # push payload), so the map/attribution can tell a manually-reported
+    # checkin position apart from real APRS data (issue follow-up).
+    source: Optional[str] = None
 
 
 class AprsPushPayload(BaseModel):
@@ -94,14 +98,16 @@ async def _aprs_cache_read(net_id: int, db: AsyncSession) -> Optional[dict]:
     return None
 
 
-def _aprs_fetch_aprsfi(cfg: AprsConfig, callsigns: list[str]) -> list[dict]:
-    """Fetch current positions from aprs.fi (https://aprs.fi/page/api) for the given callsigns."""
-    if not callsigns or not cfg.aprs_fi_api_key:
+def _aprs_fetch_aprsfi(api_key: Optional[str], callsigns: list[str]) -> list[dict]:
+    """Fetch current positions from aprs.fi (https://aprs.fi/page/api) for the
+    given callsigns. api_key is the caller's ORG's key (Organization.
+    aprs_fi_api_key), not a per-net one -- see AprsConfig's own comment."""
+    if not callsigns or not api_key:
         return []
     try:
         r = httpx.get(
             "https://api.aprs.fi/api/get",
-            params={"name": ",".join(callsigns), "what": "loc", "apikey": cfg.aprs_fi_api_key, "format": "json"},
+            params={"name": ",".join(callsigns), "what": "loc", "apikey": api_key, "format": "json"},
             timeout=10,
         )
         r.raise_for_status()
@@ -174,42 +180,101 @@ async def _aprs_active_session_callsigns(net_id: int, db: AsyncSession) -> list[
     return list(rows)
 
 
-async def _aprs_positions_for_net(net_id: int, cfg: AprsConfig, db: AsyncSession) -> list[dict]:
+async def _aprs_positions_for_net(net: Net, cfg: AprsConfig, db: AsyncSession) -> list[dict]:
     """Shared by the authenticated positions endpoint and the public live
     page (routers/public.py) — same cache-or-refresh logic either way, so
     the public page stays live without needing an authenticated viewer's
-    browser to keep the poll warm."""
+    browser to keep the poll warm. Takes the full net (not just its id) to
+    reach its org's aprs.fi key."""
     if cfg.source_type == "aprs_fi":
-        cached = await _aprs_cache_read(net_id, db)
+        cached = await _aprs_cache_read(net.id, db)
         if cached and (_time.time() - cached["pushed_at"]) <= _APRS_CACHE_TTL:
             entries = cached["entries"]
         else:
-            callsigns = await _aprs_active_session_callsigns(net_id, db)
-            entries = _aprs_fetch_aprsfi(cfg, callsigns)
-            await _aprs_cache_write(net_id, entries, db)
+            org = (await db.execute(select(Organization).filter(Organization.id == net.org_id))).scalar_one_or_none()
+            callsigns = await _aprs_active_session_callsigns(net.id, db)
+            entries = _aprs_fetch_aprsfi(org.aprs_fi_api_key if org else None, callsigns)
+            await _aprs_cache_write(net.id, entries, db)
     else:  # relay — nothing to fetch on demand, just serve whatever's been pushed
-        cached = await _aprs_cache_read(net_id, db)
+        cached = await _aprs_cache_read(net.id, db)
         entries = cached["entries"] if cached else []
 
     skip = (cfg.filter_callsign or "").upper()
     if skip:
         entries = [e for e in entries if (e.get("callsign") or "").upper() != skip]
+    for e in entries:
+        e["source"] = cfg.source_type
     return entries
 
 
-async def _public_aprs_positions(net: Net, db: AsyncSession) -> list[dict]:
+async def _manual_positions_for_net(net_id: int, db: AsyncSession, skip_callsign: str = "") -> list[dict]:
+    """Manually-reported positions (issue follow-up) from the net's current
+    live session's checkins -- works with zero APRS setup on the net at
+    all, for an operator with no APRS capability who can read off their own
+    coordinates. Same "current live session" scoping as
+    _aprs_active_session_callsigns above."""
+    session = (await db.execute(
+        select(NetSession)
+        .filter(NetSession.net_id == net_id, NetSession.ended_at.is_(None))
+        .order_by(NetSession.started_at.desc())
+        .limit(1)
+    )).scalars().first()
+    if not session:
+        return []
+    checkins = (await db.execute(
+        select(Checkin).filter(
+            Checkin.session_id == session.id,
+            Checkin.lat.isnot(None),
+            Checkin.lon.isnot(None),
+        )
+    )).scalars().all()
+    return [
+        {
+            "callsign": c.callsign,
+            "lat": c.lat,
+            "lon": c.lon,
+            "comment": c.comments or None,
+            "symbol": None,
+            "course": None,
+            "speed": None,
+            "altitude": None,
+            "heard_at": c.checked_in_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "manual",
+        }
+        for c in checkins
+        if c.callsign.upper() != skip_callsign
+    ]
+
+
+async def _all_positions_for_net(net: Net, db: AsyncSession) -> tuple[list[dict], Optional[str]]:
+    """Automated (APRS, if configured) positions merged with manually-reported
+    ones (always available, regardless of APRS setup) -- the one call both
+    the authenticated positions endpoint and the public live page make.
+    Returns (positions, source_type) -- source_type is the net's configured
+    APRS source ("aprs_fi" | "relay"), or None if it has no AprsConfig at
+    all (manual-only); used to decide whether the map owes aprs.fi credit."""
+    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net.id))).scalar_one_or_none()
+    automated = await _aprs_positions_for_net(net, cfg, db) if cfg else []
+    skip = (cfg.filter_callsign or "").upper() if cfg else ""
+    manual = await _manual_positions_for_net(net.id, db, skip_callsign=skip)
+    # A callsign already reporting via real APRS wins over its own manual
+    # entry -- avoids two overlapping pins for the same station.
+    automated_callsigns = {e["callsign"].upper() for e in automated}
+    manual = [e for e in manual if e["callsign"].upper() not in automated_callsigns]
+    return automated + manual, (cfg.source_type if cfg else None)
+
+
+async def _public_aprs_positions(net: Net, db: AsyncSession) -> tuple[list[dict], Optional[str]]:
     """Positions for the public live page (used by routers/public.py's
     public_active_sessions / public_session_detail) — only computed at all
-    if the net has opted in via aprs_map_enabled. Configuring APRS and
-    exposing it publicly are two separate decisions: field team positions
-    can be sensitive, so a net with APRS configured but not opted in never
-    even has its positions fetched for this path."""
+    if the net has opted in via aprs_map_enabled. Configuring a station map
+    and exposing it publicly are two separate decisions: field team
+    positions can be sensitive, so a net that hasn't opted in never even has
+    its positions fetched for this path — manual positions included, same
+    as the automated ones."""
     if not net or not net.aprs_map_enabled:
-        return []
-    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net.id))).scalar_one_or_none()
-    if not cfg:
-        return []
-    return await _aprs_positions_for_net(net.id, cfg, db)
+        return [], None
+    return await _all_positions_for_net(net, db)
 
 
 @router.get("/nets/{net_id}/aprs/config", response_model=Optional[AprsConfigOut])
@@ -227,13 +292,11 @@ async def save_aprs_config(net_id: int, data: AprsConfigCreate, current_user: Us
     cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
     if cfg:
         cfg.source_type = data.source_type
-        cfg.aprs_fi_api_key = data.aprs_fi_api_key or None
         cfg.filter_callsign = (data.filter_callsign or "").upper().strip() or None
     else:
         cfg = AprsConfig(
             net_id=net_id,
             source_type=data.source_type,
-            aprs_fi_api_key=data.aprs_fi_api_key or None,
             filter_callsign=(data.filter_callsign or "").upper().strip() or None,
         )
         db.add(cfg)
@@ -256,14 +319,15 @@ async def delete_aprs_config(net_id: int, current_user: User = Depends(get_curre
 async def aprs_positions(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Current station positions for the map panel — fetches fresh from
     aprs.fi if that's the configured source and the cache is stale, or just
-    reads the relay-pushed cache otherwise. One call covers both source
-    types, unlike DMR's fallback chain."""
+    reads the relay-pushed cache otherwise, merged with any manually-reported
+    checkin positions. No longer 404s when the net has no AprsConfig at all
+    (issue follow-up) -- a ham net with zero APRS setup can still have
+    manually-reported positions to show, so this always succeeds for any
+    ham net the caller can access, empty list if there's truly nothing."""
     net = await _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
-    cfg = (await db.execute(select(AprsConfig).filter(AprsConfig.net_id == net_id))).scalar_one_or_none()
-    if not cfg:
-        raise HTTPException(404, "APRS not configured for this net")
-    return await _aprs_positions_for_net(net_id, cfg, db)
+    positions, _source_type = await _all_positions_for_net(net, db)
+    return positions
 
 
 @router.post("/nets/{net_id}/aprs/push", status_code=204)

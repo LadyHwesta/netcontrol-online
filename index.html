@@ -444,10 +444,9 @@
               </select>
             </div>
             <div id="aprs-fi-fields" style="display:none">
-              <div class="form-group">
-                <label style="font-size:12px">aprs.fi API Key</label>
-                <input class="form-control mono" id="aprs-fi-key" placeholder="Free key from aprs.fi/page/api" style="font-size:13px" />
-                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Positions are looked up for whoever is currently checked in to this net's active session.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
+                Positions are looked up for whoever is currently checked in to this net's active session, using your organization's aprs.fi API key
+                (set once for the whole org under <strong>Admin → Operators → Your Organization</strong> — no per-net key needed).
               </div>
             </div>
             <div id="aprs-relay-fields" style="display:none">
@@ -1051,6 +1050,30 @@
             </div>
           </div><!-- /session-right-col -->
 
+          <!-- Manual GPS position modal (issue follow-up) -->
+          <div id="checkin-position-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
+            <div class="card" style="width:320px;margin:0">
+              <div class="card-header"><h2>📍 Station Position</h2></div>
+              <p class="text-muted" style="font-size:12px;margin-bottom:14px">Manually-reported GPS position for <strong id="checkin-position-callsign"></strong> — shown on the station map alongside APRS.</p>
+              <input type="hidden" id="checkin-position-id" />
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Latitude</label>
+                  <input class="form-control mono" id="checkin-position-lat" type="number" step="any" placeholder="47.6062" />
+                </div>
+                <div class="form-group">
+                  <label>Longitude</label>
+                  <input class="form-control mono" id="checkin-position-lon" type="number" step="any" placeholder="-122.3321" />
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="saveCheckinPosition()">Save</button>
+                <button class="btn btn-ghost" onclick="clearCheckinPosition()">Clear</button>
+                <button class="btn btn-ghost" onclick="closeCheckinPositionModal()">Cancel</button>
+              </div>
+            </div>
+          </div>
+
           </div><!-- /session-columns -->
           </div>
         </div>
@@ -1230,15 +1253,15 @@
   <script src="/static/js/report.js?v=20"></script>
   <script src="/static/js/nets.js?v=28"></script>
   <script src="/static/js/sessions.js?v=28"></script>
-  <script src="/static/js/checkins.js?v=33"></script>
+  <script src="/static/js/checkins.js?v=36"></script>
   <script src="/static/js/history.js?v=20"></script>
-  <script src="/static/js/admin.js?v=35"></script>
+  <script src="/static/js/admin.js?v=37"></script>
   <script src="/static/js/schedules.js?v=21"></script>
   <script src="/static/js/tokens.js?v=22"></script>
   <script src="/static/js/dmr.js?v=20"></script>
-  <script src="/static/js/aprs.js?v=1"></script>
+  <script src="/static/js/aprs.js?v=38"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
-  <script src="/static/js/aprs-map.js?v=1"></script>
+  <script src="/static/js/aprs-map.js?v=39"></script>
   <script src="/static/js/app.js?v=25"></script>
   <script src="/static/js/pwa.js?v=1"></script>
 </body>

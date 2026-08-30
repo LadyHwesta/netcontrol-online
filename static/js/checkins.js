@@ -532,6 +532,15 @@ function renderCheckins(checkins) {
       `Checked in: ${fmt(c.checked_in_at)}`,
     ].filter(Boolean).join(' · ');
 
+    // Manual GPS position badge (issue follow-up) -- always clickable, dim
+    // when unset, full opacity + colored when a position has been reported.
+    // Shown on both row layouts below since ARES/ACES field team positions
+    // are, if anything, the more likely case to need this.
+    const hasPos = c.lat != null && c.lon != null;
+    const posBadge = ` <span class="checkin-pos-badge" title="${hasPos ? 'Position reported — click to edit' : 'Set GPS position'}"
+      style="cursor:pointer;opacity:${hasPos ? 1 : 0.3}"
+      onclick="openCheckinPositionModal(${c.id}, ${JSON.stringify(c.callsign)}, ${hasPos ? c.lat : 'null'}, ${hasPos ? c.lon : 'null'})">📍</span>`;
+
     // ARES/ACES activation session (issue #21): Tactical / Callsign / First
     // Name, no traffic toggle. A station with no tactical assignment shows
     // its evac zone instead, if it has one. Every other session (including
@@ -544,7 +553,7 @@ function renderCheckins(checkins) {
       const welcomeBadge = c.is_first_checkin ? ' <span title="First check-in on this net" style="font-size:11px">👋</span>' : '';
       return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
         <span class="tactical-callsign">${tacticalCell}</span>
-        <span class="callsign">${esc(c.callsign)}${welcomeBadge}</span>
+        <span class="callsign">${esc(c.callsign)}${welcomeBadge}${posBadge}</span>
         <span class="checkin-name">${esc(firstName || '—')}</span>
         <button class="btn btn-danger btn-sm" onclick="removeCheckin(${c.id})">✕</button>
       </div>`;
@@ -552,7 +561,7 @@ function renderCheckins(checkins) {
 
     const welcomeBadge = c.is_first_checkin ? ' <span title="First check-in on this net" style="font-size:11px">👋</span>' : '';
     return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
-      <span class="callsign">${esc(c.callsign)}${welcomeBadge}</span>
+      <span class="callsign">${esc(c.callsign)}${welcomeBadge}${posBadge}</span>
       <span class="checkin-name">${esc(c.name || '—')}</span>
       <button class="btn btn-sm ${c.has_traffic ? 'btn-danger' : 'btn-ghost'}"
         style="font-size:14px;padding:2px 8px" title="${c.has_traffic ? 'Traffic — click to clear' : 'Click to flag traffic'}"
@@ -560,6 +569,49 @@ function renderCheckins(checkins) {
       <button class="btn btn-danger btn-sm" onclick="removeCheckin(${c.id})">✕</button>
     </div>`;
   }).join('');
+}
+
+// ============================================================
+// MANUAL GPS POSITION (issue follow-up) — for an operator with no APRS
+// capability who can read off their own coordinates over the air. Set
+// independently of check-in itself (after the fact, not on the fast
+// check-in form), shown on the same station map as APRS-derived positions.
+// ============================================================
+function openCheckinPositionModal(id, callsign, lat, lon) {
+  document.getElementById('checkin-position-id').value = id;
+  document.getElementById('checkin-position-callsign').textContent = callsign;
+  document.getElementById('checkin-position-lat').value = lat != null ? lat : '';
+  document.getElementById('checkin-position-lon').value = lon != null ? lon : '';
+  document.getElementById('checkin-position-modal').style.display = 'flex';
+}
+
+function closeCheckinPositionModal() {
+  document.getElementById('checkin-position-modal').style.display = 'none';
+}
+
+async function saveCheckinPosition() {
+  const id = document.getElementById('checkin-position-id').value;
+  const lat = parseFloat(document.getElementById('checkin-position-lat').value);
+  const lon = parseFloat(document.getElementById('checkin-position-lon').value);
+  if (isNaN(lat) || isNaN(lon)) return toast('Enter both latitude and longitude', 'error');
+  try {
+    await apiFetch(`/checkins/${id}/position`, { method: 'PATCH', body: JSON.stringify({ lat, lon }) });
+    toast('Position saved');
+    closeCheckinPositionModal();
+    await loadCheckins();
+    refreshAprsMap();   // picks up the new/cleared pin on the map if it's open
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function clearCheckinPosition() {
+  const id = document.getElementById('checkin-position-id').value;
+  try {
+    await apiFetch(`/checkins/${id}/position`, { method: 'PATCH', body: JSON.stringify({ lat: null, lon: null }) });
+    toast('Position cleared');
+    closeCheckinPositionModal();
+    await loadCheckins();
+    refreshAprsMap();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function removeCheckin(id) {

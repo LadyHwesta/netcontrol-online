@@ -42,6 +42,15 @@ def make_gmrs_net(client, headers):
     return resp.json()
 
 
+def _set_org_aprs_key(client, headers, key):
+    """aprs.fi's API key is org-level (issue follow-up), not per-net --
+    every aprs_fi-source test needs one set via this endpoint before
+    aprs.fi is actually queried."""
+    org_id = client.get("/orgs/mine", headers=headers).json()[0]["id"]
+    resp = client.put(f"/orgs/{org_id}/aprs-key", json={"aprs_fi_api_key": key}, headers=headers)
+    assert resp.status_code == 200, resp.text
+
+
 class TestAprsConfigCrud:
     def test_get_config_null_when_unconfigured(self, client, admin_headers, net):
         resp = client.get(f"/nets/{net['id']}/aprs/config", headers=admin_headers)
@@ -63,11 +72,17 @@ class TestAprsConfigCrud:
     def test_put_upserts_existing_config(self, client, admin_headers, net):
         client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "relay"}, headers=admin_headers)
         resp = client.put(f"/nets/{net['id']}/aprs/config", json={
-            "source_type": "aprs_fi", "aprs_fi_api_key": "abc123",
+            "source_type": "aprs_fi", "filter_callsign": "w1ncs",
         }, headers=admin_headers)
         assert resp.status_code == 200
         assert resp.json()["source_type"] == "aprs_fi"
-        assert resp.json()["aprs_fi_api_key"] == "abc123"
+        assert resp.json()["filter_callsign"] == "W1NCS"
+
+    def test_config_response_has_no_api_key_field(self, client, admin_headers, net):
+        """The key moved to the org level (issue follow-up) -- AprsConfigOut
+        shouldn't carry it (or anything resembling it) any more."""
+        resp = client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "aprs_fi"}, headers=admin_headers)
+        assert "aprs_fi_api_key" not in resp.json()
 
     def test_delete_removes_config(self, client, admin_headers, net):
         client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "relay"}, headers=admin_headers)
@@ -87,6 +102,50 @@ class TestAprsConfigCrud:
         assert resp.status_code == 204, resp.text
         resp = client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "relay"}, headers=user_headers)
         assert resp.status_code == 200
+
+
+class TestOrgAprsKey:
+    """aprs.fi's API key is org-level (issue follow-up), not per-net --
+    one key shared by every net in the org that uses aprs_fi as its
+    source. Deliberately NOT part of OrganizationOut (GET /orgs, GET
+    /orgs/mine, GET /public/organizations) since it's a real secret."""
+
+    def test_defaults_to_null(self, client, admin_headers):
+        org_id = client.get("/orgs/mine", headers=admin_headers).json()[0]["id"]
+        resp = client.get(f"/orgs/{org_id}/aprs-key", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["aprs_fi_api_key"] is None
+
+    def test_org_admin_can_set_and_read_it_back(self, client, admin_headers):
+        org_id = client.get("/orgs/mine", headers=admin_headers).json()[0]["id"]
+        put_resp = client.put(f"/orgs/{org_id}/aprs-key", json={"aprs_fi_api_key": "my-secret-key"}, headers=admin_headers)
+        assert put_resp.status_code == 200
+        assert put_resp.json()["aprs_fi_api_key"] == "my-secret-key"
+
+        get_resp = client.get(f"/orgs/{org_id}/aprs-key", headers=admin_headers)
+        assert get_resp.json()["aprs_fi_api_key"] == "my-secret-key"
+
+    def test_blank_clears_it(self, client, admin_headers):
+        org_id = client.get("/orgs/mine", headers=admin_headers).json()[0]["id"]
+        client.put(f"/orgs/{org_id}/aprs-key", json={"aprs_fi_api_key": "set-first"}, headers=admin_headers)
+        resp = client.put(f"/orgs/{org_id}/aprs-key", json={"aprs_fi_api_key": "  "}, headers=admin_headers)
+        assert resp.json()["aprs_fi_api_key"] is None
+
+    def test_non_admin_cannot_read_or_write(self, client, admin_headers, user_headers):
+        org_id = client.get("/orgs/mine", headers=admin_headers).json()[0]["id"]
+        assert client.get(f"/orgs/{org_id}/aprs-key", headers=user_headers).status_code == 403
+        assert client.put(f"/orgs/{org_id}/aprs-key", json={"aprs_fi_api_key": "sneaky"}, headers=user_headers).status_code == 403
+
+    def test_key_not_exposed_on_general_org_endpoints(self, client, admin_headers):
+        org_id = client.get("/orgs/mine", headers=admin_headers).json()[0]["id"]
+        client.put(f"/orgs/{org_id}/aprs-key", json={"aprs_fi_api_key": "should-not-leak"}, headers=admin_headers)
+        for body in (
+            client.get("/orgs", headers=admin_headers).json(),
+            client.get("/orgs/mine", headers=admin_headers).json(),
+            client.get("/public/organizations").json(),
+        ):
+            assert "should-not-leak" not in str(body)
+            assert "aprs_fi_api_key" not in str(body)
 
 
 class TestAprsGmrsBlocked:
@@ -137,6 +196,7 @@ class TestAprsPush:
         assert len(positions) == 1
         assert positions[0]["callsign"] == "W1AW"
         assert positions[0]["comment"] == "Field team"
+        assert positions[0]["source"] == "relay"
 
     def test_filter_callsign_excluded_on_push(self, client, admin_headers, net):
         client.put(f"/nets/{net['id']}/aprs/config", json={
@@ -151,9 +211,13 @@ class TestAprsPush:
         assert "W1NCS" not in callsigns
         assert "K1ABC" in callsigns
 
-    def test_positions_without_config_404s(self, client, admin_headers, net):
+    def test_positions_without_config_returns_empty_not_404(self, client, admin_headers, net):
+        """issue follow-up: a ham net with zero APRS setup can still have
+        manually-reported checkin positions to show, so this always
+        succeeds now instead of 404ing when there's no AprsConfig row."""
         resp = client.get(f"/nets/{net['id']}/aprs/positions", headers=admin_headers)
-        assert resp.status_code == 404
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == []
 
 
 class TestAprsCache:
@@ -192,9 +256,8 @@ class TestAprsFiFetch:
         first) -- _aprs_active_session_callsigns() used to be
         scalar_one_or_none(), which would raise MultipleResultsFound
         (-> 500) here instead of just picking the most recent."""
-        client.put(f"/nets/{net['id']}/aprs/config", json={
-            "source_type": "aprs_fi", "aprs_fi_api_key": "testkey",
-        }, headers=admin_headers)
+        client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "aprs_fi"}, headers=admin_headers)
+        _set_org_aprs_key(client, admin_headers, "testkey")
         client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)
         client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)  # a second concurrent session
 
@@ -210,9 +273,8 @@ class TestAprsFiFetch:
         assert resp.status_code == 200, resp.text
 
     def test_positions_calls_aprsfi_and_normalizes(self, client, admin_headers, net, monkeypatch):
-        client.put(f"/nets/{net['id']}/aprs/config", json={
-            "source_type": "aprs_fi", "aprs_fi_api_key": "testkey",
-        }, headers=admin_headers)
+        client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "aprs_fi"}, headers=admin_headers)
+        _set_org_aprs_key(client, admin_headers, "testkey")
         # Give the net an active session with a check-in so there's a
         # watch-list of callsigns for the aprs_fi branch to query.
         client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)
@@ -245,11 +307,11 @@ class TestAprsFiFetch:
         assert entry["speed"] == 36.0
         assert entry["altitude"] is None  # tolerates the "None" string aprs.fi sends
         assert entry["heard_at"] is not None
+        assert entry["source"] == "aprs_fi"
 
     def test_aprsfi_result_error_returns_empty(self, client, admin_headers, net, monkeypatch):
-        client.put(f"/nets/{net['id']}/aprs/config", json={
-            "source_type": "aprs_fi", "aprs_fi_api_key": "testkey",
-        }, headers=admin_headers)
+        client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "aprs_fi"}, headers=admin_headers)
+        _set_org_aprs_key(client, admin_headers, "testkey")
         client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)
         sessions = client.get(f"/nets/{net['id']}/sessions", headers=admin_headers).json()
         session_id = sessions[0]["id"] if isinstance(sessions, list) else sessions["id"]
@@ -267,9 +329,8 @@ class TestAprsFiFetch:
         assert positions == []
 
     def test_aprsfi_connect_error_502(self, client, admin_headers, net, monkeypatch):
-        client.put(f"/nets/{net['id']}/aprs/config", json={
-            "source_type": "aprs_fi", "aprs_fi_api_key": "testkey",
-        }, headers=admin_headers)
+        client.put(f"/nets/{net['id']}/aprs/config", json={"source_type": "aprs_fi"}, headers=admin_headers)
+        _set_org_aprs_key(client, admin_headers, "testkey")
         client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers)
         sessions = client.get(f"/nets/{net['id']}/sessions", headers=admin_headers).json()
         session_id = sessions[0]["id"] if isinstance(sessions, list) else sessions["id"]
@@ -327,6 +388,7 @@ class TestAprsPublicExposure:
         assert row["aprs_map_enabled"] is True
         assert len(row["aprs_positions"]) == 1
         assert row["aprs_positions"][0]["callsign"] == "W1AW"
+        assert row["aprs_source"] == "relay"   # required for the map's aprs.fi-credit decision (only "aprs_fi" owes it)
 
     def test_public_session_detail_respects_toggle(self, client, admin_headers, net):
         client.put(f"/nets/{net['id']}", json={
@@ -343,6 +405,7 @@ class TestAprsPublicExposure:
         body = resp.json()
         assert body["aprs_map_enabled"] is True
         assert len(body["aprs_positions"]) == 1
+        assert body["aprs_source"] == "relay"
 
     def test_gmrs_net_aprs_map_enabled_forced_false(self, client, admin_headers):
         resp = client.post("/nets", json={
