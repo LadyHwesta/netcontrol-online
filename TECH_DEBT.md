@@ -27,6 +27,13 @@ Known issues, shortcuts, and areas for future improvement. Not bugs — the app 
 
 ## Low Priority
 
+### In-memory cache and rate limiter won't survive multiple workers
+The DMR/APRS relay-push cache (`_dmr_push_cache`/`_aprs_push_cache`, in `routers/digital_voice.py`/`routers/aprs.py`) and `slowapi`'s rate limiter (`routers/deps.py`) both hold their state in an in-memory Python dict, scoped to a single process. `deploy.sh`/the systemd unit run exactly one `uvicorn` process today (no `--workers N`), so this is currently harmless — there's no second worker for it to be out of sync with.
+
+The moment this ever runs with multiple workers or multiple instances behind a load balancer, both break in different ways: the relay caches become per-worker (a push landing on worker 1 isn't visible to a request served by worker 2 until it falls back to the DB-backed `SystemSetting` copy — stale but not wrong), while the rate limiter becomes per-worker too, which quietly multiplies every configured limit by worker count (e.g. `5/minute` on `/auth/register` becomes ~15–20/minute across 3-4 invisible counters) — that one's a real correctness gap, not just a performance nit.
+
+`slowapi` has a built-in Redis storage backend for exactly this case, so Redis (not something like LSCache, which is a LiteSpeed-web-server page cache and doesn't fit a FastAPI backend unless deployed behind LiteSpeed specifically) would be the natural fix — but it's a real operational dependency (another service to run/monitor/secure) not worth taking on for a single-process, club-scale deployment. Revisit only if/when `--workers N` or multiple instances actually get adopted.
+
 ~~No email verification on registration~~ — resolved; see Resolved section.
 
 ~~FCC callsign lookup depends on an external service~~ — resolved; see Resolved section.
