@@ -428,6 +428,10 @@ MIGRATIONS = [
          filter_callsign VARCHAR(12),
          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
          CONSTRAINT uq_aprs_config_net UNIQUE (net_id))"""),
+
+    # ── Welcome first-time check-ins ──
+    ("checkins: is_first_checkin flag",
+     "ALTER TABLE checkins ADD COLUMN IF NOT EXISTS is_first_checkin BOOLEAN NOT NULL DEFAULT FALSE"),
 ]
 
 # ---------------------------------------------------------------------------

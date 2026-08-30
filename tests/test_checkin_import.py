@@ -34,6 +34,10 @@ class TestImportCheckinsCsv:
         assert by_call["W1AW"]["signal_report"] == "59"
         assert by_call["W1AW"]["comments"] == "First check-in"
         assert by_call["KJ7ABC"]["name"] == "Jane Doe"
+        # Shared _create_checkin path -> welcome-first-timer flag applies to
+        # imported rows too, same as one-at-a-time check-ins.
+        assert by_call["W1AW"]["is_first_checkin"] is True
+        assert by_call["KJ7ABC"]["is_first_checkin"] is True
 
     def test_header_aliases_are_case_and_punctuation_insensitive(self, client, admin_headers, session):
         csv_body = "callsign,SIGNAL_REPORT,comment\nW1AW,59,hi\n"

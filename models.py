@@ -287,6 +287,11 @@ class Checkin(Base):
     comments = Column(Text, nullable=True)
     has_traffic = Column(Boolean, default=False, nullable=False)
     traffic_called = Column(Boolean, default=False, nullable=False)  # operator has passed this station's traffic
+    # True if this callsign had never checked into this net (any session) before
+    # this row — computed once at creation time in _create_checkin(), not
+    # recomputed later, so it stays historically accurate even if earlier
+    # check-ins are later deleted. Lets net control welcome first-timers.
+    is_first_checkin = Column(Boolean, default=False, nullable=False)
     evac_zone = Column(String(100), nullable=True)   # ARES/ACES evacuation zone
     dmr_talkgroup = Column(String(20), nullable=True)  # DMR talk group, e.g. "3100"
     dmr_region = Column(String(100), nullable=True)    # Region/state/area for DMR nets

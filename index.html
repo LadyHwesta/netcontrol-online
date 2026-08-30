@@ -696,6 +696,11 @@
                 <span>📢 TRAFFIC: </span><span id="traffic-callsigns" style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;vertical-align:middle"></span>
               </div>
 
+              <!-- Welcome banner (shown when a checked-in station has never checked into this net before) -->
+              <div id="welcome-banner" style="display:none;background:var(--lc-green);color:#000;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:13px;font-weight:700">
+                <span>👋 FIRST-TIME CHECK-IN: </span><span id="welcome-callsigns" style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;vertical-align:middle"></span>
+              </div>
+
               <!-- Net script panel (shown when the net has a script attached) -->
               <div id="net-script-panel" style="display:none;margin-bottom:6px;border:1px solid var(--lc-blue);border-radius:8px;overflow:hidden">
                 <button onclick="toggleNetScriptPanel()" style="width:100%;background:rgba(0,153,255,0.12);border:none;color:var(--lc-blue);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
@@ -1195,7 +1200,7 @@
   <script src="/static/js/report.js?v=20"></script>
   <script src="/static/js/nets.js?v=28"></script>
   <script src="/static/js/sessions.js?v=28"></script>
-  <script src="/static/js/checkins.js?v=31"></script>
+  <script src="/static/js/checkins.js?v=32"></script>
   <script src="/static/js/history.js?v=20"></script>
   <script src="/static/js/admin.js?v=30"></script>
   <script src="/static/js/schedules.js?v=21"></script>

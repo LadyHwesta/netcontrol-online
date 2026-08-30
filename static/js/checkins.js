@@ -440,6 +440,20 @@ function updateTrafficBanner(checkins) {
   }).join('');
 }
 
+function updateWelcomeBanner(checkins) {
+  const firstTimers = checkins.filter(c => c.is_first_checkin);
+  const banner = document.getElementById('welcome-banner');
+  if (firstTimers.length === 0) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = '';
+  document.getElementById('welcome-callsigns').innerHTML = firstTimers.map(c => {
+    const label = c.callsign + (c.name ? ` (${c.name})` : '');
+    return `<span style="background:rgba(0,0,0,0.18);border-radius:5px;padding:2px 8px;font-weight:700;white-space:nowrap">${esc(label)}</span>`;
+  }).join('');
+}
+
 // Last 5 check-in ids added/synced, newest last — each highlighted for 20s
 // (issue #18). A station drops out of the highlight the moment either the
 // 20s window elapses or a 6th newer check-in bumps it off the list.
@@ -479,6 +493,7 @@ function renderCheckins(checkins) {
   count.textContent = `${checkins.length} check-in${checkins.length !== 1 ? 's' : ''}`;
 
   updateTrafficBanner(checkins);
+  updateWelcomeBanner(checkins);
   renderCheckinsHeader();
 
   if (checkins.length === 0) {
@@ -509,16 +524,18 @@ function renderCheckins(checkins) {
       const tacticalCell = c.tactical_callsign
         ? esc(c.tactical_callsign)
         : (c.evac_zone ? `📍 ${esc(c.evac_zone)}` : '—');
+      const welcomeBadge = c.is_first_checkin ? ' <span title="First check-in on this net" style="font-size:11px">👋</span>' : '';
       return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
         <span class="tactical-callsign">${tacticalCell}</span>
-        <span class="callsign">${esc(c.callsign)}</span>
+        <span class="callsign">${esc(c.callsign)}${welcomeBadge}</span>
         <span class="checkin-name">${esc(firstName || '—')}</span>
         <button class="btn btn-danger btn-sm" onclick="removeCheckin(${c.id})">✕</button>
       </div>`;
     }
 
+    const welcomeBadge = c.is_first_checkin ? ' <span title="First check-in on this net" style="font-size:11px">👋</span>' : '';
     return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
-      <span class="callsign">${esc(c.callsign)}</span>
+      <span class="callsign">${esc(c.callsign)}${welcomeBadge}</span>
       <span class="checkin-name">${esc(c.name || '—')}</span>
       <button class="btn btn-sm ${c.has_traffic ? 'btn-danger' : 'btn-ghost'}"
         style="font-size:14px;padding:2px 8px" title="${c.has_traffic ? 'Traffic — click to clear' : 'Click to flag traffic'}"

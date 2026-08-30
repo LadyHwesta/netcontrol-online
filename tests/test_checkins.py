@@ -8,6 +8,15 @@ Tests for check-in endpoints:
 """
 
 
+def make_gmrs_net(client, headers):
+    resp = client.post("/nets", json={
+        "name": "Family GMRS Net", "frequency": "462.550 MHz",
+        "net_type": "gmrs", "is_ares": False,
+    }, headers=headers)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
 class TestAddCheckin:
     def test_add_basic_checkin(self, client, admin_headers, session):
         resp = client.post(f"/sessions/{session['id']}/checkins", json={
@@ -192,3 +201,68 @@ class TestTrafficCalledToggle:
         assert resp.status_code == 200
         checkin = next(c for c in resp.json() if c["id"] == checkin_id)
         assert checkin["traffic_called"] is True
+
+
+class TestFirstCheckin:
+    """Welcome first-time operators: a station's very first check-in to a
+    given net (across all its sessions) is flagged is_first_checkin."""
+
+    def test_first_ever_checkin_flagged(self, client, admin_headers, session):
+        resp = client.post(f"/sessions/{session['id']}/checkins", json={
+            "callsign": "W7NEW", "has_traffic": False,
+        }, headers=admin_headers)
+        assert resp.status_code == 201
+        assert resp.json()["is_first_checkin"] is True
+
+    def test_second_checkin_same_session_not_flagged(self, client, admin_headers, net):
+        """GMRS allows the same callsign multiple times in one session --
+        only the first occurrence should be flagged."""
+        gnet = make_gmrs_net(client, admin_headers)
+        s = client.post(f"/nets/{gnet['id']}/sessions", json={}, headers=admin_headers).json()
+
+        r1 = client.post(f"/sessions/{s['id']}/checkins", json={
+            "callsign": "WQXH1234", "name": "Dad", "has_traffic": False,
+        }, headers=admin_headers)
+        r2 = client.post(f"/sessions/{s['id']}/checkins", json={
+            "callsign": "WQXH1234", "name": "Mom", "has_traffic": False,
+        }, headers=admin_headers)
+        assert r1.json()["is_first_checkin"] is True
+        assert r2.json()["is_first_checkin"] is False
+
+    def test_return_visitor_in_later_session_not_flagged(self, client, admin_headers, net):
+        s1 = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        s2 = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+
+        r1 = client.post(f"/sessions/{s1['id']}/checkins", json={
+            "callsign": "W7RET", "has_traffic": False,
+        }, headers=admin_headers)
+        r2 = client.post(f"/sessions/{s2['id']}/checkins", json={
+            "callsign": "W7RET", "has_traffic": False,
+        }, headers=admin_headers)
+        assert r1.json()["is_first_checkin"] is True
+        assert r2.json()["is_first_checkin"] is False
+
+    def test_same_callsign_new_to_a_different_net(self, client, admin_headers, net):
+        """History is scoped per-net -- a station's history on one net doesn't
+        make them a "return visitor" on an unrelated net."""
+        other_net = client.post("/nets", json={"name": "Other Net"}, headers=admin_headers).json()
+        s1 = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        s2 = client.post(f"/nets/{other_net['id']}/sessions", json={}, headers=admin_headers).json()
+
+        client.post(f"/sessions/{s1['id']}/checkins", json={
+            "callsign": "W7TWO", "has_traffic": False,
+        }, headers=admin_headers)
+        resp = client.post(f"/sessions/{s2['id']}/checkins", json={
+            "callsign": "W7TWO", "has_traffic": False,
+        }, headers=admin_headers)
+        assert resp.json()["is_first_checkin"] is True
+
+    def test_flag_persists_through_list_checkins(self, client, admin_headers, session):
+        add = client.post(f"/sessions/{session['id']}/checkins", json={
+            "callsign": "W7LST", "has_traffic": False,
+        }, headers=admin_headers)
+        checkin_id = add.json()["id"]
+
+        resp = client.get(f"/sessions/{session['id']}/checkins", headers=admin_headers)
+        checkin = next(c for c in resp.json() if c["id"] == checkin_id)
+        assert checkin["is_first_checkin"] is True

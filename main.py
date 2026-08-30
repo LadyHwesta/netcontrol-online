@@ -428,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.12.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.12.1", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -838,6 +838,7 @@ class CheckinOut(BaseModel):
     comments: Optional[str]
     has_traffic: bool
     traffic_called: bool = False
+    is_first_checkin: bool = False  # welcome first-time operators (net-level history, see _create_checkin)
     evac_zone: Optional[str]
     dmr_talkgroup: Optional[str] = None
     dmr_region: Optional[str] = None
@@ -3135,6 +3136,20 @@ def list_checkins(session_id: int, current_user: User = Depends(get_current_user
     return out
 
 
+def _is_first_checkin_for_net(net_id: int, callsign: str, db: Session) -> bool:
+    """True if `callsign` has never checked into this net before (any session,
+    any type of checkin -- routine, offline-logged, or tactical sign-on all
+    count as prior participation). Called before inserting the new row, so
+    the row being created is never counted against itself."""
+    prior = (
+        db.query(Checkin.id)
+        .join(NetSession, NetSession.id == Checkin.session_id)
+        .filter(NetSession.net_id == net_id, Checkin.callsign == callsign)
+        .first()
+    )
+    return prior is None
+
+
 def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate, db: Session) -> Checkin:
     """Shared per-checkin logic behind both add_checkin (one at a time) and
     import_checkins_csv (bulk, issue #26) — same validation either way so
@@ -3169,6 +3184,7 @@ def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate
         signal_report=data.signal_report,
         comments=data.comments,
         has_traffic=data.has_traffic,
+        is_first_checkin=_is_first_checkin_for_net(session.net_id, data.callsign, db),
         evac_zone=data.evac_zone or None,
         dmr_talkgroup=data.dmr_talkgroup or None,
         dmr_region=data.dmr_region or None,

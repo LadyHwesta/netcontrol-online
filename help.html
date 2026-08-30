@@ -63,6 +63,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-29 — Welcome First-Time Check-Ins (v2.12.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>A green <strong>👋 FIRST-TIME CHECK-IN</strong> banner appears on the live check-in screen whenever a checked-in station has never checked into that net before (across all of its past sessions) — same idea as the existing traffic banner, so net control can spot and welcome new operators.</li>
+              <li>A matching 👋 badge shows next to the callsign in the roster.</li>
+              <li>History is per-net, not global — a station new to one net but a regular on another still gets welcomed on the one it's new to.</li>
+              <li><strong>Upgrading an existing install:</strong> adds a new column to <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">checkins</code> — run <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">migrate.py</code> (see Help → Database Migrations) or let <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">./deploy.sh</code> do it automatically.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-29 — APRS Station Map (v2.12.0, issue #22)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <strong>🗺️ APRS Map</strong> section in the net Edit form (ham nets only, same edit-rights as DMR) — pick <strong>aprs.fi</strong> (a free online API key, looks up positions for whoever's currently checked in) or a <strong>relay script</strong> that speaks real APRS-IS: point it at the public APRS-IS network for online use, or at a local Direwolf/TNC/igate for offline use. A <strong>filter callsign</strong> excludes your own NCS station from the map, same as DMR.</li>
