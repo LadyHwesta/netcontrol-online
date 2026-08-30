@@ -21,6 +21,13 @@ Known issues, shortcuts, and areas for future improvement. Not bugs — the app 
 
 ~~`httpx` imported twice under different names~~ — resolved; see Resolved section.
 
+### Single-file backend (`main.py`)
+At ~5,785 lines and ~150 route handlers, `main.py` is the backend analog of the single-file frontend that was already split up (see Resolved section) — one file covering Auth, Orgs, Nets, Sessions, Checkins, Tactical Positions, Digital Voice, APRS, Schedules, Admin, Public pages, and more, each already delimited by its own comment-banner section. Splitting into `routers/<domain>.py` modules (via FastAPI's `APIRouter`, included from `main.py`) plus a shared `dependencies.py` for the cross-cutting access-control helpers (`_get_net_for_user`, `_get_editable_net`, `_get_session_for_user`, `_net_to_out`, etc. — some with 20+ call sites) would make individual features much easier to navigate, edit, and review in isolation.
+
+Note: this is primarily a navigability/review win, not a test-isolation one — `pytest tests/test_x.py` already runs any given test file in isolation today regardless of which physical file the route lives in, and the shared-helper dependency graph (the thing that actually constrained how incrementally the async migration could be tested) would be identical whether those helpers live in one file or ten, since routers would still import from the same shared `dependencies.py`. Splitting doesn't remove that ordering constraint, just makes each piece smaller while working on it.
+
+Best done as its own project with a stability checkpoint before it, not stacked directly on another large structural change (e.g. right after the async SQLAlchemy migration below) — makes it easier to isolate which change caused what if something surfaces.
+
 ---
 
 ## Low Priority
