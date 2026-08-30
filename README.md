@@ -159,7 +159,7 @@ Type=simple
 User=netcontrol
 WorkingDirectory=/opt/netcontrol
 EnvironmentFile=/opt/netcontrol/.env
-ExecStart=/usr/bin/uvicorn main:app --host 127.0.0.1 --port ${PORT}
+ExecStart=/opt/netcontrol/venv/bin/uvicorn main:app --host 127.0.0.1 --port ${PORT}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -171,6 +171,8 @@ WantedBy=multi-user.target
 ```
 
 `${PORT}` is substituted by systemd from `PORT` in `.env` (see `.env.example`) — the unit file itself doesn't need to change per instance.
+
+`ExecStart` deliberately points at the checkout's own `venv/bin/uvicorn`, not a system-wide one — a bare `uvicorn` (or `/usr/bin/uvicorn`) runs under whatever Python environment it happens to be installed in, which won't have this app's dependencies (`fastapi`, `sqlalchemy`, `asyncpg`, ...) unless that happens to be the same venv. `deploy.sh` follows the same rule for the same reason (prefers `venv/bin/python3` over a bare `python3`) — see its own comments.
 
 ```bash
 sudo systemctl daemon-reload
