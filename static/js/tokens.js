@@ -89,15 +89,18 @@ function downloadRelayScript() {
 
   const script = `#!/usr/bin/env python3
 """
-DMR Relay Script for NetControl Online
+Digital Voice Relay Script for NetControl Online
 Fetches last-heard data from your local hotspot and pushes it to the net tracker,
-bypassing browser CORS restrictions entirely.
+bypassing browser CORS restrictions entirely. Covers DMR, D-Star, YSF, NXDN, P25,
+and M17 -- a WPSD/Pi-Star hotspot reports whichever mode(s) it hears, tagged
+per-entry, so this pushes everything and NetControl Online filters by the mode
+configured on the net.
 
 Requirements: pip install requests   (or: sudo apt install python3-requests)
 
 Setup:
   1. Go to the NetControl Online → 🪙 API Tokens page and create a token labelled
-     something like "DMR Relay - shack Pi".  Copy the token (shown only once).
+     something like "Digital Voice Relay - shack Pi".  Copy the token (shown only once).
   2. Paste the token into API_TOKEN below.
   3. Run: python3 dmr_relay.py
   4. Keep it running during the net (Ctrl+C to stop).
@@ -118,42 +121,75 @@ HOTSPOT   = "${url}"                     # hotspot base URL (http://localhost if
 INTERVAL  = 30                            # seconds between refreshes
 # ───────────────────────────────────────────────────────────────
 
+# Real WPSD/Pi-Star mode strings -> canonical short codes (see NetControl
+# Online's main.py _HOTSPOT_MODE_MAP -- kept identical here so entries land
+# in the right mode bucket server-side).
+HOTSPOT_MODE_MAP = {"D-Star": "dstar", "YSF": "ysf", "P25": "p25", "NXDN": "nxdn", "M17": "m17"}
+
 def fetch_hotspot():
     if SOURCE == "pistar":
+        # Real classic Pi-Star endpoint: /api/last_heard.php?num_transmissions=N
         base = HOTSPOT.rstrip("/")
-        url = base if base.endswith("lastheard") else base + "/api/local/lastheard"
-        r = requests.get(url, timeout=5)
+        url = base if base.endswith(".php") else base + "/api/last_heard.php"
+        r = requests.get(url, params={"num_transmissions": 30}, timeout=5)
     elif SOURCE == "brandmeister":
         tg = int(HOTSPOT) if HOTSPOT.isdigit() else 0
         r = requests.get("https://api.brandmeister.network/v2/talkgroup/rx/",
                          params={"talkgroup": tg, "limit": 30}, timeout=10)
-    else:  # wpsd
+    else:  # wpsd -- real endpoint: /api?limit=N
         base = HOTSPOT.rstrip("/")
         url = base if "/api" in base else base + "/api/"
-        r = requests.get(url, params={"limit": 30, "names": "true", "country": "true"}, timeout=5)
+        r = requests.get(url, params={"limit": 30}, timeout=5)
     r.raise_for_status()
     raw = r.json()
     return raw if isinstance(raw, list) else []
 
 def normalize(e):
+    if SOURCE == "brandmeister":
+        return {
+            "callsign":   (e.get("callsign") or "").upper() or None,
+            "dmr_id":     str(e.get("SourceID") or "") or None,
+            "name":       e.get("sourceName") or None,
+            "talk_group": str(e.get("DestinationID") or "") or None,
+            "timeslot":   f"TS{e['slot']}" if e.get("slot") else None,
+            "region":     e.get("sourceState") or e.get("sourceCountry") or None,
+            "heard_at":   e.get("start") or None,
+            "duration":   str(e["duration"]) if e.get("duration") else None,
+            "mode":       "dmr",
+        }
+    # wpsd/pistar: real field shape is {time_utc, mode, callsign, name,
+    # callsign_suffix, target, src, duration} -- no top-level slot/dst/
+    # country/start keys exist, and there's no region data at all.
+    raw_mode = str(e.get("mode") or "").strip()
+    if raw_mode == "POCSAG":
+        return None  # paging, not a voice check-in concern
+    mode, timeslot = None, None
+    if raw_mode.startswith("DMR"):
+        mode = "dmr"
+        ts = raw_mode.replace("DMR Slot", "").strip()
+        if raw_mode.startswith("DMR Slot") and ts:
+            timeslot = f"TS{ts}"
+    else:
+        mode = HOTSPOT_MODE_MAP.get(raw_mode)
     return {
         "callsign":   (e.get("callsign") or "").upper() or None,
-        "dmr_id":     str(e.get("src") or e.get("id") or "") or None,
+        "dmr_id":     str(e.get("callsign_suffix") or "") or None,
         "name":       e.get("name") or None,
-        "talk_group": str(e.get("dst") or "") or None,
-        "timeslot":   f"TS{e['slot']}" if e.get("slot") else None,
-        "region":     e.get("country") or None,
-        "heard_at":   e.get("start") or None,
+        "talk_group": str(e.get("target") or "") or None,
+        "timeslot":   timeslot,
+        "region":     None,
+        "heard_at":   e.get("time_utc") or None,
         "duration":   str(e["duration"]) if e.get("duration") else None,
+        "mode":       mode,
     }
 
-print(f"DMR Relay started — pushing to {BACKEND}/nets/{NET_ID}/dmr/push every {INTERVAL}s")
+print(f"Digital voice relay started — pushing to {BACKEND}/nets/{NET_ID}/dmr/push every {INTERVAL}s")
 print("Press Ctrl+C to stop.\\n")
 
 while True:
     try:
         raw     = fetch_hotspot()
-        entries = [normalize(e) for e in raw if e.get("callsign")]
+        entries = [n for n in (normalize(e) for e in raw) if n and n.get("callsign")]
         r = requests.post(
             f"{BACKEND}/nets/{NET_ID}/dmr/push",
             json={"entries": entries},

@@ -428,7 +428,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.12.1", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.13.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -943,6 +943,7 @@ class NetControlShiftOut(BaseModel):
 
 class DmrConfigCreate(BaseModel):
     source_type: str = "wpsd"           # wpsd | pistar | brandmeister
+    mode: str = "dmr"                   # dmr | dstar | ysf | nxdn | p25 | m17 (issue #26)
     hotspot_url: Optional[str] = None   # for wpsd/pistar
     talkgroup_id: Optional[int] = None  # for brandmeister
     filter_callsign: Optional[str] = None
@@ -951,6 +952,7 @@ class DmrConfigCreate(BaseModel):
 
 class DmrConfigOut(BaseModel):
     source_type: str
+    mode: str = "dmr"
     hotspot_url: Optional[str] = None
     talkgroup_id: Optional[int] = None
     filter_callsign: Optional[str] = None
@@ -968,6 +970,7 @@ class DmrHeardEntry(BaseModel):
     region: Optional[str] = None
     heard_at: Optional[str] = None
     duration: Optional[str] = None
+    mode: Optional[str] = None   # dmr | dstar | ysf | nxdn | p25 | m17 (issue #26)
 
 
 class AprsConfigCreate(BaseModel):
@@ -4828,10 +4831,19 @@ def upcoming_slots(
 
 
 # ---------------------------------------------------------------------------
-# DMR Integration
+# Digital Voice Integration (DMR, D-Star, YSF, NXDN, P25, M17 — issue #26)
 # ---------------------------------------------------------------------------
+# Started as DMR-only; a WPSD/Pi-Star hotspot's last-heard feed actually
+# reports every digital voice mode it hears, tagged per-entry, so this was
+# generalized rather than duplicated per mode. Internal names (DmrConfig,
+# /nets/{id}/dmr/*, dmr_talkgroup/dmr_region) are kept as-is — they're
+# already generic enough (freeform strings, presence-based on/off switch)
+# to serve any mode; only the user-facing labels changed. BrandMeister
+# stays DMR-only (it's a real, centralized DMR network API — no equivalent
+# exists for the other modes, whose reflectors are individually operated
+# with inconsistent, often non-JSON dashboard software).
 
-# In-memory cache for relay-pushed DMR data { net_id: {"entries": [...], "pushed_at": float} }
+# In-memory cache for relay-pushed digital voice data { net_id: {"entries": [...], "pushed_at": float} }
 # This is backed by SystemSetting so it survives server restarts.
 _dmr_push_cache: dict = {}
 
@@ -4867,18 +4879,53 @@ def _dmr_cache_read(net_id: int, db: Session) -> Optional[dict]:
     return None
 
 
-def _dmr_normalize_wpsd(entry: dict) -> dict:
-    """Normalize a WPSD/Pi-Star last-heard entry to a common dict."""
-    slot = str(entry.get("slot", "")).strip()
+# Real WPSD/Pi-Star mode strings -> our canonical short codes (issue #26).
+# Confirmed against the actual dashboard source (WPSD-M17/WPSD-WebCode,
+# f1rmb/Pi-Star_DV_Dash): the last-heard feed reports whichever digital
+# voice mode(s) the hotspot actually heard, tagged per-entry in `mode` —
+# it's not DMR-only data, it just used to be normalized as if it were.
+_HOTSPOT_MODE_MAP = {
+    "D-Star": "dstar",
+    "YSF": "ysf",
+    "P25": "p25",
+    "NXDN": "nxdn",
+    "M17": "m17",
+}
+
+
+def _dmr_normalize_wpsd(entry: dict) -> Optional[dict]:
+    """Normalize a WPSD/Pi-Star last-heard entry to a common dict.
+
+    Field names below match the REAL API response shape (verified against
+    the dashboard source, not just docs): {time_utc, mode, callsign, name,
+    callsign_suffix, target, src, duration, loss}. There is no top-level
+    `slot`/`dst`/`country`/`start` key in the real payload — those were
+    what this function used to read, which meant Talk Group, Timeslot,
+    Region, and Heard-At always came back empty. `target` is the
+    talkgroup/reflector string for every mode; `src` is "RF"/"Net"
+    (transmission direction, not a radio ID); the DMR timeslot is embedded
+    in `mode` itself ("DMR Slot 1"/"DMR Slot 2") rather than a separate
+    field. There's no region/country data in this feed at all -- that's
+    left None here rather than faked."""
+    raw_mode = str(entry.get("mode", "")).strip()
+    if raw_mode == "POCSAG":
+        return None  # paging, not a voice check-in concern
+    mode = "dmr" if raw_mode.startswith("DMR") else _HOTSPOT_MODE_MAP.get(raw_mode)
+    timeslot = None
+    if raw_mode.startswith("DMR Slot"):
+        ts = raw_mode.replace("DMR Slot", "").strip()
+        if ts:
+            timeslot = f"TS{ts}"
     return {
         "callsign": str(entry.get("callsign", "")).upper().strip(),
-        "dmr_id":   str(entry.get("src", entry.get("id", ""))).strip() or None,
+        "dmr_id":   str(entry.get("callsign_suffix", "")).strip() or None,
         "name":     entry.get("name") or None,
-        "talk_group": str(entry.get("dst", "")).strip() or None,
-        "timeslot": f"TS{slot}" if slot else None,
-        "region":   entry.get("country") or None,
-        "heard_at": entry.get("start") or None,
+        "talk_group": str(entry.get("target", "")).strip() or None,
+        "timeslot": timeslot,
+        "region":   None,
+        "heard_at": entry.get("time_utc") or None,
         "duration": str(entry.get("duration", "")).strip() or None,
+        "mode":     mode,
     }
 
 
@@ -4906,7 +4953,18 @@ def _dmr_normalize_brandmeister(entry: dict) -> dict:
         "region":     region,
         "heard_at":   heard_at,
         "duration":   duration,
+        "mode":       "dmr",
     }
+
+
+def _dmr_filter_mode(entries: list[dict], mode: str) -> list[dict]:
+    """Narrow a normalized entry list down to one digital voice mode
+    (issue #26) -- applied at READ time (proxy fetch + relay cache reads),
+    not at push time, so a relay watching a mixed-mode hotspot can push
+    everything and each net just sees the mode it configured. An entry
+    with no mode info (older relay push, or an unrecognized hotspot mode
+    string) is kept rather than dropped, so nothing silently disappears."""
+    return [e for e in entries if not e.get("mode") or e.get("mode") == mode]
 
 
 def _dmr_fetch_proxy(cfg: DmrConfig) -> list[dict]:
@@ -4928,20 +4986,25 @@ def _dmr_fetch_proxy(cfg: DmrConfig) -> list[dict]:
             if not cfg.hotspot_url:
                 return []
             base = cfg.hotspot_url.rstrip("/")
-            # Pi-Star endpoint
-            url = base if base.endswith("lastheard") else base + "/api/local/lastheard"
-            r = httpx.get(url, timeout=10)
+            # Real classic Pi-Star endpoint is /api/last_heard.php with a
+            # num_transmissions query param -- NOT /api/local/lastheard
+            # with `limit`, which doesn't exist in the actual dashboard
+            # codebase (confirmed against f1rmb/Pi-Star_DV_Dash's source).
+            url = base if base.endswith(".php") else base + "/api/last_heard.php"
+            r = httpx.get(url, params={"num_transmissions": 30}, timeout=10)
             r.raise_for_status()
             raw = r.json() if isinstance(r.json(), list) else []
-            return [_dmr_normalize_wpsd(e) for e in raw[:30]]
+            entries = [_dmr_normalize_wpsd(e) for e in raw[:30]]
+            return _dmr_filter_mode([e for e in entries if e], cfg.mode)
 
         else:  # wpsd (default)
             if not cfg.hotspot_url:
                 return []
-            r = httpx.get(cfg.hotspot_url, params={"limit": 30, "names": "true", "country": "true"}, timeout=10)
+            r = httpx.get(cfg.hotspot_url, params={"limit": 30}, timeout=10)
             r.raise_for_status()
             raw = r.json() if isinstance(r.json(), list) else []
-            return [_dmr_normalize_wpsd(e) for e in raw]
+            entries = [_dmr_normalize_wpsd(e) for e in raw]
+            return _dmr_filter_mode([e for e in entries if e], cfg.mode)
 
     except httpx.ConnectError as exc:
         raise HTTPException(502, f"Cannot reach hotspot: {exc}. If your hotspot is on a local network, enable direct mode so the browser fetches it instead.")
@@ -4971,9 +5034,15 @@ def get_dmr_config(net_id: int, current_user: User = Depends(get_current_user), 
 def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     net = _get_editable_net(net_id, current_user, db)
     _assert_ham_net(net)
+    # BrandMeister is a DMR-only network -- can't return any other mode's
+    # traffic. The UI already hides this combination; this is defense in
+    # depth for a direct API call (issue #26).
+    if data.source_type == "brandmeister" and data.mode != "dmr":
+        raise HTTPException(400, "BrandMeister only supports DMR mode")
     cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
     if cfg:
         cfg.source_type     = data.source_type
+        cfg.mode             = data.mode
         cfg.hotspot_url     = data.hotspot_url or None
         cfg.talkgroup_id    = data.talkgroup_id
         cfg.filter_callsign = (data.filter_callsign or "").upper().strip() or None
@@ -4982,6 +5051,7 @@ def save_dmr_config(net_id: int, data: DmrConfigCreate, current_user: User = Dep
         cfg = DmrConfig(
             net_id          = net_id,
             source_type     = data.source_type,
+            mode            = data.mode,
             hotspot_url     = data.hotspot_url or None,
             talkgroup_id    = data.talkgroup_id,
             filter_callsign = (data.filter_callsign or "").upper().strip() or None,
@@ -5077,6 +5147,12 @@ def dmr_push_raw(
 
     source = data.source.lower()
     if source in ("wpsd", "pistar"):
+        # _dmr_normalize_wpsd returns None for entries it drops entirely
+        # (e.g. POCSAG paging traffic) -- filtered out below. Deliberately
+        # NOT mode-filtered here: the cache holds everything a mixed-mode
+        # hotspot reports; /dmr/cache and /dmr/lastheard narrow it down to
+        # cfg.mode at read time (issue #26) so one relay can serve any
+        # net regardless of which mode(s) it cares about.
         entries = [_dmr_normalize_wpsd(e) for e in data.entries]
     elif source == "brandmeister":
         entries = [_dmr_normalize_brandmeister(e) for e in data.entries]
@@ -5085,7 +5161,7 @@ def dmr_push_raw(
 
     # Filter out NCS callsign and any entries with no callsign after normalization
     skip = (cfg.filter_callsign or "").upper()
-    entries = [e for e in entries if e.get("callsign")]
+    entries = [e for e in entries if e and e.get("callsign")]
     if skip:
         entries = [e for e in entries if e["callsign"].upper() != skip]
 
@@ -5101,6 +5177,9 @@ def dmr_cache(
     """Return relay-pushed DMR data with freshness info."""
     net = _get_net_for_user(net_id, current_user, db)
     _assert_ham_net(net)
+    cfg = db.query(DmrConfig).filter(DmrConfig.net_id == net_id).first()
+    if not cfg:
+        raise HTTPException(404, "DMR not configured for this net")
     cached = _dmr_cache_read(net_id, db)
     if not cached:
         raise HTTPException(404, "No relay data for this net — is the relay script running?")
@@ -5110,7 +5189,7 @@ def dmr_cache(
             404,
             f"Relay data is stale ({age}s old). Is the relay script still running?",
         )
-    return {"entries": cached["entries"], "age_seconds": age}
+    return {"entries": _dmr_filter_mode(cached["entries"], cfg.mode), "age_seconds": age}
 
 
 # ---------------------------------------------------------------------------

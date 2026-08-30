@@ -22,7 +22,7 @@ Setting up your own instance? See **[QUICKSTART.md](QUICKSTART.md)** for the fas
 
 - **Multi-tenancy** — every account belongs to one or more **Organizations**; nets, sessions, and check-ins are scoped so separate organizations sharing the same install never see each other's data. Registration offers create-a-new-organization (name + required website URL; needs a Super Admin's approval before login, since a founder can't approve themselves) or join-an-existing-one (needs that organization's own admin to approve you instead); an org switcher appears for anyone in more than one. Organization admins get a scoped Admin page for their own members; the existing site-wide Super Admin role is unchanged, still sees everything, and is the only registration path that's ever auto-approved (the instance's first-ever user, with no one else to ask)
 - **Net & session management** — create nets, start/end sessions, log check-ins with signal reports
-- **Log a past net** — a net that formed with no access to the web tool can be backfilled afterward: set its date/time, Net Control, and broadcaster up front, then add check-ins that get stamped with the reported date/time instead of "now". No live-session chrome (clock, Expected Stations, DMR, Net Script) since it was never live to begin with — just the check-in form and roster. Click **🔒 Close Log** when done entering data to stop accepting further check-ins
+- **Log a past net** — a net that formed with no access to the web tool can be backfilled afterward: set its date/time, Net Control, and broadcaster up front, then add check-ins that get stamped with the reported date/time instead of "now". No live-session chrome (clock, Expected Stations, Digital Voice, Net Script) since it was never live to begin with — just the check-in form and roster. Click **🔒 Close Log** when done entering data to stop accepting further check-ins
 - **Focused live session view** — sidebar auto-collapses and session navigation hides while a session is live to cut clutter, restoring automatically once it ends; the manual check-in form stays pinned to the top of the screen so it's reachable while scrolling; the checked-in stations roster sits in its own independently-scrollable column on the right (callsign, name, traffic, delete — the 5 most recent highlighted for 20 seconds), so it's always visible without scrolling past the form
 - **Callsign lookup** — FCC database lookup with local history suffix search
 - **Traffic management** — flag stations with traffic, interactive "called" tracking (persists across a session close/reopen), formal traffic message log
@@ -47,7 +47,7 @@ Setting up your own instance? See **[QUICKSTART.md](QUICKSTART.md)** for the fas
 - **Bot protection (optional)** — Cloudflare Turnstile, Google reCAPTCHA, or ALTCHA (open source, self-contained — no third-party service) on registration and login, off by default; set `CAPTCHA_PROVIDER` plus that provider's keys to enable
 - **Configurable branding** — set organization name, tagline, website URL, and logo from the Admin panel
 - **Theme engine** — per-account color theme (LCARS, Dark, Light, High Contrast, or System/OS-matched), persisted server-side so it follows you across devices
-- **DMR hotspot integration** — connect a net to a WPSD, Pi-Star, or BrandMeister talk group; see a live "last heard" panel during the session, quick-check-in heard stations, and log Talk Group + Region per check-in
+- **Digital voice integration** — connect a net to a WPSD/Pi-Star hotspot or a BrandMeister talk group; covers DMR, D-Star, YSF, NXDN, P25, and M17. See a live "last heard" panel during the session, quick-check-in heard stations, and log Talk Group + Region per check-in
 - **Keyboard-friendly forms** — Enter submits the primary action from any save/submit form's text fields (multi-line fields like net description and report body are left alone so Enter still inserts a newline)
 - **Installable mobile app (PWA)** — installable to a phone's home screen with an offline-capable app shell; a **📱 Net Control** toggle on the live session view strips the check-in screen down to a big callsign field and minimal chrome for one-handed net control. Check-ins submitted with no connection queue locally and send automatically once back online
 - **Separate GMRS callsign** — operators holding both an amateur and a GMRS license can set a GMRS callsign under **⚙️ Account**; Net Control on a GMRS net automatically shows it instead of the amateur callsign — duty bar, net script variables, the public live page, and Schedule sign-ups all pick it up with nothing else to configure. Leave it unset to keep using the amateur callsign everywhere
@@ -257,7 +257,7 @@ just the check-in flow.
 **📱 Net Control** — a toggle button on the live session view (next to End
 Session) strips the check-in screen down to a big callsign field, a large
 Check In button, and a minimal check-ins list — the net script panel,
-Expected Stations, DMR Last Heard, and secondary table columns are hidden.
+Expected Stations, Digital Voice Last Heard, and secondary table columns are hidden.
 Meant for running a net one-handed from a phone. The preference persists
 across sessions (per device).
 
@@ -356,9 +356,9 @@ python3 /opt/netcontrol/send_reminders.py
 
 It's safe to run every few minutes — each signup is only ever reminded once, tracked via a `reminder_sent_at` timestamp set the first time its reminder window is caught, so overlapping cron runs don't double-send. Uses the same `SMTP_*` settings in `.env` as the rest of the app; reminders are silently skipped (logged, not sent) if SMTP isn't configured.
 
-## DMR Hotspot Integration
+## Digital Voice Integration
 
-Net owners can configure DMR last-heard data in the net's Edit form. Three source types are supported: **WPSD**, **Pi-Star**, and **BrandMeister** (by talk group).
+Net owners can configure digital voice last-heard data in the net's Edit form, under **📻 Digital Voice Integration**. Covers **DMR, D-Star, YSF (Yaesu Fusion), NXDN, P25, and M17** — pick a **Mode**, then a source: **WPSD** or **Pi-Star** hotspot (any mode), or **BrandMeister** (DMR-only network API, by talk group). A WPSD/Pi-Star hotspot's last-heard feed reports whichever mode(s) it actually hears, tagged per-entry, so switching Mode on an already-configured hotspot just changes what's shown — no reconfiguration of the hotspot itself needed.
 
 ### Fetch modes
 
@@ -368,14 +368,14 @@ Net owners can configure DMR last-heard data in the net's Edit form. Three sourc
 | **Direct** | Browser fetches the hotspot directly | Hotspot is on local LAN; browser has CORS/insecure-content permissions set |
 | **Relay script** | Small Python script on the LAN pushes data to the server | Hotspot is local-only and CORS is blocked (most common home setup) |
 
-### DMR relay script
+### Relay script
 
-If your hotspot is on a local network and browser CORS restrictions prevent direct fetching, download `dmr_relay.py` from the net's DMR config section in the app. It runs on any machine that can reach the hotspot (the Pi itself works well) and pushes last-heard data to the server every 30 seconds.
+If your hotspot is on a local network and browser CORS restrictions prevent direct fetching, download `dmr_relay.py` from the net's Digital Voice config section in the app. It runs on any machine that can reach the hotspot (the Pi itself works well) and pushes last-heard data to the server every 30 seconds — for whichever mode(s) the hotspot reports; the server filters to what the net is configured for.
 
 **Setup:**
 
-1. Go to **🪙 API Tokens** in the sidebar and create a token (e.g. "DMR Relay - shack Pi"). Copy the token — it is shown only once.
-2. Download `dmr_relay.py` from the net's DMR config section.
+1. Go to **🪙 API Tokens** in the sidebar and create a token (e.g. "Digital Voice Relay - shack Pi"). Copy the token — it is shown only once.
+2. Download `dmr_relay.py` from the net's Digital Voice config section.
 3. Paste the token into the `API_TOKEN` line in the script.
 4. Run it on any machine that can reach the hotspot:
 
@@ -384,7 +384,7 @@ sudo apt install python3-requests   # on Raspberry Pi / WPSD
 python3 dmr_relay.py
 ```
 
-The script uses a long-lived API token (no password stored, no re-authentication needed). Leave it running for the duration of the net. The app shows "Via relay script (Xs ago)" in the DMR panel when using cached relay data. Revoke the token any time from the API Tokens page.
+The script uses a long-lived API token (no password stored, no re-authentication needed). Leave it running for the duration of the net. The app shows "Via relay script (Xs ago)" in the panel when using cached relay data. Revoke the token any time from the API Tokens page.
 
 ## APRS Station Map
 

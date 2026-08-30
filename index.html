@@ -351,17 +351,34 @@
               <input class="form-control" id="net-website" placeholder="https://your-club-website.org" style="font-size:13px" />
             </div>
           </div>
-          <!-- DMR Integration — only shown when editing an existing net you own -->
+          <!-- Digital Voice Integration (DMR, D-Star, YSF, NXDN, P25, M17 — issue #26) —
+               only shown when editing an existing net you own. Internal ids/names stay
+               "dmr" (see main.py's Digital Voice Integration section comment) since a
+               WPSD/Pi-Star hotspot's last-heard feed already reports every mode it
+               hears — this is one integration with a mode filter, not six. -->
           <div id="net-dmr-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:10px">📻 DMR Integration</div>
-            <div class="form-group">
-              <label style="font-size:12px">Source</label>
-              <select class="form-control" id="dmr-source" onchange="onDmrSourceChange()" style="font-size:13px">
-                <option value="none">— Disabled —</option>
-                <option value="wpsd">WPSD Hotspot</option>
-                <option value="pistar">Pi-Star Hotspot</option>
-                <option value="brandmeister">BrandMeister Network</option>
-              </select>
+            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:10px">📻 Digital Voice Integration</div>
+            <div class="form-row">
+              <div class="form-group mb-0">
+                <label style="font-size:12px">Mode</label>
+                <select class="form-control" id="dmr-mode" onchange="onDmrModeChange()" style="font-size:13px">
+                  <option value="dmr">DMR</option>
+                  <option value="dstar">D-Star</option>
+                  <option value="ysf">YSF (Yaesu Fusion)</option>
+                  <option value="nxdn">NXDN</option>
+                  <option value="p25">P25</option>
+                  <option value="m17">M17</option>
+                </select>
+              </div>
+              <div class="form-group mb-0">
+                <label style="font-size:12px">Source</label>
+                <select class="form-control" id="dmr-source" onchange="onDmrSourceChange()" style="font-size:13px">
+                  <option value="none">— Disabled —</option>
+                  <option value="wpsd">WPSD Hotspot</option>
+                  <option value="pistar">Pi-Star Hotspot</option>
+                  <option value="brandmeister">BrandMeister Network (DMR only)</option>
+                </select>
+              </div>
             </div>
             <div id="dmr-hotspot-fields" style="display:none">
               <div class="form-group">
@@ -390,8 +407,8 @@
               <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Defaults to the net owner's callsign if left blank.</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <button class="btn btn-primary btn-sm" onclick="saveDmrConfig()">Save DMR Config</button>
-              <button class="btn btn-danger btn-sm" id="dmr-delete-btn" style="display:none" onclick="deleteDmrConfig()">Remove DMR</button>
+              <button class="btn btn-primary btn-sm" onclick="saveDmrConfig()">Save Config</button>
+              <button class="btn btn-danger btn-sm" id="dmr-delete-btn" style="display:none" onclick="deleteDmrConfig()">Remove</button>
               <button class="btn btn-ghost btn-sm" id="dmr-relay-btn" style="display:none" onclick="downloadRelayScript()" title="Download a Python relay script that pushes hotspot data from your local network">📥 Relay Script</button>
             </div>
             <div id="dmr-relay-note" style="display:none;margin-top:8px;font-size:11px;color:var(--text-muted);background:var(--surface);border:1px solid var(--lc-border);border-radius:5px;padding:8px">
@@ -912,10 +929,10 @@
               </div>
             </div>
 
-            <!-- DMR Heard Panel (shown when net has DMR config) -->
+            <!-- Digital Voice Last Heard Panel (shown when net has a digital voice config -- issue #26) -->
             <div id="dmr-heard-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-orange);border-radius:8px;overflow:hidden">
               <button onclick="toggleDmrPanel()" style="width:100%;background:rgba(255,153,0,0.12);border:none;color:var(--lc-orange);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                <span>📻 DMR LAST HEARD</span>
+                <span>📻 DIGITAL VOICE LAST HEARD</span>
                 <span style="display:flex;align-items:center;gap:10px">
                   <span id="dmr-heard-count" style="font-size:11px;background:var(--lc-orange);color:#000;border-radius:10px;padding:1px 8px;display:none"></span>
                   <span id="dmr-panel-toggle-icon">▶</span>

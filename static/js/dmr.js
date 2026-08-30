@@ -1,15 +1,67 @@
 // ============================================================
-// DMR INTEGRATION
+// DIGITAL VOICE INTEGRATION (DMR, D-Star, YSF, NXDN, P25, M17 — issue #26)
 // ============================================================
+// Internal names stay "dmr" (see main.py's Digital Voice Integration
+// section comment) -- a WPSD/Pi-Star hotspot's last-heard feed already
+// reports every mode it hears, tagged per-entry, so this is one
+// integration with a mode filter rather than six separate ones.
 let currentDmrConfig = null;
 let dmrHeardInterval = null;
 let dmrPanelOpen = false;
 let dmrHeardEntries = [];   // keyed by render index for onclick handlers
 
+// Real WPSD/Pi-Star mode strings -> our canonical short codes. Mirrors
+// _HOTSPOT_MODE_MAP in main.py -- used here only by the direct-mode fetch
+// path in refreshDmrHeard(), since that one bypasses the backend entirely.
+const DMR_HOTSPOT_MODE_MAP = { 'D-Star': 'dstar', 'YSF': 'ysf', 'P25': 'p25', 'NXDN': 'nxdn', 'M17': 'm17' };
+
+// Mirrors main.py's _dmr_normalize_wpsd -- same real field shape
+// ({time_utc, mode, callsign, name, callsign_suffix, target, src,
+// duration}), same POCSAG drop, same "no region data exists" honesty.
+// Kept as its own function (not shared with the backend, which can't run
+// in the browser) but deliberately field-for-field identical so the two
+// don't drift the way the old wpsd/pistar mapping silently did.
+function normalizeHotspotEntry(e) {
+  const rawMode = String(e.mode || '').trim();
+  if (rawMode === 'POCSAG') return null;
+  let mode = null, timeslot = null;
+  if (rawMode.startsWith('DMR')) {
+    mode = 'dmr';
+    const ts = rawMode.replace('DMR Slot', '').trim();
+    if (rawMode.startsWith('DMR Slot') && ts) timeslot = `TS${ts}`;
+  } else {
+    mode = DMR_HOTSPOT_MODE_MAP[rawMode] || null;
+  }
+  return {
+    callsign:   (e.callsign || '').toUpperCase(),
+    dmr_id:     String(e.callsign_suffix || ''),
+    name:       e.name || null,
+    talk_group: String(e.target || ''),
+    timeslot,
+    region:     null,
+    heard_at:   e.time_utc || null,
+    duration:   e.duration ? String(e.duration) : null,
+    mode,
+  };
+}
+
 function onDmrSourceChange() {
   const src = document.getElementById('dmr-source').value;
   document.getElementById('dmr-hotspot-fields').style.display = (src === 'wpsd' || src === 'pistar') ? '' : 'none';
   document.getElementById('dmr-bm-fields').style.display      = src === 'brandmeister' ? '' : 'none';
+}
+
+// BrandMeister is a DMR-only network -- can't return any other mode's
+// traffic, so it's disabled (and bumped back to wpsd if it was selected)
+// whenever Mode isn't DMR.
+function onDmrModeChange() {
+  const mode = document.getElementById('dmr-mode').value;
+  const bmOption = document.querySelector('#dmr-source option[value="brandmeister"]');
+  if (bmOption) bmOption.disabled = (mode !== 'dmr');
+  if (mode !== 'dmr' && document.getElementById('dmr-source').value === 'brandmeister') {
+    document.getElementById('dmr-source').value = 'wpsd';
+    onDmrSourceChange();
+  }
 }
 
 async function loadDmrConfig(netId) {
@@ -20,7 +72,9 @@ async function loadDmrConfig(netId) {
   const sec = document.getElementById('net-dmr-section');
   if (sec) sec.style.display = '';  // always show when editing own net
   if (currentDmrConfig) {
+    document.getElementById('dmr-mode').value = currentDmrConfig.mode || 'dmr';
     document.getElementById('dmr-source').value = currentDmrConfig.source_type;
+    onDmrModeChange();
     onDmrSourceChange();
     document.getElementById('dmr-url').value       = currentDmrConfig.hotspot_url || '';
     document.getElementById('dmr-direct').checked  = !!currentDmrConfig.direct_mode;
@@ -30,7 +84,9 @@ async function loadDmrConfig(netId) {
     document.getElementById('dmr-relay-btn').style.display  = '';
     document.getElementById('dmr-relay-note').style.display = '';
   } else {
+    document.getElementById('dmr-mode').value = 'dmr';
     document.getElementById('dmr-source').value = 'none';
+    onDmrModeChange();
     onDmrSourceChange();
     document.getElementById('dmr-url').value    = '';
     document.getElementById('dmr-direct').checked = false;
@@ -47,6 +103,7 @@ async function saveDmrConfig() {
   if (src === 'none') { await deleteDmrConfig(); return; }
   const payload = {
     source_type:     src,
+    mode:            document.getElementById('dmr-mode').value,
     hotspot_url:     document.getElementById('dmr-url').value.trim() || null,
     talkgroup_id:    parseInt(document.getElementById('dmr-tg').value) || null,
     filter_callsign: document.getElementById('dmr-filter').value.trim().toUpperCase() || null,
@@ -57,7 +114,7 @@ async function saveDmrConfig() {
     document.getElementById('dmr-delete-btn').style.display = '';
     document.getElementById('dmr-relay-btn').style.display = '';
     document.getElementById('dmr-relay-note').style.display = '';
-    toast('DMR config saved');
+    toast('Config saved');
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -66,12 +123,14 @@ async function deleteDmrConfig() {
   try {
     await apiFetch(`/nets/${editNetId}/dmr/config`, { method: 'DELETE' });
     currentDmrConfig = null;
+    document.getElementById('dmr-mode').value = 'dmr';
     document.getElementById('dmr-source').value = 'none';
+    onDmrModeChange();
     onDmrSourceChange();
     document.getElementById('dmr-url').value = '';
     document.getElementById('dmr-tg').value  = '';
     document.getElementById('dmr-delete-btn').style.display = 'none';
-    toast('DMR integration removed');
+    toast('Digital voice integration removed');
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -114,30 +173,27 @@ async function refreshDmrHeard(netIdArg) {
   let entries = [];
   try {
     if (currentDmrConfig.direct_mode && currentDmrConfig.hotspot_url) {
-      // Fetch directly from browser (local network access)
+      // Fetch directly from browser (local network access). Real endpoints
+      // (confirmed against the actual WPSD/Pi-Star dashboard source, not
+      // just docs): WPSD is `<host>/api?limit=N`; classic Pi-Star is
+      // `<host>/api/last_heard.php?num_transmissions=N` -- NOT
+      // `/api/local/lastheard`, which doesn't exist in either codebase.
       let url = currentDmrConfig.hotspot_url.trim();
-      if (currentDmrConfig.source_type === 'pistar' && !url.includes('lastheard')) {
-        url = url.replace(/\/$/, '') + '/api/local/lastheard';
+      if (currentDmrConfig.source_type === 'pistar' && !url.endsWith('.php')) {
+        url = url.replace(/\/$/, '') + '/api/last_heard.php';
+        url += (url.includes('?') ? '&' : '?') + 'num_transmissions=30';
       } else if (currentDmrConfig.source_type === 'wpsd') {
-        // Ensure URL ends at the /api/ path
         if (!url.includes('/api')) url = url.replace(/\/$/, '') + '/api/';
-        url += (url.includes('?') ? '&' : '?') + 'limit=30&names=true&country=true';
+        url += (url.includes('?') ? '&' : '?') + 'limit=30';
       }
       let directOk = false;
       try {
         const r = await fetch(url, { mode: 'cors' });
         if (!r.ok) throw new Error(`HTTP ${r.status} from hotspot`);
         const raw = await r.json();
-        entries = (Array.isArray(raw) ? raw : []).map(e => ({
-          callsign:   (e.callsign || '').toUpperCase(),
-          dmr_id:     String(e.src || e.id || ''),
-          name:       e.name || null,
-          talk_group: String(e.dst || ''),
-          timeslot:   e.slot ? `TS${e.slot}` : null,
-          region:     e.country || null,
-          heard_at:   e.start || null,
-          duration:   e.duration ? String(e.duration) : null,
-        }));
+        entries = (Array.isArray(raw) ? raw : [])
+          .map(normalizeHotspotEntry)
+          .filter(e => e && (!e.mode || e.mode === currentDmrConfig.mode));
         directOk = true;
       } catch (_directErr) {
         // Direct fetch failed (CORS, mixed content, unreachable) — fall back to backend proxy
@@ -211,6 +267,10 @@ async function refreshDmrHeard(netIdArg) {
   else cnt.style.display = 'none';
 }
 
+// Mode label + Region-column visibility: "Reflector" reads more naturally
+// than "Talk Group" for D-Star/YSF/M17; Region has no real data source for
+// any hotspot mode (see main.py's _dmr_normalize_wpsd) so it's only shown
+// for BrandMeister, the one source that legitimately populates it.
 function renderDmrHeard(entries) {
   dmrHeardEntries = entries;
   const el = document.getElementById('dmr-heard-list');
@@ -218,8 +278,11 @@ function renderDmrHeard(entries) {
     el.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No stations heard recently.</p>';
     return;
   }
+  const mode = currentDmrConfig ? currentDmrConfig.mode : 'dmr';
+  const tgLabel = (mode === 'dstar' || mode === 'ysf' || mode === 'm17') ? 'Reflector' : 'Talk Group';
+  const showRegion = !!(currentDmrConfig && currentDmrConfig.source_type === 'brandmeister');
   el.innerHTML = `<table class="tbl" style="font-size:12px"><thead><tr>
-    <th>Callsign</th><th>Name</th><th>Talk Group</th><th>Region</th><th>Heard</th><th></th>
+    <th>Callsign</th><th>Name</th><th>${tgLabel}</th>${showRegion ? '<th>Region</th>' : ''}<th>Heard</th><th></th>
   </tr></thead><tbody>` +
   entries.map((e, i) => {
     const already = lastKnownCheckins && lastKnownCheckins.some(c => c.callsign === e.callsign);
@@ -230,7 +293,7 @@ function renderDmrHeard(entries) {
       <td><span class="callsign">${esc(e.callsign)}</span>${e.dmr_id ? ` <span class="text-muted" style="font-size:10px">${esc(e.dmr_id)}</span>` : ''}</td>
       <td>${e.name ? esc(e.name) : '<span class="text-muted">—</span>'}</td>
       <td>${e.talk_group ? esc(e.talk_group) : '—'}${e.timeslot ? ` <span class="text-muted">${esc(e.timeslot)}</span>` : ''}</td>
-      <td>${e.region ? esc(e.region) : '—'}</td>
+      ${showRegion ? `<td>${e.region ? esc(e.region) : '—'}</td>` : ''}
       <td style="white-space:nowrap">${e.heard_at ? esc(String(e.heard_at).slice(11,19) || e.heard_at) : '—'}${dur}</td>
       <td><button class="btn ${btnClass} btn-sm" style="font-size:11px;padding:1px 8px" ${already ? 'disabled' : `onclick="dmrQuickCheckin(${i})"`}>${btnText}</button></td>
     </tr>`;

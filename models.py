@@ -521,14 +521,22 @@ class CallsignCache(Base):
 
 
 class DmrConfig(Base):
-    """Per-net DMR integration configuration (hotspot or network API)."""
+    """Per-net digital voice last-heard integration configuration (hotspot
+    or network API). Despite the class/table name (kept for API/migration
+    stability), this covers DMR and other digital voice modes (issue #26)
+    — a WPSD/Pi-Star hotspot's last-heard feed reports whichever mode(s)
+    it hears, tagged per-entry; `mode` below just narrows what's shown."""
     __tablename__ = "dmr_configs"
 
     id = Column(Integer, primary_key=True, index=True)
     net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False, unique=True)
     # wpsd | pistar | brandmeister
     source_type = Column(String(20), nullable=False, default="wpsd")
-    # WPSD/Pi-Star: full API URL, e.g. http://wpsd.local/api or http://host/api/local/lastheard
+    # dmr | dstar | ysf | nxdn | p25 | m17 (issue #26). BrandMeister is
+    # DMR-only, enforced server-side. Existing rows default to "dmr" to
+    # preserve behavior from before other modes existed.
+    mode = Column(String(10), nullable=False, default="dmr")
+    # WPSD/Pi-Star: full API URL, e.g. http://wpsd.local/api or http://host/api/last_heard.php
     hotspot_url = Column(Text, nullable=True)
     # BrandMeister: talk group number to monitor
     talkgroup_id = Column(Integer, nullable=True)

@@ -432,6 +432,10 @@ MIGRATIONS = [
     # ── Welcome first-time check-ins ──
     ("checkins: is_first_checkin flag",
      "ALTER TABLE checkins ADD COLUMN IF NOT EXISTS is_first_checkin BOOLEAN NOT NULL DEFAULT FALSE"),
+
+    # ── Digital voice modes beyond DMR (issue #26) ──
+    ("dmr_configs: mode column",
+     "ALTER TABLE dmr_configs ADD COLUMN IF NOT EXISTS mode VARCHAR(10) NOT NULL DEFAULT 'dmr'"),
 ]
 
 # ---------------------------------------------------------------------------
