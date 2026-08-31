@@ -530,6 +530,13 @@ Optional, off by default. Translates the app's own UI into other languages using
    venv/bin/pip install argostranslate
    ```
    (already listed, commented as optional, in `requirements.txt` — a plain `pip install -r requirements.txt` skips nothing extra unless you also flip the env var and actually enable a language)
+
+   `argostranslate` pulls in `torch` transitively (via `spacy`/`stanza`) — a 500MB+ wheel on its own. `pip` downloads it into `$TMPDIR` (usually `/tmp`) before installing, and on many cloud VPS images `/tmp` is its own small `tmpfs` mount (RAM-backed, often under 1GB) completely separate from the disk space `df -h` shows free on `/` — `pip install` can fail with `[Errno 28] No space left on device` even with tens of GB free overall. If that happens, point `TMPDIR` at a disk-backed directory for the install:
+   ```bash
+   mkdir -p ~/pip-tmp
+   TMPDIR=~/pip-tmp venv/bin/pip install argostranslate
+   rm -rf ~/pip-tmp
+   ```
 2. Restart the app, then run `migrate.py` if this is an existing install (adds `translation_cache`, `enabled_languages`, and a `language` column on `users` — a fresh install creates all three automatically on first startup).
 3. In **Admin → Languages**, enter a language code (e.g. `es`, `fr`, `de` — any [argos-translate-supported](https://github.com/argosopentech/argos-translate#supported-languages) code) and a display name, then click **Enable Language**. This kicks off a background job that downloads that language's model and pre-translates the app's known UI strings — can take a few minutes the first time; the tab shows Pending → Installing → Ready.
 
