@@ -7,12 +7,21 @@ Tests for UI translation via argos-translate (opt-in, TRANSLATION_ENABLED):
   PATCH /auth/language          -- per-user language preference
   GET/POST/DELETE /admin/languages  -- super admin only
 
-argos-translate itself is never installed in the test environment -- every
-test that needs "translation configured" monkeypatches routers.translation's
-module-level TRANSLATION_ENABLED flag and _translate_sync/_install_model_sync
-functions directly, the same way test_support.py monkeypatches SUPPORT_EMAIL
-and test_email_send.py monkeypatches smtplib.
+Every test that needs a specific "translation configured" state monkeypatches
+routers.translation's module-level TRANSLATION_ENABLED flag and
+_translate_sync/_install_model_sync functions directly, the same way
+test_support.py monkeypatches SUPPORT_EMAIL and test_email_send.py
+monkeypatches smtplib -- deliberately never relying on whatever
+TRANSLATION_ENABLED happens to be in the ambient .env this process loaded.
+That's not hypothetical: this whole suite runs for real (via deploy.sh)
+against a server's actual .env, which may well have TRANSLATION_ENABLED=true
+and a real argos-translate model installed -- a "disabled" test that only
+assumed the env var was unset, rather than forcing it off, silently passed
+in development and failed the moment it ran somewhere translation was
+genuinely turned on.
 """
+
+import pytest
 
 from routers import translation
 from helpers import register, login, auth
@@ -23,6 +32,13 @@ def _fake_translate(text, target_lang):
 
 
 class TestTranslationDisabledByDefault:
+    @pytest.fixture(autouse=True)
+    def _force_disabled(self, monkeypatch):
+        """Every test in this class is specifically about the
+        not-configured behavior -- force it off rather than assume it,
+        regardless of what this process's own .env happens to have set."""
+        monkeypatch.setattr(translation, "TRANSLATION_ENABLED", False)
+
     def test_languages_list_is_empty_with_nothing_enabled(self, client):
         resp = client.get("/i18n/languages")
         assert resp.status_code == 200
