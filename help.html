@@ -36,10 +36,10 @@
         <option value="high-contrast">High Contrast</option>
         <option value="system">System</option>
       </select>
-      <select id="lang-select" class="btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
+      <select id="lang-select" class="lang-select btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
         <option value="en">English</option>
       </select>
-      <a id="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+      <a id="i18n-credit" class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
         style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
       <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
     </div>
@@ -67,6 +67,14 @@
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Language Switcher on the Login Screen (v2.20.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The login/registration screen now has its own language switcher (top-right corner) — previously the only way to change language before logging in was browser auto-detect, with no manual override.</li>
+              <li>Internal: the switcher and its "via Argos Translate" credit link are now driven by a shared <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.lang-select</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.i18n-credit</code> class rather than a single page-wide id, since a page can now have more than one instance (the auth screen's own, plus the logged-in app header's).</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Sessions, Schedule &amp; Check-In Panel (v2.20.1)</div>
@@ -1192,7 +1200,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
   <script src="/static/js/utils.js?v=8"></script>
   <script src="/static/js/auth.js?v=30"></script>
   <script src="/static/js/theme.js?v=1"></script>
-  <script src="/static/js/i18n.js?v=2"></script>
+  <script src="/static/js/i18n.js?v=3"></script>
   <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/pwa.js?v=1"></script>
 

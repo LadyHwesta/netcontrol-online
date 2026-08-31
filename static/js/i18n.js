@@ -95,18 +95,22 @@ function translatePage() {
 }
 
 function _updateLangUi() {
-  const sel = document.getElementById('lang-select');
-  if (sel) {
-    sel.innerHTML = '<option value="en">English</option>' +
-      enabledLanguages.map(l => `<option value="${esc(l.code)}">${esc(l.display_name)}</option>`).join('');
+  // A class, not a single id -- most pages have one switcher in the app
+  // header, but the pre-login auth screen has its own separate instance
+  // (no #app header to sit in yet), so more than one can be on a page.
+  const optionsHtml = '<option value="en">English</option>' +
+    enabledLanguages.map(l => `<option value="${esc(l.code)}">${esc(l.display_name)}</option>`).join('');
+  document.querySelectorAll('.lang-select').forEach(sel => {
+    sel.innerHTML = optionsHtml;
     sel.value = currentLang;
     // No point showing a switcher with nothing but English to pick from --
     // matches the rest of the app's "hide the control when the feature
     // behind it isn't configured" convention.
     sel.style.display = enabledLanguages.length ? '' : 'none';
-  }
-  const credit = document.getElementById('i18n-credit');
-  if (credit) credit.style.display = currentLang !== 'en' ? '' : 'none';
+  });
+  document.querySelectorAll('.i18n-credit').forEach(credit => {
+    credit.style.display = currentLang !== 'en' ? '' : 'none';
+  });
 }
 
 // User picked a new language from the <select> -- persist to DB (if
