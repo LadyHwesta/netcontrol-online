@@ -492,13 +492,13 @@ function renderCheckinsHeader() {
   const header = document.getElementById('checkins-list-header');
   if (!header) return;
   header.innerHTML = currentSessionIsActivation
-    ? `<span class="checkin-header-callsign">Tactical</span>
-       <span class="checkin-header-name">Callsign</span>
-       <span class="checkin-header-name">Name</span>
+    ? `<span class="checkin-header-callsign">${t('Tactical')}</span>
+       <span class="checkin-header-name">${t('Callsign')}</span>
+       <span class="checkin-header-name">${t('Name')}</span>
        <span class="checkin-header-actions"></span>`
-    : `<span class="checkin-header-callsign">Callsign</span>
-       <span class="checkin-header-name">Name</span>
-       <span class="checkin-header-traffic">Tfc</span>
+    : `<span class="checkin-header-callsign">${t('Callsign')}</span>
+       <span class="checkin-header-name">${t('Name')}</span>
+       <span class="checkin-header-traffic">${t('Tfc')}</span>
        <span class="checkin-header-actions"></span>`;
 }
 
@@ -675,7 +675,7 @@ function renderExpectedList() {
   // attendance list entirely with the tactical position roster. A routine
   // session on an ARES net (currentNetIsAres but not currentSessionIsActivation)
   // falls through to the unchanged code below.
-  document.getElementById('expected-panel-title').textContent = currentSessionIsActivation ? 'TACTICAL ASSIGNMENTS' : 'EXPECTED STATIONS';
+  document.getElementById('expected-panel-title').textContent = currentSessionIsActivation ? t('TACTICAL ASSIGNMENTS') : t('EXPECTED STATIONS');
   document.getElementById('expected-filter-row').style.display = currentSessionIsActivation ? 'none' : '';
   if (currentSessionIsActivation) { renderTacticalAssignments(); return; }
 

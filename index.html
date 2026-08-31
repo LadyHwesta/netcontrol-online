@@ -571,43 +571,43 @@
           <!-- Only shown while viewing a live (not yet ended) session, where the sessions
                list is hidden to cut clutter — lets you step back one level to see other
                sessions or make changes, instead of leaving the net entirely (issue #19). -->
-          <button class="btn btn-ghost btn-sm" id="back-to-sessions-btn" style="display:none" onclick="backToSessions()">← Back to Sessions</button>
-          <button class="btn btn-ghost btn-sm" onclick="showView('nets')">← Back to Nets</button>
+          <button class="btn btn-ghost btn-sm" id="back-to-sessions-btn" style="display:none" onclick="backToSessions()" data-i18n="← Back to Sessions">← Back to Sessions</button>
+          <button class="btn btn-ghost btn-sm" onclick="showView('nets')" data-i18n="← Back to Nets">← Back to Nets</button>
           <h2 class="section-title mb-0" id="session-net-name"></h2>
         </div>
 
         <!-- Sub-tabs — hidden while a session is live to reduce clutter; restored when it ends -->
         <div class="tab-bar" id="session-tab-bar">
-          <button class="tab-btn active" id="sub-tab-sessions" onclick="switchSubTab('sessions')">Sessions</button>
-          <button class="tab-btn" id="sub-tab-schedule" onclick="switchSubTab('schedule')">Schedule</button>
+          <button class="tab-btn active" id="sub-tab-sessions" onclick="switchSubTab('sessions')" data-i18n="Sessions">Sessions</button>
+          <button class="tab-btn" id="sub-tab-schedule" onclick="switchSubTab('schedule')" data-i18n="Schedule">Schedule</button>
         </div>
 
         <!-- Session list/controls -->
         <div id="sessions-panel">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-            <span class="text-muted" style="font-size:13px">Sessions</span>
-            <button class="btn btn-success btn-sm" onclick="toggleStartSessionForm()">▶ Start New Session</button>
-            <button class="btn btn-ghost btn-sm" onclick="toggleLogOfflineForm()">🕐 Log Past Net</button>
-            <button class="btn btn-ghost btn-sm" id="export-net-btn" onclick="exportNet()">⬇ Export All CSV</button>
-            <button class="btn btn-ghost btn-sm" onclick="showView('history', currentNetId)">📊 History</button>
+            <span class="text-muted" style="font-size:13px" data-i18n="Sessions">Sessions</span>
+            <button class="btn btn-success btn-sm" onclick="toggleStartSessionForm()" data-i18n="▶ Start New Session">▶ Start New Session</button>
+            <button class="btn btn-ghost btn-sm" onclick="toggleLogOfflineForm()" data-i18n="🕐 Log Past Net">🕐 Log Past Net</button>
+            <button class="btn btn-ghost btn-sm" id="export-net-btn" onclick="exportNet()" data-i18n="⬇ Export All CSV">⬇ Export All CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="showView('history', currentNetId)" data-i18n="📊 History">📊 History</button>
           </div>
           <!-- Start session form -->
           <div id="start-session-form" class="card" style="display:none;max-width:460px;margin-bottom:12px">
             <div class="form-group mb-0">
-              <label>Session Name <span class="text-muted" style="font-size:11px">(optional)</span></label>
+              <label><span data-i18n="Session Name">Session Name</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
               <input class="form-control" id="new-session-name" placeholder="e.g. Monday Night Net — July 14" />
             </div>
             <!-- Broadcaster override — only shown for nets with an additional broadcast segment.
                  Covers a broadcaster not known until the net is about to begin (issue #17);
                  leave blank to use whoever is scheduled via Sign-Up. -->
             <div id="start-session-broadcaster-group" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-              <label style="font-size:12px" id="start-session-broadcaster-label">Broadcaster Override <span class="text-muted" style="font-size:11px">(optional — overrides today's sign-up)</span></label>
+              <label style="font-size:12px" id="start-session-broadcaster-label"><span data-i18n="Broadcaster Override">Broadcaster Override</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional — overrides today's sign-up)">(optional — overrides today's sign-up)</span></label>
               <div class="form-row" style="margin-top:4px">
                 <div class="form-group mb-0">
-                  <input class="form-control mono" id="new-session-broadcaster-callsign" placeholder="Callsign" style="text-transform:uppercase;font-size:13px" />
+                  <input class="form-control mono" id="new-session-broadcaster-callsign" placeholder="Callsign" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Callsign" />
                 </div>
                 <div class="form-group mb-0">
-                  <input class="form-control" id="new-session-broadcaster-name" placeholder="Name (optional)" style="font-size:13px" />
+                  <input class="form-control" id="new-session-broadcaster-name" placeholder="Name (optional)" style="font-size:13px" data-i18n-placeholder="Name (optional)" />
                 </div>
               </div>
             </div>
@@ -617,13 +617,13 @@
             <div id="start-session-activation-group" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
                 <input type="checkbox" id="new-session-is-activation" style="accent-color:var(--lc-red);width:16px;height:16px" />
-                🚨 ARES/ACES Activation
+                <span data-i18n="🚨 ARES/ACES Activation">🚨 ARES/ACES Activation</span>
               </label>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Enables tactical assignments and shift sign-on for this session only — leave unchecked for a routine net.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Enables tactical assignments and shift sign-on for this session only — leave unchecked for a routine net.">Enables tactical assignments and shift sign-on for this session only — leave unchecked for a routine net.</div>
             </div>
             <div style="display:flex;gap:8px;margin-top:12px">
-              <button class="btn btn-success" onclick="startSession()">▶ Start</button>
-              <button class="btn btn-ghost" onclick="toggleStartSessionForm()">Cancel</button>
+              <button class="btn btn-success" onclick="startSession()" data-i18n="▶ Start">▶ Start</button>
+              <button class="btn btn-ghost" onclick="toggleStartSessionForm()" data-i18n="Cancel">Cancel</button>
             </div>
           </div>
           <!-- Log a past net (issue #20) — for a net that already happened with no
@@ -632,23 +632,23 @@
                check-in form stays usable so checkins can be entered afterward, each
                stamped with the reported date/time rather than real "now". -->
           <div id="log-offline-form" class="card" style="display:none;max-width:460px;margin-bottom:12px">
-            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:10px">🕐 LOG A NET THAT ALREADY HAPPENED</div>
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:10px" data-i18n="🕐 LOG A NET THAT ALREADY HAPPENED">🕐 LOG A NET THAT ALREADY HAPPENED</div>
             <div class="form-group mb-0">
-              <label>Session Name <span class="text-muted" style="font-size:11px">(optional)</span></label>
+              <label><span data-i18n="Session Name">Session Name</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
               <input class="form-control" id="log-offline-name" placeholder="e.g. Monday Night Net — July 14" />
             </div>
             <div class="form-group" style="margin-top:10px">
-              <label style="font-size:12px">Date &amp; Time of Net * <span class="text-muted" style="font-size:11px">(this year)</span></label>
+              <label style="font-size:12px"><span data-i18n="Date &amp; Time of Net *">Date &amp; Time of Net *</span> <span class="text-muted" style="font-size:11px" data-i18n="(this year)">(this year)</span></label>
               <div style="display:flex;gap:6px">
                 <select class="form-control" id="log-offline-month" style="font-size:13px;width:78px">
-                  <option value="">Month</option>
+                  <option value="" data-i18n="Month">Month</option>
                   <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
                   <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
                   <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
                   <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
                 </select>
                 <select class="form-control" id="log-offline-day" style="font-size:13px;width:66px">
-                  <option value="">Day</option>
+                  <option value="" data-i18n="Day">Day</option>
                   <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
                   <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
                   <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
@@ -662,30 +662,30 @@
             </div>
             <div class="form-row" style="margin-top:10px">
               <div class="form-group mb-0">
-                <label style="font-size:12px">Net Control Callsign</label>
-                <input class="form-control mono" id="log-offline-ncs-callsign" placeholder="Optional" style="text-transform:uppercase;font-size:13px" />
+                <label style="font-size:12px" data-i18n="Net Control Callsign">Net Control Callsign</label>
+                <input class="form-control mono" id="log-offline-ncs-callsign" placeholder="Optional" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Optional" />
               </div>
               <div class="form-group mb-0">
-                <label style="font-size:12px">Net Control Name</label>
-                <input class="form-control" id="log-offline-ncs-name" placeholder="Optional" style="font-size:13px" />
+                <label style="font-size:12px" data-i18n="Net Control Name">Net Control Name</label>
+                <input class="form-control" id="log-offline-ncs-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
               </div>
             </div>
             <!-- Same conditional visibility as the live-session broadcaster override —
                  only shown for nets with an additional broadcast segment. -->
             <div id="log-offline-broadcaster-group" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-              <label style="font-size:12px" id="log-offline-broadcaster-label">Broadcaster <span class="text-muted" style="font-size:11px">(optional)</span></label>
+              <label style="font-size:12px" id="log-offline-broadcaster-label"><span data-i18n="Broadcaster">Broadcaster</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
               <div class="form-row" style="margin-top:4px">
                 <div class="form-group mb-0">
-                  <input class="form-control mono" id="log-offline-broadcaster-callsign" placeholder="Callsign" style="text-transform:uppercase;font-size:13px" />
+                  <input class="form-control mono" id="log-offline-broadcaster-callsign" placeholder="Callsign" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Callsign" />
                 </div>
                 <div class="form-group mb-0">
-                  <input class="form-control" id="log-offline-broadcaster-name" placeholder="Name (optional)" style="font-size:13px" />
+                  <input class="form-control" id="log-offline-broadcaster-name" placeholder="Name (optional)" style="font-size:13px" data-i18n-placeholder="Name (optional)" />
                 </div>
               </div>
             </div>
             <div style="display:flex;gap:8px;margin-top:12px">
-              <button class="btn btn-success" onclick="logOfflineNet()">📝 Log Net</button>
-              <button class="btn btn-ghost" onclick="toggleLogOfflineForm()">Cancel</button>
+              <button class="btn btn-success" onclick="logOfflineNet()" data-i18n="📝 Log Net">📝 Log Net</button>
+              <button class="btn btn-ghost" onclick="toggleLogOfflineForm()" data-i18n="Cancel">Cancel</button>
             </div>
           </div>
           <div id="sessions-list-container"></div>
@@ -704,41 +704,41 @@
                 <strong id="session-status-label"></strong>
                 <span class="text-muted" id="session-meta"></span>
                 <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-                  <button class="btn btn-ghost" id="net-control-mode-btn" onclick="toggleNetControlMode()">📱 Net Control</button>
-                  <button class="btn btn-danger" id="end-session-btn" onclick="endSession()">■ End Session</button>
-                  <button class="btn btn-ghost" onclick="openICS205(currentSessionId)">📄 ICS-205</button>
-                  <button class="btn btn-ghost" onclick="exportSession()">⬇ CSV</button>
-                  <button class="btn btn-ghost" onclick="openCheckinImportModal()">⬆ Import CSV</button>
+                  <button class="btn btn-ghost" id="net-control-mode-btn" onclick="toggleNetControlMode()" data-i18n="📱 Net Control">📱 Net Control</button>
+                  <button class="btn btn-danger" id="end-session-btn" onclick="endSession()" data-i18n="■ End Session">■ End Session</button>
+                  <button class="btn btn-ghost" onclick="openICS205(currentSessionId)" data-i18n="📄 ICS-205">📄 ICS-205</button>
+                  <button class="btn btn-ghost" onclick="exportSession()" data-i18n="⬇ CSV">⬇ CSV</button>
+                  <button class="btn btn-ghost" onclick="openCheckinImportModal()" data-i18n="⬆ Import CSV">⬆ Import CSV</button>
                 </div>
               </div>
 
               <!-- Scheduled duty (Net Control / Broadcaster) for today, from the Schedule sign-up if one exists -->
               <div id="duty-bar" style="display:none;font-size:12px;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">
-                <span id="duty-nc" style="display:none">🎙 Net Control: <strong></strong></span>
+                <span id="duty-nc" style="display:none"><span data-i18n="🎙 Net Control:">🎙 Net Control:</span> <strong></strong></span>
                 <span id="duty-bc" style="display:none">📻 <span class="duty-bc-label">Broadcaster</span>: <strong></strong></span>
               </div>
 
               <!-- Clock / session timer -->
               <div id="session-clock-bar" style="display:none;font-family:monospace;color:var(--lc-blue);display:flex;gap:24px;margin-bottom:12px;flex-wrap:wrap;align-items:center;background:rgba(0,153,255,0.06);border:1px solid rgba(0,153,255,0.2);border-radius:8px;padding:8px 14px">
-                <span title="Local time" style="font-size:18px;letter-spacing:.04em">🕐 <span id="clk-local">—</span></span>
-                <span title="UTC time" style="font-size:18px;letter-spacing:.04em">🌐 <span id="clk-utc">—</span>Z</span>
-                <span title="Session elapsed time" style="font-size:18px;letter-spacing:.04em;color:var(--lc-orange)">⏱ <span id="clk-elapsed">—</span></span>
+                <span title="Local time" data-i18n-title="Local time" style="font-size:18px;letter-spacing:.04em">🕐 <span id="clk-local">—</span></span>
+                <span title="UTC time" data-i18n-title="UTC time" style="font-size:18px;letter-spacing:.04em">🌐 <span id="clk-utc">—</span>Z</span>
+                <span title="Session elapsed time" data-i18n-title="Session elapsed time" style="font-size:18px;letter-spacing:.04em;color:var(--lc-orange)">⏱ <span id="clk-elapsed">—</span></span>
               </div>
 
               <!-- Traffic banner (shown when any station has traffic) -->
               <div id="traffic-banner" style="display:none;background:var(--lc-red);color:#000;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:13px;font-weight:700">
-                <span>📢 TRAFFIC: </span><span id="traffic-callsigns" style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;vertical-align:middle"></span>
+                <span data-i18n="📢 TRAFFIC:">📢 TRAFFIC:</span> <span id="traffic-callsigns" style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;vertical-align:middle"></span>
               </div>
 
               <!-- Welcome banner (shown when a checked-in station has never checked into this net before) -->
               <div id="welcome-banner" style="display:none;background:var(--lc-green);color:#000;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:13px;font-weight:700">
-                <span>👋 FIRST-TIME CHECK-IN: </span><span id="welcome-callsigns" style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;vertical-align:middle"></span>
+                <span data-i18n="👋 FIRST-TIME CHECK-IN:">👋 FIRST-TIME CHECK-IN:</span> <span id="welcome-callsigns" style="display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center;vertical-align:middle"></span>
               </div>
 
               <!-- Net script panel (shown when the net has a script attached) -->
               <div id="net-script-panel" style="display:none;margin-bottom:6px;border:1px solid var(--lc-blue);border-radius:8px;overflow:hidden">
                 <button onclick="toggleNetScriptPanel()" style="width:100%;background:rgba(0,153,255,0.12);border:none;color:var(--lc-blue);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                  <span>📜 NET SCRIPT</span>
+                  <span data-i18n="📜 NET SCRIPT">📜 NET SCRIPT</span>
                   <span id="net-script-toggle-icon">▼</span>
                 </button>
                 <div id="net-script-body" style="border-top:1px solid var(--lc-blue);padding:12px;max-height:320px;overflow-y:auto">
@@ -751,7 +751,7 @@
               <div id="offline-queue-banner" style="display:none;background:rgba(255,153,0,0.12);border:1px solid var(--lc-orange);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px">
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                   <span id="offline-queue-summary" style="color:var(--lc-orange);font-weight:700"></span>
-                  <button class="btn btn-ghost btn-sm" onclick="retryOfflineQueue()" style="margin-left:auto">↻ Retry Now</button>
+                  <button class="btn btn-ghost btn-sm" onclick="retryOfflineQueue()" style="margin-left:auto" data-i18n="↻ Retry Now">↻ Retry Now</button>
                 </div>
                 <div id="offline-queue-list" style="margin-top:6px"></div>
               </div>
@@ -761,8 +761,8 @@
                    Station Schedule (tactical position setup) tab; the roster column on
                    the right stays visible regardless of which tab is active. -->
               <div class="tab-bar" id="session-mode-tab-bar" style="display:none">
-                <button class="tab-btn active" id="session-tab-checkin-btn" onclick="switchSessionTab('checkin')">📻 Check-In</button>
-                <button class="tab-btn" id="session-tab-schedule-btn" onclick="switchSessionTab('schedule')">🗓 Station Schedule</button>
+                <button class="tab-btn active" id="session-tab-checkin-btn" onclick="switchSessionTab('checkin')" data-i18n="📻 Check-In">📻 Check-In</button>
+                <button class="tab-btn" id="session-tab-schedule-btn" onclick="switchSessionTab('schedule')" data-i18n="🗓 Station Schedule">🗓 Station Schedule</button>
               </div>
 
               <!-- Station Schedule tab content — setup/definition, split into Tactical
@@ -774,46 +774,46 @@
                    right here too, not just there. -->
               <div id="station-schedule-panel" style="display:none">
                 <div class="tab-bar" id="station-schedule-subtab-bar">
-                  <button class="tab-btn active" id="schedule-subtab-tactical-btn" onclick="switchStationScheduleSubTab('tactical')">🎯 Tactical Stations</button>
-                  <button class="tab-btn" id="schedule-subtab-netcontrol-btn" onclick="switchStationScheduleSubTab('netcontrol')">🎙 Net Control</button>
+                  <button class="tab-btn active" id="schedule-subtab-tactical-btn" onclick="switchStationScheduleSubTab('tactical')" data-i18n="🎯 Tactical Stations">🎯 Tactical Stations</button>
+                  <button class="tab-btn" id="schedule-subtab-netcontrol-btn" onclick="switchStationScheduleSubTab('netcontrol')" data-i18n="🎙 Net Control">🎙 Net Control</button>
                 </div>
 
                 <div id="tactical-stations-subpanel">
                   <div class="card" style="margin-bottom:12px;padding:12px">
-                    <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:8px">+ ADD TACTICAL POSITION</div>
+                    <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:8px" data-i18n="+ ADD TACTICAL POSITION">+ ADD TACTICAL POSITION</div>
                     <div class="form-row">
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Tactical Callsign *</label>
+                        <label style="font-size:11px" data-i18n="Tactical Callsign *">Tactical Callsign *</label>
                         <input class="form-control mono" id="tac-pos-callsign" placeholder="SHELTER 1" style="text-transform:uppercase;font-size:13px" />
                       </div>
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Location</label>
-                        <input class="form-control" id="tac-pos-location" placeholder="Optional" style="font-size:13px" />
+                        <label style="font-size:11px" data-i18n="Location">Location</label>
+                        <input class="form-control" id="tac-pos-location" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
                       </div>
                     </div>
                     <div class="form-row" style="margin-top:8px">
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Assigned Operator Callsign</label>
-                        <input class="form-control mono" id="tac-pos-assigned-callsign" placeholder="Optional — who's planned for this" style="text-transform:uppercase;font-size:13px" />
+                        <label style="font-size:11px" data-i18n="Assigned Operator Callsign">Assigned Operator Callsign</label>
+                        <input class="form-control mono" id="tac-pos-assigned-callsign" placeholder="Optional — who's planned for this" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Optional — who's planned for this" />
                       </div>
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Assigned Operator Name</label>
-                        <input class="form-control" id="tac-pos-assigned-name" placeholder="Optional" style="font-size:13px" />
+                        <label style="font-size:11px" data-i18n="Assigned Operator Name">Assigned Operator Name</label>
+                        <input class="form-control" id="tac-pos-assigned-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
                       </div>
                     </div>
                     <div class="form-row" style="margin-top:8px">
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Scheduled Sign-On <span class="text-muted">(this year)</span></label>
+                        <label style="font-size:11px"><span data-i18n="Scheduled Sign-On">Scheduled Sign-On</span> <span class="text-muted" data-i18n="(this year)">(this year)</span></label>
                         <div style="display:flex;gap:6px">
                           <select class="form-control" id="tac-pos-scheduled-month" style="font-size:13px;width:78px">
-                            <option value="">Month</option>
+                            <option value="" data-i18n="Month">Month</option>
                             <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
                             <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
                             <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
                             <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
                           </select>
                           <select class="form-control" id="tac-pos-scheduled-day" style="font-size:13px;width:66px">
-                            <option value="">Day</option>
+                            <option value="" data-i18n="Day">Day</option>
                             <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
                             <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
                             <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
@@ -826,7 +826,7 @@
                         </div>
                       </div>
                     </div>
-                    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addTacticalPosition()">+ Add Position</button>
+                    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addTacticalPosition()" data-i18n="+ Add Position">+ Add Position</button>
                   </div>
                   <div id="tactical-schedule-list"></div>
                 </div>
@@ -834,30 +834,30 @@
                 <div id="net-control-subpanel" style="display:none">
                   <div id="net-control-status-card"></div>
                   <div class="card" style="margin-bottom:12px;padding:12px">
-                    <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:8px">+ ADD PLANNED SHIFT</div>
+                    <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:8px" data-i18n="+ ADD PLANNED SHIFT">+ ADD PLANNED SHIFT</div>
                     <div class="form-row">
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Callsign *</label>
+                        <label style="font-size:11px" data-i18n="Callsign *">Callsign *</label>
                         <input class="form-control mono" id="nc-shift-callsign" placeholder="W1ABC" style="text-transform:uppercase;font-size:13px" />
                       </div>
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Name</label>
-                        <input class="form-control" id="nc-shift-name" placeholder="Optional" style="font-size:13px" />
+                        <label style="font-size:11px" data-i18n="Name">Name</label>
+                        <input class="form-control" id="nc-shift-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
                       </div>
                     </div>
                     <div class="form-row" style="margin-top:8px">
                       <div class="form-group mb-0">
-                        <label style="font-size:11px">Scheduled Sign-On <span class="text-muted">(this year)</span></label>
+                        <label style="font-size:11px"><span data-i18n="Scheduled Sign-On">Scheduled Sign-On</span> <span class="text-muted" data-i18n="(this year)">(this year)</span></label>
                         <div style="display:flex;gap:6px">
                           <select class="form-control" id="nc-shift-month" style="font-size:13px;width:78px">
-                            <option value="">Month</option>
+                            <option value="" data-i18n="Month">Month</option>
                             <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
                             <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
                             <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
                             <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
                           </select>
                           <select class="form-control" id="nc-shift-day" style="font-size:13px;width:66px">
-                            <option value="">Day</option>
+                            <option value="" data-i18n="Day">Day</option>
                             <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
                             <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
                             <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
@@ -870,7 +870,7 @@
                         </div>
                       </div>
                     </div>
-                    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addNetControlShift()">+ Add Shift</button>
+                    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addNetControlShift()" data-i18n="+ Add Shift">+ Add Shift</button>
                   </div>
                   <div id="net-control-shifts-list"></div>
                 </div>
@@ -881,43 +881,43 @@
               <div id="checkin-form-area" class="session-checkin-tab-content">
               <div class="checkin-new-row">
                 <div class="form-group callsign-field" style="position:relative">
-                  <label>Callsign *</label>
+                  <label data-i18n="Callsign *">Callsign *</label>
                   <input class="form-control mono" id="ci-call" placeholder="W1AW or suffix" style="text-transform:uppercase" autocomplete="off" />
                   <div class="lookup-info" id="ci-lookup-info"></div>
                   <div id="cs-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--lc-orange);border-radius:0 0 8px 8px;z-index:200;max-height:220px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.5)"></div>
                 </div>
                 <div class="form-group name-field">
-                  <label>Name <span id="ci-name-autofill-note" style="color:var(--success);font-size:10px;display:none">✓ auto-filled</span></label>
-                  <input class="form-control" id="ci-name" placeholder="Auto-filled from FCC lookup" />
+                  <label><span data-i18n="Name">Name</span> <span id="ci-name-autofill-note" style="color:var(--success);font-size:10px;display:none" data-i18n="✓ auto-filled">✓ auto-filled</span></label>
+                  <input class="form-control" id="ci-name" placeholder="Auto-filled from FCC lookup" data-i18n-placeholder="Auto-filled from FCC lookup" />
                 </div>
                 <div class="form-group sig-field">
-                  <label>Signal</label>
+                  <label data-i18n="Signal">Signal</label>
                   <input class="form-control" id="ci-sig" placeholder="59" />
                 </div>
                 <div class="form-group ci-comments-group" style="width:140px">
-                  <label>Comments</label>
-                  <input class="form-control" id="ci-comments" placeholder="Optional" />
+                  <label data-i18n="Comments">Comments</label>
+                  <input class="form-control" id="ci-comments" placeholder="Optional" data-i18n-placeholder="Optional" />
                 </div>
                 <div id="ci-zone-group" class="form-group" style="width:120px;display:none">
-                  <label style="font-size:11px">Evac Zone</label>
+                  <label style="font-size:11px" data-i18n="Evac Zone">Evac Zone</label>
                   <input class="form-control" id="ci-zone" placeholder="Zone A" list="known-zones-list" style="font-size:13px" />
                   <datalist id="known-zones-list"></datalist>
                 </div>
                 <div id="ci-dmr-tg-group" class="form-group" style="width:110px;display:none">
-                  <label style="font-size:11px">Talk Group</label>
+                  <label style="font-size:11px" data-i18n="Talk Group">Talk Group</label>
                   <input class="form-control" id="ci-dmr-tg" placeholder="3117" style="font-size:13px" />
                 </div>
                 <div id="ci-dmr-region-group" class="form-group" style="width:130px;display:none">
-                  <label style="font-size:11px">Region/State</label>
+                  <label style="font-size:11px" data-i18n="Region/State">Region/State</label>
                   <input class="form-control" id="ci-dmr-region" placeholder="Illinois" style="font-size:13px" />
                 </div>
                 <div class="form-group" style="width:auto;display:flex;align-items:flex-end;gap:6px;padding-bottom:2px">
                   <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;white-space:nowrap;margin-bottom:0">
                     <input type="checkbox" id="ci-traffic" style="accent-color:var(--lc-red);width:16px;height:16px" />
-                    Has Traffic
+                    <span data-i18n="Has Traffic">Has Traffic</span>
                   </label>
                 </div>
-                <button class="btn btn-primary" style="margin-bottom:0;height:33px;margin-top:auto" onclick="addCheckin()">Check In</button>
+                <button class="btn btn-primary" style="margin-bottom:0;height:33px;margin-top:auto" onclick="addCheckin()" data-i18n="Check In">Check In</button>
               </div>
             </div>
             </div><!-- /session-sticky-header -->
@@ -931,17 +931,17 @@
               <div id="expected-panel-body" style="display:none;padding:12px;border-top:1px solid var(--border)">
                 <div id="expected-filter-row" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px">
                   <div class="form-group" style="margin-bottom:0;width:90px">
-                    <label style="font-size:11px">Min. Check-ins</label>
+                    <label style="font-size:11px" data-i18n="Min. Check-ins">Min. Check-ins</label>
                     <input class="form-control" type="number" id="exp-min" value="2" min="1" max="99" style="font-size:13px" />
                   </div>
                   <div class="form-group" style="margin-bottom:0;width:90px">
-                    <label style="font-size:11px">Past (weeks)</label>
+                    <label style="font-size:11px" data-i18n="Past (weeks)">Past (weeks)</label>
                     <input class="form-control" type="number" id="exp-weeks" value="4" min="1" max="52" style="font-size:13px" />
                   </div>
-                  <button class="btn btn-primary btn-sm" onclick="loadExpectedStations()">Load List</button>
+                  <button class="btn btn-primary btn-sm" onclick="loadExpectedStations()" data-i18n="Load List">Load List</button>
                 </div>
                 <div id="expected-list">
-                  <p class="text-muted" style="font-size:12px;margin:0">Set filter and click Load List to see previously active stations.</p>
+                  <p class="text-muted" style="font-size:12px;margin:0" data-i18n="Set filter and click Load List to see previously active stations.">Set filter and click Load List to see previously active stations.</p>
                 </div>
               </div>
             </div>
@@ -949,7 +949,7 @@
             <!-- Digital Voice Last Heard Panel (shown when net has a digital voice config -- issue #26) -->
             <div id="dmr-heard-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-orange);border-radius:8px;overflow:hidden">
               <button onclick="toggleDmrPanel()" style="width:100%;background:rgba(255,153,0,0.12);border:none;color:var(--lc-orange);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                <span>📻 DIGITAL VOICE LAST HEARD</span>
+                <span data-i18n="📻 DIGITAL VOICE LAST HEARD">📻 DIGITAL VOICE LAST HEARD</span>
                 <span style="display:flex;align-items:center;gap:10px">
                   <span id="dmr-heard-count" style="font-size:11px;background:var(--lc-orange);color:#000;border-radius:10px;padding:1px 8px;display:none"></span>
                   <span id="dmr-panel-toggle-icon">▶</span>
@@ -958,7 +958,7 @@
               <div id="dmr-panel-body" style="display:none;border-top:1px solid var(--lc-orange)">
                 <div style="padding:8px 12px;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-muted)">
                   <span id="dmr-last-refresh">Not yet refreshed</span>
-                  <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:1px 8px" onclick="refreshDmrHeard()">↻ Refresh</button>
+                  <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:1px 8px" onclick="refreshDmrHeard()" data-i18n="↻ Refresh">↻ Refresh</button>
                 </div>
                 <div id="dmr-heard-list" style="padding:0 12px 12px"></div>
               </div>
@@ -967,7 +967,7 @@
             <!-- APRS Map Panel (issue #22, shown when net has APRS config) -->
             <div id="aprs-map-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-blue);border-radius:8px;overflow:hidden">
               <button onclick="toggleAprsMapPanel()" style="width:100%;background:rgba(0,153,255,0.12);border:none;color:var(--lc-blue);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                <span>🗺️ APRS STATION MAP</span>
+                <span data-i18n="🗺️ APRS STATION MAP">🗺️ APRS STATION MAP</span>
                 <span style="display:flex;align-items:center;gap:10px">
                   <span id="aprs-map-count" style="font-size:11px;background:var(--lc-blue);color:#000;border-radius:10px;padding:1px 8px;display:none"></span>
                   <span id="aprs-map-toggle-icon">▶</span>
@@ -976,7 +976,7 @@
               <div id="aprs-map-body" style="display:none;border-top:1px solid var(--lc-blue)">
                 <div style="padding:8px 12px;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-muted)">
                   <span id="aprs-map-last-refresh">Not yet refreshed</span>
-                  <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:1px 8px" onclick="refreshAprsMap()">↻ Refresh</button>
+                  <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:1px 8px" onclick="refreshAprsMap()" data-i18n="↻ Refresh">↻ Refresh</button>
                 </div>
                 <div id="aprs-map-container" style="height:320px"></div>
               </div>
@@ -985,12 +985,12 @@
             <!-- Zone Roster (ARES/ACES nets only) -->
             <div id="zone-roster-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-orange);border-radius:8px;overflow:hidden">
               <button onclick="toggleZoneRoster()" style="width:100%;background:rgba(255,153,0,0.12);border:none;color:var(--lc-orange);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                <span>🗺 EVACUATION ZONE ROSTER</span>
+                <span data-i18n="🗺 EVACUATION ZONE ROSTER">🗺 EVACUATION ZONE ROSTER</span>
                 <span id="zone-roster-toggle-icon">▶</span>
               </button>
               <div id="zone-roster-body" style="display:none;padding:10px;border-top:1px solid var(--lc-orange)">
                 <div id="zone-roster-list" style="max-height:240px;overflow-y:auto;font-size:13px">
-                  <p class="text-muted" style="margin:0;font-size:12px">Loading…</p>
+                  <p class="text-muted" style="margin:0;font-size:12px" data-i18n="Loading…">Loading…</p>
                 </div>
               </div>
             </div>
@@ -998,41 +998,41 @@
             <!-- Traffic message log (ARES nets only) -->
             <div id="traffic-log-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-blue);border-radius:8px;overflow:hidden">
               <button onclick="toggleTrafficLog()" style="width:100%;background:rgba(0,153,255,0.1);border:none;color:var(--lc-blue);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                <span>📋 TRAFFIC MESSAGE LOG <span id="traffic-log-count" style="font-weight:400;font-size:11px;opacity:.7"></span></span>
+                <span><span data-i18n="📋 TRAFFIC MESSAGE LOG">📋 TRAFFIC MESSAGE LOG</span> <span id="traffic-log-count" style="font-weight:400;font-size:11px;opacity:.7"></span></span>
                 <span id="traffic-log-toggle-icon">▶</span>
               </button>
               <div id="traffic-log-body" style="display:none;padding:10px;border-top:1px solid var(--lc-blue)">
                 <!-- Add message form -->
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end">
                   <div class="form-group mb-0" style="width:90px">
-                    <label style="font-size:11px">Msg #</label>
+                    <label style="font-size:11px" data-i18n="Msg #">Msg #</label>
                     <input class="form-control" id="tm-number" placeholder="NTS-001" style="font-size:12px" />
                   </div>
                   <div class="form-group mb-0" style="width:100px">
-                    <label style="font-size:11px">Origin</label>
+                    <label style="font-size:11px" data-i18n="Origin">Origin</label>
                     <input class="form-control mono" id="tm-origin" placeholder="W1AW" style="font-size:12px;text-transform:uppercase" />
                   </div>
                   <div class="form-group mb-0" style="flex:1;min-width:120px">
-                    <label style="font-size:11px">Destination</label>
-                    <input class="form-control" id="tm-dest" placeholder="Callsign or address" style="font-size:12px" />
+                    <label style="font-size:11px" data-i18n="Destination">Destination</label>
+                    <input class="form-control" id="tm-dest" placeholder="Callsign or address" style="font-size:12px" data-i18n-placeholder="Callsign or address" />
                   </div>
                   <div class="form-group mb-0" style="width:120px">
-                    <label style="font-size:11px">Type</label>
+                    <label style="font-size:11px" data-i18n="Type">Type</label>
                     <select class="form-control" id="tm-type" style="font-size:12px">
-                      <option value="formal">Formal</option>
-                      <option value="informal">Informal</option>
-                      <option value="health_welfare">Health &amp; Welfare</option>
+                      <option value="formal" data-i18n="Formal">Formal</option>
+                      <option value="informal" data-i18n="Informal">Informal</option>
+                      <option value="health_welfare" data-i18n="Health &amp; Welfare">Health &amp; Welfare</option>
                     </select>
                   </div>
                   <div class="form-group mb-0" style="flex:1;min-width:120px">
-                    <label style="font-size:11px">Notes</label>
-                    <input class="form-control" id="tm-notes" placeholder="Optional notes" style="font-size:12px" />
+                    <label style="font-size:11px" data-i18n="Notes">Notes</label>
+                    <input class="form-control" id="tm-notes" placeholder="Optional notes" style="font-size:12px" data-i18n-placeholder="Optional notes" />
                   </div>
-                  <button class="btn btn-primary btn-sm" onclick="addTrafficMessage()" style="height:33px;margin-bottom:0">+ Log</button>
+                  <button class="btn btn-primary btn-sm" onclick="addTrafficMessage()" style="height:33px;margin-bottom:0" data-i18n="+ Log">+ Log</button>
                 </div>
                 <!-- Message list -->
                 <div id="traffic-log-list" style="max-height:260px;overflow-y:auto;font-size:12px">
-                  <p class="text-muted" style="margin:0;font-size:12px">No messages logged yet.</p>
+                  <p class="text-muted" style="margin:0;font-size:12px" data-i18n="No messages logged yet.">No messages logged yet.</p>
                 </div>
               </div>
             </div>
@@ -1051,30 +1051,30 @@
             </div>
             <div id="checkins-list"></div>
             <div class="empty" id="checkins-empty" style="display:none">
-              <p>No check-ins yet. Add the first station above.</p>
+              <p data-i18n="No check-ins yet. Add the first station above.">No check-ins yet. Add the first station above.</p>
             </div>
           </div><!-- /session-right-col -->
 
           <!-- Manual GPS position modal (issue follow-up) -->
           <div id="checkin-position-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
             <div class="card" style="width:320px;margin:0">
-              <div class="card-header"><h2>📍 Station Position</h2></div>
-              <p class="text-muted" style="font-size:12px;margin-bottom:14px">Manually-reported GPS position for <strong id="checkin-position-callsign"></strong> — shown on the station map alongside APRS.</p>
+              <div class="card-header"><h2 data-i18n="📍 Station Position">📍 Station Position</h2></div>
+              <p class="text-muted" style="font-size:12px;margin-bottom:14px"><span data-i18n="Manually-reported GPS position for">Manually-reported GPS position for</span> <strong id="checkin-position-callsign"></strong> <span data-i18n="— shown on the station map alongside APRS.">— shown on the station map alongside APRS.</span></p>
               <input type="hidden" id="checkin-position-id" />
               <div class="form-row">
                 <div class="form-group">
-                  <label>Latitude</label>
+                  <label data-i18n="Latitude">Latitude</label>
                   <input class="form-control mono" id="checkin-position-lat" type="number" step="any" placeholder="47.6062" />
                 </div>
                 <div class="form-group">
-                  <label>Longitude</label>
+                  <label data-i18n="Longitude">Longitude</label>
                   <input class="form-control mono" id="checkin-position-lon" type="number" step="any" placeholder="-122.3321" />
                 </div>
               </div>
               <div style="display:flex;gap:8px">
-                <button class="btn btn-primary" onclick="saveCheckinPosition()">Save</button>
-                <button class="btn btn-ghost" onclick="clearCheckinPosition()">Clear</button>
-                <button class="btn btn-ghost" onclick="closeCheckinPositionModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveCheckinPosition()" data-i18n="Save">Save</button>
+                <button class="btn btn-ghost" onclick="clearCheckinPosition()" data-i18n="Clear">Clear</button>
+                <button class="btn btn-ghost" onclick="closeCheckinPositionModal()" data-i18n="Cancel">Cancel</button>
               </div>
             </div>
           </div>
@@ -1089,41 +1089,41 @@
 
           <!-- Add schedule form -->
           <div class="card" style="max-width:520px;margin-bottom:16px">
-            <div class="card-header"><h2>Weekly Schedules</h2>
-              <div class="actions"><button class="btn btn-primary btn-sm" onclick="toggleScheduleForm()">+ Add Schedule</button></div>
+            <div class="card-header"><h2 data-i18n="Weekly Schedules">Weekly Schedules</h2>
+              <div class="actions"><button class="btn btn-primary btn-sm" onclick="toggleScheduleForm()" data-i18n="+ Add Schedule">+ Add Schedule</button></div>
             </div>
             <div id="schedule-form" style="display:none;border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
               <div class="form-row">
                 <div class="form-group">
-                  <label>Day of Week</label>
+                  <label data-i18n="Day of Week">Day of Week</label>
                   <select class="form-control" id="sched-day">
-                    <option value="0">Monday</option>
-                    <option value="1">Tuesday</option>
-                    <option value="2">Wednesday</option>
-                    <option value="3">Thursday</option>
-                    <option value="4">Friday</option>
-                    <option value="5">Saturday</option>
-                    <option value="6">Sunday</option>
+                    <option value="0" data-i18n="Monday">Monday</option>
+                    <option value="1" data-i18n="Tuesday">Tuesday</option>
+                    <option value="2" data-i18n="Wednesday">Wednesday</option>
+                    <option value="3" data-i18n="Thursday">Thursday</option>
+                    <option value="4" data-i18n="Friday">Friday</option>
+                    <option value="5" data-i18n="Saturday">Saturday</option>
+                    <option value="6" data-i18n="Sunday">Sunday</option>
                   </select>
                 </div>
                 <div class="form-group">
-                  <label>Start Time</label>
+                  <label data-i18n="Start Time">Start Time</label>
                   <input class="form-control" id="sched-time" type="time" value="19:30" />
                 </div>
                 <div class="form-group">
-                  <label>Timezone</label>
+                  <label data-i18n="Timezone">Timezone</label>
                   <input class="form-control" id="sched-tz" list="sched-tz-list" placeholder="America/Los_Angeles" />
                   <datalist id="sched-tz-list"></datalist>
                 </div>
               </div>
-              <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 12px">Time and timezone are entered together — auto-filled to your browser's detected timezone; change it if this net runs somewhere else.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin:-8px 0 12px" data-i18n="Time and timezone are entered together — auto-filled to your browser's detected timezone; change it if this net runs somewhere else.">Time and timezone are entered together — auto-filled to your browser's detected timezone; change it if this net runs somewhere else.</div>
               <div class="form-group">
-                <label>Notes</label>
+                <label data-i18n="Notes">Notes</label>
                 <input class="form-control" id="sched-notes" placeholder="Optional (e.g. 2m simplex)" />
               </div>
               <div style="display:flex;gap:8px">
-                <button class="btn btn-primary" onclick="saveSchedule()">Save</button>
-                <button class="btn btn-ghost" onclick="toggleScheduleForm()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSchedule()" data-i18n="Save">Save</button>
+                <button class="btn btn-ghost" onclick="toggleScheduleForm()" data-i18n="Cancel">Cancel</button>
               </div>
             </div>
             <div id="schedules-list" style="margin-top:10px"></div>
@@ -1132,40 +1132,40 @@
           <!-- Upcoming dates -->
           <div class="card">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-              <h2 style="font-size:15px;font-weight:600">Upcoming Net Control</h2>
-              <span class="text-muted" style="font-size:12px">(next 8 weeks)</span>
+              <h2 style="font-size:15px;font-weight:600" data-i18n="Upcoming Net Control">Upcoming Net Control</h2>
+              <span class="text-muted" style="font-size:12px" data-i18n="(next 8 weeks)">(next 8 weeks)</span>
             </div>
             <div id="upcoming-slots" class="slot-grid"></div>
-            <div class="empty" id="upcoming-empty" style="display:none"><p>No schedules yet — add one above.</p></div>
+            <div class="empty" id="upcoming-empty" style="display:none"><p data-i18n="No schedules yet — add one above.">No schedules yet — add one above.</p></div>
           </div>
 
           <!-- Self sign-up modal -->
           <div id="signup-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
             <div class="card" style="width:380px;margin:0">
               <div class="card-header"><h2 id="signup-modal-title">Sign Up for Net Control</h2></div>
-              <p class="text-muted" style="font-size:13px;margin-bottom:14px">Date: <strong id="signup-date-label"></strong></p>
+              <p class="text-muted" style="font-size:13px;margin-bottom:14px"><span data-i18n="Date:">Date:</span> <strong id="signup-date-label"></strong></p>
               <input type="hidden" id="signup-schedule-id" />
               <input type="hidden" id="signup-slot-date" />
               <input type="hidden" id="signup-role" />
               <div class="form-group">
-                <label>Callsign *</label>
-                <input class="form-control mono" id="signup-callsign" placeholder="Your callsign" style="text-transform:uppercase" />
+                <label data-i18n="Callsign *">Callsign *</label>
+                <input class="form-control mono" id="signup-callsign" placeholder="Your callsign" style="text-transform:uppercase" data-i18n-placeholder="Your callsign" />
               </div>
               <div class="form-group">
-                <label>Name</label>
-                <input class="form-control" id="signup-name" placeholder="Your name" />
+                <label data-i18n="Name">Name</label>
+                <input class="form-control" id="signup-name" placeholder="Your name" data-i18n-placeholder="Your name" />
               </div>
               <div class="form-group">
-                <label>Email</label>
+                <label data-i18n="Email">Email</label>
                 <input class="form-control" id="signup-email" type="email" placeholder="you@example.com" />
               </div>
               <div class="form-group">
-                <label>Notes</label>
-                <input class="form-control" id="signup-notes" placeholder="Optional" />
+                <label data-i18n="Notes">Notes</label>
+                <input class="form-control" id="signup-notes" placeholder="Optional" data-i18n-placeholder="Optional" />
               </div>
               <div style="display:flex;gap:8px">
-                <button class="btn btn-primary" onclick="submitSignup()">Confirm Sign-up</button>
-                <button class="btn btn-ghost" onclick="closeSignupModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitSignup()" data-i18n="Confirm Sign-up">Confirm Sign-up</button>
+                <button class="btn btn-ghost" onclick="closeSignupModal()" data-i18n="Cancel">Cancel</button>
               </div>
             </div>
           </div>
@@ -1174,14 +1174,14 @@
           <div id="assign-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center">
             <div class="card" style="width:380px;margin:0">
               <div class="card-header"><h2 id="assign-modal-title">Assign Net Control</h2></div>
-              <p class="text-muted" style="font-size:13px;margin-bottom:14px">Date: <strong id="assign-date-label"></strong></p>
+              <p class="text-muted" style="font-size:13px;margin-bottom:14px"><span data-i18n="Date:">Date:</span> <strong id="assign-date-label"></strong></p>
               <input type="hidden" id="assign-schedule-id" />
               <input type="hidden" id="assign-slot-date" />
               <input type="hidden" id="assign-role" />
               <div class="form-group">
-                <label>Select Operator *</label>
+                <label data-i18n="Select Operator *">Select Operator *</label>
                 <select class="form-control" id="assign-user-select" onchange="onAssignUserChange()">
-                  <option value="">— choose a registered operator —</option>
+                  <option value="" data-i18n="— choose a registered operator —">— choose a registered operator —</option>
                 </select>
               </div>
               <div id="assign-preview" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;font-size:13px">
@@ -1189,12 +1189,12 @@
                 <span class="text-muted" id="assign-preview-name"></span>
               </div>
               <div class="form-group">
-                <label>Notes</label>
-                <input class="form-control" id="assign-notes" placeholder="Optional" />
+                <label data-i18n="Notes">Notes</label>
+                <input class="form-control" id="assign-notes" placeholder="Optional" data-i18n-placeholder="Optional" />
               </div>
               <div style="display:flex;gap:8px">
-                <button class="btn btn-primary" onclick="submitAssign()">Assign</button>
-                <button class="btn btn-ghost" onclick="closeAssignModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitAssign()" data-i18n="Assign">Assign</button>
+                <button class="btn btn-ghost" onclick="closeAssignModal()" data-i18n="Cancel">Cancel</button>
               </div>
             </div>
           </div>
@@ -1304,11 +1304,11 @@
   <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/report.js?v=20"></script>
   <script src="/static/js/nets.js?v=29"></script>
-  <script src="/static/js/sessions.js?v=28"></script>
-  <script src="/static/js/checkins.js?v=36"></script>
+  <script src="/static/js/sessions.js?v=29"></script>
+  <script src="/static/js/checkins.js?v=37"></script>
   <script src="/static/js/history.js?v=21"></script>
   <script src="/static/js/admin.js?v=38"></script>
-  <script src="/static/js/schedules.js?v=21"></script>
+  <script src="/static/js/schedules.js?v=22"></script>
   <script src="/static/js/tokens.js?v=22"></script>
   <script src="/static/js/dmr.js?v=20"></script>
   <script src="/static/js/aprs.js?v=38"></script>

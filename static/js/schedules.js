@@ -80,7 +80,7 @@ function renderSchedules() {
       <span style="font-size:13px"><strong>${esc(s.day_name)}s</strong> at ${esc(s.start_time)} ${esc(s.timezone)}</span>
       ${localStr ? `<span class="text-muted" style="font-size:12px">(${esc(localStr)} your time)</span>` : ''}
       ${s.notes ? `<span class="text-muted" style="font-size:12px">— ${esc(s.notes)}</span>` : ''}
-      <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="deleteSchedule(${s.id})">Delete</button>
+      <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="deleteSchedule(${s.id})">${t('Delete')}</button>
     </div>
   `;
   }).join('');
@@ -114,13 +114,13 @@ async function saveSchedule() {
   const start_time  = document.getElementById('sched-time').value;
   const timezone    = document.getElementById('sched-tz').value.trim() || 'UTC';
   const notes       = document.getElementById('sched-notes').value.trim() || null;
-  if (!start_time) return toast('Start time required', 'error');
+  if (!start_time) return toast(t('Start time required'), 'error');
   try {
     await apiFetch(`/nets/${currentNetId}/schedules`, {
       method: 'POST',
       body: JSON.stringify({ day_of_week, start_time, timezone, notes }),
     });
-    toast('Schedule added');
+    toast(t('Schedule added'));
     document.getElementById('schedule-form').style.display = 'none';
     document.getElementById('sched-notes').value = '';
     await loadScheduleView();
@@ -128,10 +128,10 @@ async function saveSchedule() {
 }
 
 async function deleteSchedule(id) {
-  if (!confirm('Delete this schedule and all its sign-ups?')) return;
+  if (!confirm(t('Delete this schedule and all its sign-ups?'))) return;
   try {
     await apiFetch(`/schedules/${id}`, { method: 'DELETE' });
-    toast('Schedule deleted');
+    toast(t('Schedule deleted'));
     await loadScheduleView();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -217,8 +217,8 @@ async function loadUpcoming() {
 // ============================================================
 function roleLabelFor(role) {
   const net = nets.find(n => n.id === currentNetId);
-  const bcLabel = (net && net.broadcast_label) || 'Broadcaster';
-  return { net_control: 'Net Control', broadcaster: bcLabel, both: `Net Control & ${bcLabel}` }[role] || 'Net Control';
+  const bcLabel = (net && net.broadcast_label) || t('Broadcaster');
+  return { net_control: t('Net Control'), broadcaster: bcLabel, both: `${t('Net Control')} & ${bcLabel}` }[role] || t('Net Control');
 }
 
 function openSignupModal(scheduleId, slotDate, dateLabel, role) {
@@ -226,7 +226,7 @@ function openSignupModal(scheduleId, slotDate, dateLabel, role) {
   document.getElementById('signup-slot-date').value   = slotDate;
   document.getElementById('signup-role').value        = role || 'net_control';
   document.getElementById('signup-date-label').textContent = dateLabel;
-  document.getElementById('signup-modal-title').textContent = `Sign Up for ${roleLabelFor(role)}`;
+  document.getElementById('signup-modal-title').textContent = `${t('Sign Up for')} ${roleLabelFor(role)}`;
   // Pre-fill from current user
   if (currentUser) {
     document.getElementById('signup-callsign').value = myCallsignForCurrentNet();
@@ -249,7 +249,7 @@ async function submitSignup() {
   const name        = document.getElementById('signup-name').value.trim() || null;
   const email       = document.getElementById('signup-email').value.trim() || null;
   const notes       = document.getElementById('signup-notes').value.trim() || null;
-  if (!callsign) return toast('Callsign required', 'error');
+  if (!callsign) return toast(t('Callsign required'), 'error');
   const btn = document.querySelector('#signup-modal .btn-primary');
   btnLoading(btn, true);
   try {
@@ -267,10 +267,10 @@ async function submitSignup() {
 }
 
 async function removeSignup(id) {
-  if (!confirm('Remove this sign-up?')) return;
+  if (!confirm(t('Remove this sign-up?'))) return;
   try {
     await apiFetch(`/signups/${id}`, { method: 'DELETE' });
-    toast('Sign-up removed');
+    toast(t('Sign-up removed'));
     await loadUpcoming();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -291,7 +291,7 @@ function openAssignModal(scheduleId, slotDate, dateLabel, role) {
   document.getElementById('assign-slot-date').value   = slotDate;
   document.getElementById('assign-role').value        = role || 'net_control';
   document.getElementById('assign-date-label').textContent = dateLabel;
-  document.getElementById('assign-modal-title').textContent = `Assign ${roleLabelFor(role)}`;
+  document.getElementById('assign-modal-title').textContent = `${t('Assign')} ${roleLabelFor(role)}`;
   document.getElementById('assign-notes').value = '';
   document.getElementById('assign-preview').style.display = 'none';
 
@@ -328,7 +328,7 @@ async function submitAssign() {
   const role              = document.getElementById('assign-role').value || 'net_control';
   const assigned_user_id = parseInt(document.getElementById('assign-user-select').value);
   const notes            = document.getElementById('assign-notes').value.trim() || null;
-  if (!assigned_user_id) return toast('Please select an operator', 'error');
+  if (!assigned_user_id) return toast(t('Please select an operator'), 'error');
   try {
     await apiFetch(`/nets/${currentNetId}/signups`, {
       method: 'POST',

@@ -69,6 +69,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Sessions, Schedule &amp; Check-In Panel (v2.20.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Extends UI translation (see below) to the <strong>Sessions</strong> view: session list controls, Start/Log Past Net forms, the live check-in panel (quick check-in form, Expected Stations, Digital Voice/APRS panel headers, Zone Roster, Traffic Message Log, roster column, manual GPS modal), and the <strong>Schedule</strong> tab (weekly schedule form, upcoming sign-ups, sign-up/assign modals) — the third slice of the incremental rollout tracked in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">TECH_DEBT.md</code>.</li>
+              <li>No backend changes — this only adds <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">data-i18n</code> markup and <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">t()</code> calls to already-shipped screens.</li>
+              <li><code style="background:var(--surface2);padding:1px 5px;border-radius:3px">checkins.js</code>'s own dynamically-rendered roster/check-in list stays out of scope for this pass — it's flagged as the hardest remaining file (ternary-composed strings) and gets its own dedicated pass.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Per-Organization Language Management (v2.20.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Enabling a language is now <strong>any org admin's</strong> call, not just the super admin's — no more asking a super admin every time a new organization wants a language turned on.</li>

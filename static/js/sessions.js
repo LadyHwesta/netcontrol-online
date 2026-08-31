@@ -193,7 +193,7 @@ function renderDutyBar(s) {
     ncEl.style.display = 'none';
   }
   if (s.broadcaster_callsign) {
-    bcEl.querySelector('.duty-bc-label').textContent = s.broadcast_label || 'Broadcaster';
+    bcEl.querySelector('.duty-bc-label').textContent = s.broadcast_label || t('Broadcaster');
     bcEl.querySelector('strong').textContent = s.broadcaster_name ? `${s.broadcaster_callsign} — ${s.broadcaster_name}` : s.broadcaster_callsign;
     bcEl.style.display = '';
   } else {
@@ -281,7 +281,7 @@ function renderSessions(sessions) {
       <td class="col-sess-ended">${fmt(s.ended_at)}</td>
       <td class="col-sess-checkins"><span class="badge badge-blue">${s.checkin_count}</span></td>
       <td>${s.ended_at ? '<span class="badge badge-gray">Ended</span>' : '<span class="badge badge-green">Live</span>'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteSession(${s.id})">Delete</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteSession(${s.id})">${t('Delete')}</button></td>
     </tr>`;
   }).join('') + '</tbody></table>';
 }
@@ -297,7 +297,7 @@ function toggleStartSessionForm() {
     bcGroup.style.display = (net && net.has_broadcast) ? '' : 'none';
     if (net && net.has_broadcast && net.broadcast_label) {
       document.getElementById('start-session-broadcaster-label').innerHTML =
-        `${esc(net.broadcast_label)} Override <span class="text-muted" style="font-size:11px">(optional — overrides today's sign-up)</span>`;
+        `${esc(net.broadcast_label)} ${t('Override')} <span class="text-muted" style="font-size:11px">${t('(optional — overrides today\'s sign-up)')}</span>`;
     }
     // ARES/ACES activation checkbox — only offered for ARES-enabled nets (issue #21)
     document.getElementById('start-session-activation-group').style.display = (net && net.is_ares) ? '' : 'none';
@@ -320,7 +320,7 @@ async function startSession() {
     document.getElementById('new-session-broadcaster-name').value = '';
     document.getElementById('new-session-is-activation').checked = false;
     document.getElementById('start-session-form').style.display = 'none';
-    toast('Session started');
+    toast(t('Session started'));
     await loadSessions();
     await loadSessionLive(s.id);
   } catch (e) { toast(e.message, 'error'); }
@@ -343,7 +343,7 @@ function toggleLogOfflineForm() {
     bcGroup.style.display = (net && net.has_broadcast) ? '' : 'none';
     if (net && net.has_broadcast && net.broadcast_label) {
       document.getElementById('log-offline-broadcaster-label').innerHTML =
-        `${esc(net.broadcast_label)} <span class="text-muted" style="font-size:11px">(optional)</span>`;
+        `${esc(net.broadcast_label)} <span class="text-muted" style="font-size:11px">${t('(optional)')}</span>`;
     }
   }
 }
@@ -353,7 +353,7 @@ async function logOfflineNet() {
   const month = document.getElementById('log-offline-month').value;
   const day = document.getElementById('log-offline-day').value;
   const time = document.getElementById('log-offline-time').value;
-  if (!month || !day || !time) return toast('Date and time of the net are required', 'error');
+  if (!month || !day || !time) return toast(t('Date and time of the net are required'), 'error');
   const year = new Date().getFullYear();
   const occurred_at = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${time}`).toISOString();
   const ncs_override_callsign = document.getElementById('log-offline-ncs-callsign').value.trim().toUpperCase() || null;
@@ -374,7 +374,7 @@ async function logOfflineNet() {
     document.getElementById('log-offline-broadcaster-callsign').value = '';
     document.getElementById('log-offline-broadcaster-name').value = '';
     document.getElementById('log-offline-form').style.display = 'none';
-    toast('Net logged');
+    toast(t('Net logged'));
     await loadSessions();
     await loadSessionLive(s.id);
   } catch (e) { toast(e.message, 'error'); }
@@ -385,7 +385,7 @@ async function promptRenameSession(id, currentName) {
   if (name === null) return; // cancelled
   try {
     await apiFetch(`/sessions/${id}/rename`, { method: 'PATCH', body: JSON.stringify({ name: name.trim() || null }) });
-    toast('Session renamed');
+    toast(t('Session renamed'));
     await loadSessions();
     if (currentSessionId === id) await loadSessionLive(id);
   } catch (e) { toast(e.message, 'error'); }
@@ -519,10 +519,10 @@ async function endSession() {
 }
 
 async function deleteSession(id) {
-  if (!confirm('Delete this session and all its check-ins?')) return;
+  if (!confirm(t('Delete this session and all its check-ins?'))) return;
   try {
     await apiFetch(`/sessions/${id}`, { method: 'DELETE' });
-    toast('Session deleted');
+    toast(t('Session deleted'));
     if (currentSessionId === id) {
       document.getElementById('live-session-panel').style.display = 'none';
       document.getElementById('sessions-list-container').style.display = '';
@@ -549,7 +549,7 @@ function triggerDownload(url) {
       a.download = filename;
       a.click();
     })
-    .catch(e => toast('Export failed: ' + e.message, 'error'));
+    .catch(e => toast(t('Export failed:') + ' ' + e.message, 'error'));
 }
 
 
@@ -660,5 +660,5 @@ async function exportSessionById(sessionId) {
       const a = document.createElement('a');
       a.href = url; a.download = `session_${sessionId}.csv`; a.click();
     })
-    .catch(e => toast('Export failed: ' + e.message, 'error'));
+    .catch(e => toast(t('Export failed:') + ' ' + e.message, 'error'));
 }
