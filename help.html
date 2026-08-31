@@ -69,10 +69,19 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Fix: Service Worker Never Actually Checked for Updates (v2.20.4)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Follow-up to the network-first fix below (v2.20.3), after confirming by direct reproduction that a hard refresh does <strong>not</strong> bypass an already-installed service worker or force it to check for a new version — only an explicit update check does, and this app never asked for one. A browser could stay wedged on an old service worker (old cached pages/scripts) through any number of reloads, hard or otherwise, until its own internal, heavily-throttled background check eventually got around to it.</li>
+              <li>Now explicitly calls <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">registration.update()</code> right after registering, every page load — confirmed by direct reproduction that this reliably gets a stuck browser onto the latest service worker within one or two normal reloads, no hard refresh or manual unregister needed.</li>
+              <li>Corrects the previous entry: reaching this fix at all still requires however many reloads it takes for a still-stuck browser's <em>next</em> service worker check to land on this version — from here on, every future deploy should update within a reload or two on its own.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Fix: Service Worker Served Stale Pages on Normal Refresh (v2.20.3)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
-              <li>The service worker's offline app-shell cache was <strong>cache-first</strong>: once a page/script was cached, every later plain reload kept serving that same cached copy indefinitely, even after a new version was deployed — only a hard refresh (or an already-cycled service worker update, which can lag a deploy by a while) actually picked up the new code. Switched to <strong>network-first</strong>, falling back to the cache only when a fetch genuinely fails (offline) — a normal reload now always gets the latest version when you have a connection, while offline app-shell loading (issue #9) is unaffected.</li>
-              <li>This one-time deploy still needs a hard refresh (or fully closing and reopening the tab) to pick up the fixed service worker itself — every deploy after this one shouldn't.</li>
+              <li>The service worker's offline app-shell cache was <strong>cache-first</strong>: once a page/script was cached, every later plain reload kept serving that same cached copy indefinitely, even after a new version was deployed. Switched to <strong>network-first</strong>, falling back to the cache only when a fetch genuinely fails (offline) — a normal reload now always gets the latest version when you have a connection, while offline app-shell loading (issue #9) is unaffected.</li>
+              <li><em>(See the v2.20.4 entry above — this alone wasn't sufficient; the service worker also needed to actually be asked to check for the update.)</em></li>
             </ul>
           </div>
 
@@ -1210,7 +1219,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=3"></script>
   <script src="/static/js/branding.js?v=23"></script>
-  <script src="/static/js/pwa.js?v=1"></script>
+  <script src="/static/js/pwa.js?v=2"></script>
 
   <script>
     function switchHelpTab(tab) {
