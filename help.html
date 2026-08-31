@@ -64,6 +64,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-30 — History Search Filters &amp; Report Templates (v2.18.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New History filters: a <strong>minimum check-in count</strong>, a <strong>last check-in date range</strong>, and — on ARES/ACES nets — a <strong>zone</strong> filter, all combinable with the existing text search and preset dropdown.</li>
+              <li>Three <strong>report templates</strong> above the table: <strong>📋 Roster</strong> (the original table, now with a Zone column on ARES nets), <strong>📊 Summary Stats</strong> (aggregate cards plus a compact attendance table), and <strong>🖨 Printable Report</strong> (a clean, print-ready layout with its own Print button).</li>
+              <li><strong>⬇ CSV</strong> export gained three column presets (Full, Minimal, License Detail) and now downloads whatever the current filters and template show, instead of always the full unfiltered list.</li>
+              <li>No database migration — frontend only, built entirely from data the app already had.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-30 — Help Page Reorganized Into Tabs (v2.17.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The Guide tab's 25 cards — previously one long scrolling page — are now grouped into 7 sub-tabs: <strong>Getting Started</strong>, <strong>Check-In Workflow</strong>, <strong>Net Setup</strong>, <strong>ARES / Activation</strong>, <strong>Session Wrap-Up</strong>, <strong>Public &amp; Directory</strong>, and (admins only) <strong>Admin &amp; Server</strong>.</li>
@@ -1041,8 +1051,9 @@ Thank you all for checking in. This net is now closed.</pre>
         <div class="card" style="margin-bottom:16px" id="help-sec-history">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">SESSION HISTORY</h3>
           <p style="margin:0 0 8px">The <strong>History</strong> view shows every callsign that has checked into the selected net, with check-in counts for the past 2 weeks, 4 weeks, and all time.</p>
-          <p style="margin:0 0 8px">Use the filter dropdown to find: <strong>Last Net</strong>, <strong>Missed Last Net</strong>, <strong>Active (2 wks)</strong>, <strong>Regular (4 wks, ≥2)</strong>, <strong>Frequent (4 wks, ≥3)</strong>, or <strong>Inactive (4 wks)</strong>.</p>
-          <p style="margin:0">Combine the dropdown with the text search box for further filtering. Use <strong>⬇ Download CSV</strong> to export the current view.</p>
+          <p style="margin:0 0 8px">Use the filter dropdown to find: <strong>Last Net</strong>, <strong>Missed Last Net</strong>, <strong>Active (2 wks)</strong>, <strong>Regular (4 wks, ≥2)</strong>, <strong>Frequent (4 wks, ≥3)</strong>, or <strong>Inactive (4 wks)</strong>. Combine it with the text search box, a <strong>minimum check-in count</strong>, a <strong>last check-in date range</strong>, and — on ARES/ACES nets — a <strong>zone</strong> filter, for further narrowing.</p>
+          <p style="margin:0 0 8px">Three <strong>report templates</strong> sit above the table: <strong>📋 Roster</strong> (the full per-callsign table, the default), <strong>📊 Summary Stats</strong> (aggregate cards — operators shown, combined check-ins, average per operator, sessions logged — plus a compact attendance table), and <strong>🖨 Printable Report</strong> (a clean, print-ready layout with its own <strong>Print</strong> button). All three, and the <strong>⬇ CSV</strong> export, reflect whatever filters are currently active.</p>
+          <p style="margin:0">CSV export has three column presets, picked from the dropdown next to the button: <strong>Full</strong> (everything, including License/State/Grid if already looked up), <strong>Minimal</strong> (Callsign, Name, Total Check-ins only), and <strong>License Detail</strong> (Callsign, Name, License Class, State, Grid).</p>
         </div>
 
         </div><!-- /help-guide-panel-wrapup -->

@@ -11,10 +11,39 @@ async function loadHistory(netId) {
   currentNetId = netId;
   document.getElementById('history-search').value = '';
   document.getElementById('history-filter').value = 'all';
+  document.getElementById('history-min-checkins').value = '';
+  document.getElementById('history-date-from').value = '';
+  document.getElementById('history-date-to').value = '';
+  document.getElementById('history-csv-preset').value = 'full';
+  switchHistoryTemplate('roster', /*skipRender=*/true);
+
+  const net = nets.find(n => n.id === netId);
+  historyNetIsAres = net ? !!net.is_ares : false;
+  document.getElementById('history-th-zone').style.display = historyNetIsAres ? '' : 'none';
+
+  const zoneFilterSel = document.getElementById('history-zone-filter');
+  zoneFilterSel.innerHTML = '<option value="">All Zones</option>';
+  zoneFilterSel.value = '';
+  zoneFilterSel.style.display = historyNetIsAres ? '' : 'none';
+  historyZones = {};
+  if (historyNetIsAres) {
+    try {
+      const zones = await apiFetch(`/nets/${netId}/evac-zones`);
+      zones.forEach(z => { historyZones[z.callsign] = z.zone; });
+      const distinctZones = [...new Set(Object.values(historyZones))].sort();
+      zoneFilterSel.innerHTML += distinctZones.map(z => `<option value="${esc(z)}">${esc(z)}</option>`).join('');
+    } catch {}
+  }
+
+  try {
+    const sessions = await apiFetch(`/nets/${netId}/sessions`);
+    historySessionCount = sessions.filter(s => s.ended_at).length;
+  } catch { historySessionCount = 0; }
+
   try {
     historyData = await apiFetch(`/nets/${netId}/history?limit=1000`);
   } catch { historyData = []; }
-  renderHistory(historyData);
+  filterHistory();
 }
 
 function onHistoryNetChange() {
@@ -24,15 +53,38 @@ function onHistoryNetChange() {
 
 const historyLookupCache = {};  // separate cache for history view
 
+// ------------------------------------------------------------
+// Template picker -- switches which of the three views below is shown
+// ------------------------------------------------------------
+function switchHistoryTemplate(tpl, skipRender) {
+  currentHistoryTemplate = tpl;
+  ['roster', 'summary', 'printable'].forEach(t => {
+    const btn = document.getElementById('history-tpl-' + t);
+    if (btn) btn.classList.toggle('active', t === tpl);
+  });
+  if (!skipRender) filterHistory();
+}
+
 function renderHistory(rows) {
-  const tbody = document.getElementById('history-tbody');
+  historyFilteredRows = rows;
   const empty = document.getElementById('history-empty');
-  if (rows.length === 0) {
-    tbody.innerHTML = '';
-    empty.style.display = '';
-    return;
-  }
-  empty.style.display = 'none';
+  ['roster', 'summary', 'printable'].forEach(t => {
+    const el = document.getElementById('history-view-' + t);
+    if (el) el.style.display = (t === currentHistoryTemplate && rows.length) ? '' : 'none';
+  });
+  empty.style.display = rows.length ? 'none' : '';
+  if (!rows.length) return;
+
+  if (currentHistoryTemplate === 'summary') renderHistorySummary(rows);
+  else if (currentHistoryTemplate === 'printable') renderHistoryPrintable(rows);
+  else renderHistoryRoster(rows);
+}
+
+// ------------------------------------------------------------
+// ROSTER template -- the original per-callsign table
+// ------------------------------------------------------------
+function renderHistoryRoster(rows) {
+  const tbody = document.getElementById('history-tbody');
   tbody.innerHTML = rows.map(r => {
     const cached = historyLookupCache[r.callsign];
     const licenseCell = cached
@@ -47,6 +99,7 @@ function renderHistory(rows) {
     const recent4wBadge = r.recent_4w_checkins > 0
       ? `<span class="badge badge-blue">${r.recent_4w_checkins}</span>`
       : `<span class="text-muted" style="font-size:11px">—</span>`;
+    const zoneCell = historyNetIsAres ? `<td>${esc(historyZones[r.callsign] || '—')}</td>` : '';
     return `<tr id="hist-row-${esc(r.callsign)}">
       <td><span class="callsign">${esc(r.callsign)}</span></td>
       <td id="hist-name-${esc(r.callsign)}">
@@ -56,6 +109,7 @@ function renderHistory(rows) {
           style="background:none;border:none;color:var(--lc-orange);cursor:pointer;font-size:11px;padding:0 2px;opacity:0.7">✏️</button>
       </td>
       <td id="hist-lic-${esc(r.callsign)}">${licenseCell}</td>
+      ${zoneCell}
       <td style="text-align:center">${lastNetBadge}</td>
       <td style="text-align:center">${recent2wBadge}</td>
       <td style="text-align:center">${recent4wBadge}</td>
@@ -137,9 +191,97 @@ async function lookupAllHistory() {
   }
 }
 
+// ------------------------------------------------------------
+// SUMMARY STATS template -- aggregate cards + a compact attendance table
+// ------------------------------------------------------------
+function renderHistorySummary(rows) {
+  const uniqueOperators = rows.length;
+  const totalCheckins = rows.reduce((sum, r) => sum + r.total_checkins, 0);
+  const avgPerOperator = uniqueOperators ? (totalCheckins / uniqueOperators).toFixed(1) : '0';
+
+  const card = (label, value) => `
+    <div class="card" style="padding:12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:var(--lc-orange)">${value}</div>
+      <div style="font-size:11px;color:var(--text-muted);letter-spacing:.04em;margin-top:2px">${label}</div>
+    </div>`;
+  document.getElementById('history-summary-cards').innerHTML =
+    card('OPERATORS SHOWN', uniqueOperators) +
+    card('COMBINED CHECK-INS', totalCheckins) +
+    card('AVG. PER OPERATOR', avgPerOperator) +
+    card('SESSIONS LOGGED', historySessionCount);
+
+  const tbody = document.getElementById('history-summary-tbody');
+  tbody.innerHTML = rows.map(r => {
+    const attendance = historySessionCount > 0
+      ? `${Math.min(100, Math.round((r.total_checkins / historySessionCount) * 100))}%`
+      : '—';
+    return `<tr>
+      <td><span class="callsign">${esc(r.callsign)}</span></td>
+      <td>${esc(r.name || '—')}</td>
+      <td style="text-align:center"><span class="badge badge-orange">${r.total_checkins}</span></td>
+      <td style="text-align:center">${attendance}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ------------------------------------------------------------
+// PRINTABLE REPORT template -- clean layout for window.print()
+// ------------------------------------------------------------
+function renderHistoryPrintable(rows) {
+  const net = nets.find(n => n.id === currentNetId);
+  const netName = net ? net.name : 'Net';
+  const generated = new Date().toLocaleString();
+
+  const td = 'border:1px solid #ccc;padding:3px 6px';
+  const zoneTh = historyNetIsAres ? `<th style="border:1px solid #999;padding:4px 6px;text-align:left">Zone</th>` : '';
+  const rowsHtml = rows.map(r => {
+    const cached = historyLookupCache[r.callsign];
+    const license = cached && cached.status === 'found'
+      ? [cached.license_class, cached.state].filter(Boolean).join(' / ')
+      : '';
+    const zoneTd = historyNetIsAres ? `<td style="${td}">${esc(historyZones[r.callsign] || '')}</td>` : '';
+    return `<tr>
+      <td style="${td}"><strong>${esc(r.callsign)}</strong></td>
+      <td style="${td}">${esc(r.name || '')}</td>
+      <td style="${td}">${esc(license)}</td>
+      ${zoneTd}
+      <td style="${td};text-align:center">${r.total_checkins}</td>
+      <td style="${td}">${r.last_checkin ? fmt(r.last_checkin) : ''}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('history-print-area').innerHTML = `
+    <div style="font-family:Arial,sans-serif;color:#000;padding:10px">
+      <h1 style="font-size:18px;margin:0 0 4px">${esc(netName)} — Checkin History Report</h1>
+      <p style="font-size:11px;color:#555;margin:0 0 16px">Generated ${esc(generated)} &middot; ${rows.length} operator${rows.length === 1 ? '' : 's'}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="background:#eee">
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Callsign</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Name</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">License</th>
+            ${zoneTh}
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Total Check-ins</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Last Check-in</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+// ------------------------------------------------------------
+// Filtering -- combines the text search, preset dropdown, and the newer
+// min-checkins / date-range / zone filters, then hands off to whichever
+// template is currently active.
+// ------------------------------------------------------------
 function filterHistory() {
   const q      = document.getElementById('history-search').value.toLowerCase();
   const filter = document.getElementById('history-filter').value;
+  const minCheckins = parseInt(document.getElementById('history-min-checkins').value) || 0;
+  const dateFrom = document.getElementById('history-date-from').value;
+  const dateTo = document.getElementById('history-date-to').value;
+  const zoneFilter = document.getElementById('history-zone-filter').value;
 
   let rows = historyData;
 
@@ -160,33 +302,65 @@ function filterHistory() {
     );
   }
 
+  if (minCheckins > 0) {
+    rows = rows.filter(r => r.total_checkins >= minCheckins);
+  }
+
+  if (dateFrom) {
+    const from = new Date(dateFrom);
+    rows = rows.filter(r => r.last_checkin && new Date(r.last_checkin) >= from);
+  }
+  if (dateTo) {
+    const to = new Date(dateTo);
+    to.setHours(23, 59, 59, 999);
+    rows = rows.filter(r => r.last_checkin && new Date(r.last_checkin) <= to);
+  }
+
+  if (zoneFilter) {
+    rows = rows.filter(r => (historyZones[r.callsign] || '') === zoneFilter);
+  }
+
   renderHistory(rows);
 }
 
 function downloadHistoryCSV() {
-  if (!historyData.length) return toast('No history to download', 'error');
+  const rows = historyFilteredRows.length ? historyFilteredRows : historyData;
+  if (!rows.length) return toast('No history to download', 'error');
   const net = nets.find(n => n.id === currentNetId);
   const netName = net ? net.name : 'net';
+  const preset = document.getElementById('history-csv-preset').value;
 
-  // Include FCC lookup data if already fetched
-  const rows = [
-    ['Callsign', 'Name', 'License Class', 'State', 'Grid', 'Past 14 Days', 'Total Check-ins', 'Last Check-in']
-  ];
-  for (const r of historyData) {
-    const cached = historyLookupCache[r.callsign];
-    rows.push([
-      r.callsign,
-      r.name || '',
-      cached?.license_class || '',
-      cached?.state || '',
-      cached?.grid || '',
-      r.recent_checkins,
-      r.total_checkins,
-      r.last_checkin ? new Date(r.last_checkin).toISOString() : '',
-    ]);
+  let header, csvRows;
+  if (preset === 'minimal') {
+    header = ['Callsign', 'Name', 'Total Check-ins'];
+    csvRows = rows.map(r => [r.callsign, r.name || '', r.total_checkins]);
+  } else if (preset === 'license') {
+    header = ['Callsign', 'Name', 'License Class', 'State', 'Grid'];
+    csvRows = rows.map(r => {
+      const cached = historyLookupCache[r.callsign];
+      return [r.callsign, r.name || '', cached?.license_class || '', cached?.state || '', cached?.grid || ''];
+    });
+  } else {
+    header = ['Callsign', 'Name', 'License Class', 'State', 'Grid', 'Past 14 Days', 'Total Check-ins', 'Last Check-in'];
+    if (historyNetIsAres) header.push('Zone');
+    csvRows = rows.map(r => {
+      const cached = historyLookupCache[r.callsign];
+      const row = [
+        r.callsign,
+        r.name || '',
+        cached?.license_class || '',
+        cached?.state || '',
+        cached?.grid || '',
+        r.recent_checkins,
+        r.total_checkins,
+        r.last_checkin ? new Date(r.last_checkin).toISOString() : '',
+      ];
+      if (historyNetIsAres) row.push(historyZones[r.callsign] || '');
+      return row;
+    });
   }
 
-  const csv = rows.map(row =>
+  const csv = [header, ...csvRows].map(row =>
     row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
   ).join('\r\n');
 
@@ -194,7 +368,7 @@ function downloadHistoryCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `history_${netName.replace(/\s+/g, '_')}.csv`;
+  a.download = `history_${netName.replace(/\s+/g, '_')}_${preset}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -222,4 +396,3 @@ function exportNet() {
   if (!currentNetId) return;
   triggerDownload(`${API}/nets/${currentNetId}/export`);
 }
-

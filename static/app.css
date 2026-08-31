@@ -870,3 +870,12 @@
     .net-control-mode #offline-queue-banner {
       font-size: 15px;
     }
+
+    /* History's Printable Report template -- window.print() shows only
+       #history-print-area, hiding the rest of the SPA shell (sidebar,
+       header, other tabs) regardless of what's scrolled into view. */
+    @media print {
+      body * { visibility: hidden; }
+      #history-print-area, #history-print-area * { visibility: visible; }
+      #history-print-area { position: absolute; top: 0; left: 0; width: 100%; }
+    }
