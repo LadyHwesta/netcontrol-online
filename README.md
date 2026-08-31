@@ -223,6 +223,29 @@ The template above, plus `PORT`, `SYSTEMD_SERVICE`, and `GIT_BRANCH` in `.env`, 
 
 `deploy.sh` only runs the test suite automatically when `GIT_BRANCH` is `testing` — a `main` instance skips it, since a change should already have passed on testing before being merged. Run `./deploy.sh --force-tests` to run the suite anyway on a `main` instance (e.g. right after a hotfix committed straight to `main`).
 
+#### Troubleshooting a failed deploy
+
+First, always check the service logs — `deploy.sh` finishing without error only means the *deploy steps* succeeded (git pull, pip install, migrate.py, systemd restart); it doesn't mean the app actually started:
+
+```bash
+sudo journalctl -u <SYSTEMD_SERVICE> -n 50 --no-pager
+```
+
+Two dependency-related failures have come up in practice, both fixed the same way — re-running the dependency install:
+
+- **`ModuleNotFoundError: No module named 'asyncpg'`** (or any other app dependency) with a traceback pointing at a path like `~/.local/lib/python3.X/site-packages/...` instead of `<checkout>/venv/lib/...` — there's no `venv/` in this checkout, so `deploy.sh` silently fell back to a bare `python3` and installed packages outside any virtualenv. Fix:
+  ```bash
+  sudo -u netcontrol python3 -m venv venv
+  sudo -u netcontrol ./deploy.sh
+  ```
+- **`ValueError: the greenlet library is required to use this function. No module named 'greenlet'`**, raised from inside SQLAlchemy during startup (`init_db()` / `engine.begin()`) — `requirements.txt` pins `sqlalchemy[asyncio]` specifically so a fresh install pulls in `greenlet` (the async-to-sync bridging library SQLAlchemy's async engine needs at runtime); a checkout on a version of `requirements.txt` from before this was added won't have it. Fix: pull the latest `requirements.txt` and reinstall:
+  ```bash
+  sudo -u netcontrol venv/bin/pip install -r requirements.txt
+  sudo systemctl restart <SYSTEMD_SERVICE>
+  ```
+
+If a redeploy still doesn't come up, run `venv/bin/pip check` in the checkout to catch any other dependency mismatch, and confirm `ExecStart` in the systemd unit points at `<checkout>/venv/bin/uvicorn` (not a bare `uvicorn`) as shown above.
+
 ### Apache reverse proxy
 
 See the `apache/` directory for a ready-to-use virtual host configuration with Let's Encrypt SSL.
