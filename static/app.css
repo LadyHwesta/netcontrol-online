@@ -294,6 +294,7 @@
     .badge-gray   { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
     .badge-blue   { background: var(--badge-blue-bg); color: var(--lc-blue); border: 1px solid var(--lc-blue); }
     .badge-orange { background: var(--badge-orange-bg); color: var(--lc-orange); border: 1px solid var(--lc-orange); }
+    .badge-red    { background: var(--surface2); color: var(--lc-red); border: 1px solid var(--lc-red); }
 
     /* ===== AUTH PAGE =====
        Single centered column: header (logo/title/tagline/external links),

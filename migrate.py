@@ -470,6 +470,28 @@ MIGRATIONS = [
             ORDER BY n.org_id, ac.id
         ) sub
         WHERE o.id = sub.org_id AND o.aprs_fi_api_key IS NULL"""),
+
+    # UI translation via argos-translate (opt-in, TRANSLATION_ENABLED). ──
+    ("users: language column",
+     "ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(10)"),
+    ("table: translation_cache",
+     """CREATE TABLE IF NOT EXISTS translation_cache (
+         id SERIAL PRIMARY KEY,
+         cache_key VARCHAR(64) NOT NULL UNIQUE,
+         target_lang VARCHAR(10) NOT NULL,
+         source_text TEXT NOT NULL,
+         translated_text TEXT NOT NULL,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""),
+    ("index: translation_cache target_lang",
+     "CREATE INDEX IF NOT EXISTS ix_translation_cache_target_lang ON translation_cache (target_lang)"),
+    ("table: enabled_languages",
+     """CREATE TABLE IF NOT EXISTS enabled_languages (
+         id SERIAL PRIMARY KEY,
+         code VARCHAR(10) NOT NULL UNIQUE,
+         display_name VARCHAR(50) NOT NULL,
+         model_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+         error_message TEXT,
+         enabled_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""),
 ]
 
 # ---------------------------------------------------------------------------

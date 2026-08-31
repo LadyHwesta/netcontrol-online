@@ -314,6 +314,7 @@ async function enterApp() {
   if (shortEl) shortEl.textContent = currentUser.callsign;
   await loadBranding();
   loadOrgBanner();       // fire-and-forget; non-blocking
+  syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
   checkWelcomePopup();   // fire-and-forget; non-blocking
   restoreSidebarCollapse();
   restoreNetControlMode();

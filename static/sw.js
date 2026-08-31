@@ -21,15 +21,16 @@
 // entry just means offline mode serves an older shell, not a broken one,
 // but it's worth keeping current.
 
-const CACHE_NAME = 'netcontrol-online-shell-v48';
+const CACHE_NAME = 'netcontrol-online-shell-v49';
 
 const PRECACHE_URLS = [
   '/',
-  '/static/app.css?v=20',
+  '/static/app.css?v=21',
   '/static/vendor/leaflet/leaflet.css?v=1',
   '/static/js/state.js?v=24',
+  '/static/js/i18n.js?v=1',
   '/static/js/utils.js?v=21',
-  '/static/js/auth.js?v=29',
+  '/static/js/auth.js?v=30',
   '/static/js/theme.js?v=1',
   '/static/js/views.js?v=19',
   '/static/js/branding.js?v=23',
@@ -38,14 +39,14 @@ const PRECACHE_URLS = [
   '/static/js/sessions.js?v=28',
   '/static/js/checkins.js?v=36',
   '/static/js/history.js?v=21',
-  '/static/js/admin.js?v=37',
+  '/static/js/admin.js?v=38',
   '/static/js/schedules.js?v=21',
   '/static/js/tokens.js?v=22',
   '/static/js/dmr.js?v=20',
   '/static/js/aprs.js?v=38',
   '/static/js/aprs-map.js?v=39',
   '/static/vendor/leaflet/leaflet.js?v=1',
-  '/static/js/app.js?v=25',
+  '/static/js/app.js?v=26',
   '/static/js/offline-queue.js?v=2',
   '/static/js/pwa.js?v=1',
   '/manifest.json',

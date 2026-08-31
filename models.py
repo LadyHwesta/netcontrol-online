@@ -47,6 +47,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     notify_new_registrations = Column(Boolean, default=False, nullable=False)  # email opt-in for new signups
     theme = Column(String(20), default="lcars", nullable=False)  # lcars | dark | light | high-contrast | system
+    language = Column(String(10), nullable=True)  # ISO code (e.g. "es"); null = English / browser default
     email_verified = Column(Boolean, default=True, nullable=False)  # False only when SMTP is configured and a verification email was actually sent
     verification_token = Column(String(64), nullable=True)
     verification_sent_at = Column(UTCDateTime, nullable=True)
@@ -594,3 +595,41 @@ class AprsConfig(Base):
 
     def __repr__(self):
         return f"<AprsConfig net={self.net_id} type={self.source_type}>"
+
+
+class TranslationCache(Base):
+    """Translation memory for the argos-translate integration -- the English
+    source text itself is the cache key (hashed), not an invented key name,
+    same principle gettext/_() has used for decades. One row serves both UI
+    chrome strings and on-demand user-content translation (net scripts,
+    welcome messages, announcements) -- same operation either way."""
+    __tablename__ = "translation_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cache_key = Column(String(64), unique=True, nullable=False, index=True)  # sha256(lang|context|source_text)
+    target_lang = Column(String(10), nullable=False, index=True)
+    source_text = Column(Text, nullable=False)
+    translated_text = Column(Text, nullable=False)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<TranslationCache lang={self.target_lang} key={self.cache_key[:8]}>"
+
+
+class EnabledLanguage(Base):
+    """A language a super admin has turned on for the UI translation feature.
+    Presence of a 'ready' row is what the language switcher and browser-
+    language auto-detect actually offer -- argos-translate itself supports
+    many more languages than any given instance has chosen to enable."""
+    __tablename__ = "enabled_languages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(10), unique=True, nullable=False)  # "es", "fr", ...
+    display_name = Column(String(50), nullable=False)  # "Español"
+    # pending (just created) | installing (model download/pretranslate running) | ready | error
+    model_status = Column(String(20), nullable=False, default="pending")
+    error_message = Column(Text, nullable=True)
+    enabled_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<EnabledLanguage {self.code} status={self.model_status}>"

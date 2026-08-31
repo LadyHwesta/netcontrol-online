@@ -15,3 +15,11 @@ slowapi==0.1.9
 # if you're using turnstile/recaptcha or no bot protection at all; the app
 # imports it lazily and only when that code path actually runs.
 altcha==2.1.0
+
+# Only needed if you set TRANSLATION_ENABLED=true — safe to remove these two
+# lines otherwise; the app imports argostranslate lazily and only when that
+# code path actually runs. This is a genuinely heavy dependency chain (it
+# pulls in ctranslate2, spacy, and stanza) next to everything else in this
+# file -- see README's "UI Translation" section before enabling on a small
+# or resource-constrained server.
+argostranslate==1.11.0

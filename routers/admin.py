@@ -5,18 +5,19 @@ Admin routes + Net Repository self-service API key requests.
 import os
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import engine, get_db
-from models import Organization, OrganizationMembership, User
+from models import EnabledLanguage, Organization, OrganizationMembership, User
 from routers import helpers
 from routers.deps import get_current_user
 from routers.helpers import _delete_orphaned_orgs
 from routers.schemas import AdminUserOut, UserOut
+from routers.translation import _translation_configured, run_enable_language_job
 
 router = APIRouter()
 
@@ -533,3 +534,65 @@ async def admin_clear_net_repository_key(admin: User = Depends(require_admin), d
     """Forget the self-service key and any in-flight request, to start over.
     Does not affect NET_REPOSITORY_API_KEY if set via .env."""
     await net_repository.clear_stored_key(db)
+
+
+# ---------------------------------------------------------------------------
+# UI translation (argos-translate, opt-in TRANSLATION_ENABLED) — instance-
+# wide like Branding/Email/DB Stats/Net Repository above, not org-scoped.
+# ---------------------------------------------------------------------------
+
+class LanguageAdminOut(BaseModel):
+    code: str
+    display_name: str
+    model_status: str
+    error_message: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class LanguageCreate(BaseModel):
+    code: str
+    display_name: str
+
+
+@router.get("/admin/languages", response_model=list[LanguageAdminOut])
+async def admin_list_languages(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    return (await db.execute(select(EnabledLanguage).order_by(EnabledLanguage.display_name))).scalars().all()
+
+
+@router.post("/admin/languages", response_model=LanguageAdminOut, status_code=201)
+async def admin_enable_language(
+    data: LanguageCreate,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Creates the EnabledLanguage row, then kicks off a background job that
+    installs the argos-translate model and bulk pre-translates the known
+    UI strings -- both real blocking/network work, so this endpoint returns
+    immediately with model_status='pending' rather than making the admin's
+    browser wait on a model download."""
+    if not _translation_configured():
+        raise HTTPException(503, "Translation isn't configured on this server (set TRANSLATION_ENABLED=true)")
+    code = data.code.strip().lower()
+    existing = (await db.execute(select(EnabledLanguage).filter(EnabledLanguage.code == code))).scalar_one_or_none()
+    if existing:
+        raise HTTPException(400, f"{code} is already enabled")
+
+    lang = EnabledLanguage(code=code, display_name=data.display_name.strip(), model_status="pending")
+    db.add(lang)
+    await db.commit()
+    await db.refresh(lang)
+    background_tasks.add_task(run_enable_language_job, code, lang.display_name)
+    return lang
+
+
+@router.delete("/admin/languages/{code}", status_code=204)
+async def admin_disable_language(code: str, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Removes the language from the switcher/auto-detect list. Cached
+    translations in translation_cache are left in place -- cheap to keep,
+    instant to re-enable later."""
+    lang = (await db.execute(select(EnabledLanguage).filter(EnabledLanguage.code == code))).scalar_one_or_none()
+    if lang:
+        await db.delete(lang)
+        await db.commit()

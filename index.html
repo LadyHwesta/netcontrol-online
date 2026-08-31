@@ -7,13 +7,13 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=20">
+  <link rel="stylesheet" href="/static/app.css?v=21">
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=1">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;})();</script>
+  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;var l=localStorage.getItem('nt_lang');if(l&&l!=='en')document.documentElement.lang=l;})();</script>
 </head>
 <body>
 
@@ -35,17 +35,17 @@
   <header id="auth-header">
     <div class="auth-header-logo"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" width="72" height="72" style="border-radius:22%;vertical-align:middle" alt="NetControl Online"></div>
     <h1 class="auth-header-title">NetControl Online</h1>
-    <p class="auth-header-sub">Amateur &amp; GMRS Net Logging</p>
-    <p class="auth-header-tagline">A free, open-source net check-in logger built for net control operators</p>
+    <p class="auth-header-sub" data-i18n="Amateur &amp; GMRS Net Logging">Amateur &amp; GMRS Net Logging</p>
+    <p class="auth-header-tagline" data-i18n="A free, open-source net check-in logger built for net control operators">A free, open-source net check-in logger built for net control operators</p>
     <div class="auth-header-links">
       <a href="https://tracker.netcontrol.online/live" target="_blank" class="auth-ext-btn">
-        <span>📡</span> Live Net Status
+        <span>📡</span> <span data-i18n="Live Net Status">Live Net Status</span>
       </a>
       <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" class="auth-ext-btn">
         <span>💻</span> GitHub
       </a>
       <a href="/directory" class="auth-ext-btn">
-        <span>📖</span> Net Directory
+        <span>📖</span> <span data-i18n="Net Directory">Net Directory</span>
       </a>
     </div>
   </header>
@@ -57,25 +57,25 @@
     <div id="auth-box">
       <div class="auth-lcars-bar"><span><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" width="18" height="18" style="display:inline-block;vertical-align:middle;border-radius:22%" alt=""></span> NetControl Online</div>
       <h1>📻 NetControl Online</h1>
-      <p class="subtitle">Amateur Radio Net Check-in Logger</p>
+      <p class="subtitle" data-i18n="Amateur Radio Net Check-in Logger">Amateur Radio Net Check-in Logger</p>
       <div id="auth-tabs">
-        <div class="auth-tab active" onclick="switchAuthTab('login')">Login</div>
-        <div class="auth-tab" onclick="switchAuthTab('register')">Register</div>
+        <div class="auth-tab active" onclick="switchAuthTab('login')" data-i18n="Login">Login</div>
+        <div class="auth-tab" onclick="switchAuthTab('register')" data-i18n="Register">Register</div>
       </div>
       <div id="auth-error"></div>
 
       <!-- Login -->
       <div id="tab-login">
         <div class="form-group">
-          <label>Callsign or Email</label>
+          <label data-i18n="Callsign or Email">Callsign or Email</label>
           <input class="form-control" id="login-user" placeholder="W1AW" autocomplete="username" />
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label data-i18n="Password">Password</label>
           <input class="form-control" id="login-pass" type="password" autocomplete="current-password" />
         </div>
         <div id="login-captcha" style="display:none;margin-bottom:14px"></div>
-        <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Sign In</button>
+        <button class="btn btn-primary" style="width:100%" onclick="doLogin()" data-i18n="Sign In">Sign In</button>
         <p style="margin:14px 0 0;font-size:12px;color:var(--text-muted);text-align:center">
           New here? Check <strong>Help → Changelog</strong> after logging in to see what's new.
         </p>
@@ -89,60 +89,60 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Callsign</label>
+            <label data-i18n="Callsign">Callsign</label>
             <input class="form-control" id="reg-call" placeholder="W1AW" />
           </div>
           <div class="form-group">
-            <label>Name</label>
-            <input class="form-control" id="reg-name" placeholder="Your name" />
+            <label data-i18n="Name">Name</label>
+            <input class="form-control" id="reg-name" placeholder="Your name" data-i18n-placeholder="Your name" />
           </div>
         </div>
         <div class="form-group">
-          <label>Email</label>
+          <label data-i18n="Email">Email</label>
           <input class="form-control" id="reg-email" type="email" placeholder="you@example.com" />
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label data-i18n="Password">Password</label>
           <input class="form-control" id="reg-pass" type="password" />
         </div>
         <div class="form-group">
-          <label>Organization</label>
+          <label data-i18n="Organization">Organization</label>
           <div style="display:flex;gap:14px;margin-bottom:8px;font-size:12px">
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
-              <input type="radio" name="reg-org-action" value="create" checked onchange="updateRegOrgChoice()" style="width:auto"> Create new
+              <input type="radio" name="reg-org-action" value="create" checked onchange="updateRegOrgChoice()" style="width:auto"> <span data-i18n="Create new">Create new</span>
             </label>
             <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
-              <input type="radio" name="reg-org-action" value="join" onchange="updateRegOrgChoice()" style="width:auto"> Join existing
+              <input type="radio" name="reg-org-action" value="join" onchange="updateRegOrgChoice()" style="width:auto"> <span data-i18n="Join existing">Join existing</span>
             </label>
           </div>
           <input class="form-control" id="reg-org-name" placeholder="e.g. Snohomish County ARES" />
-          <input class="form-control" id="reg-org-website" placeholder="Organization website URL" style="margin-top:8px" />
+          <input class="form-control" id="reg-org-website" placeholder="Organization website URL" style="margin-top:8px" data-i18n-placeholder="Organization website URL" />
           <select class="form-control" id="reg-org-select" style="display:none"></select>
-          <p id="reg-org-hint" style="margin:6px 0 0;font-size:11px;color:var(--text-muted)">You'll be this organization's admin, pending a super admin's approval before you can log in.</p>
+          <p id="reg-org-hint" style="margin:6px 0 0;font-size:11px;color:var(--text-muted)" data-i18n="You'll be this organization's admin, pending a super admin's approval before you can log in.">You'll be this organization's admin, pending a super admin's approval before you can log in.</p>
         </div>
         <div id="reg-captcha" style="display:none;margin-bottom:14px"></div>
-        <button class="btn btn-primary" style="width:100%" onclick="doRegister(this)">Create Account</button>
+        <button class="btn btn-primary" style="width:100%" onclick="doRegister(this)" data-i18n="Create Account">Create Account</button>
       </div>
 
       <!-- Set Password — admin-created account invite link (issue #1 follow-up) -->
       <div id="tab-setpassword" style="display:none">
-        <p style="margin:0 0 14px;font-size:13px;color:var(--text-muted)">
+        <p style="margin:0 0 14px;font-size:13px;color:var(--text-muted)" data-i18n="An administrator created an account for you. Set a password to finish setting it up.">
           An administrator created an account for you. Set a password to finish setting it up.
         </p>
         <div class="form-group">
-          <label>New Password</label>
+          <label data-i18n="New Password">New Password</label>
           <input class="form-control" id="setpw-pass" type="password" autocomplete="new-password" />
         </div>
         <div class="form-group">
-          <label>Confirm Password</label>
+          <label data-i18n="Confirm Password">Confirm Password</label>
           <input class="form-control" id="setpw-pass2" type="password" autocomplete="new-password" />
         </div>
-        <button class="btn btn-primary" style="width:100%" onclick="doSetPassword(this)">Set Password &amp; Log In</button>
+        <button class="btn btn-primary" style="width:100%" onclick="doSetPassword(this)" data-i18n="Set Password &amp; Log In">Set Password &amp; Log In</button>
       </div>
     </div>
 
     <div class="auth-org-box">
-      <div class="auth-org-heading">🏢 Bring Your Own Group</div>
+      <div class="auth-org-heading" data-i18n="🏢 Bring Your Own Group">🏢 Bring Your Own Group</div>
       <p class="auth-org-desc">
         Running a net for your club, ARES section, or GMRS group? When you register,
         create your own private <strong>Organization</strong> — your nets, sessions, and
@@ -152,8 +152,8 @@
   </main>
 
   <footer id="auth-footer">
-    <div class="auth-donate-heading">☕ Support Hosting</div>
-    <p class="auth-donate-desc">
+    <div class="auth-donate-heading" data-i18n="☕ Support Hosting">☕ Support Hosting</div>
+    <p class="auth-donate-desc" data-i18n="This app is free to use. If it's been helpful to you, a small contribution helps keep the server running.">
       This app is free to use. If it's been helpful to you,
       a small contribution helps keep the server running.
     </p>
@@ -195,6 +195,11 @@
         <option value="high-contrast">High Contrast</option>
         <option value="system">System</option>
       </select>
+      <select id="lang-select" class="btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
+        <option value="en">English</option>
+      </select>
+      <a id="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+        style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
       <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
     </div>
   </header>
@@ -208,27 +213,27 @@
       <div id="sidebar-stats" class="sidebar-stats">
         <div class="sb-stat">
           <span class="sb-stat-value" id="stat-nets">—</span>
-          <span class="sb-stat-label">Nets</span>
+          <span class="sb-stat-label" data-i18n="Nets">Nets</span>
         </div>
         <div class="sb-stat">
           <span class="sb-stat-value" id="stat-active" style="color:var(--lc-green)">—</span>
-          <span class="sb-stat-label">Active</span>
+          <span class="sb-stat-label" data-i18n="Active">Active</span>
         </div>
         <div class="sb-stat">
           <span class="sb-stat-value" id="stat-today">—</span>
-          <span class="sb-stat-label">Check-ins today</span>
+          <span class="sb-stat-label" data-i18n="Check-ins today">Check-ins today</span>
         </div>
       </div>
 
-      <div class="sidebar-section">Navigation</div>
-      <button class="sidebar-btn active" onclick="showView('nets')" id="nav-nets"><span class="sb-icon">📡</span><span class="sb-label">My Nets</span></button>
-      <button class="sidebar-btn" onclick="showView('history')" id="nav-history" style="display:none"><span class="sb-icon">📊</span><span class="sb-label">History</span></button>
-      <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none"><span class="sb-icon">🔑</span><span class="sb-label">Admin</span></a>
-      <a class="sidebar-btn" href="/tokens"><span class="sb-icon">⚙️</span><span class="sb-label">Account</span></a>
-      <a class="sidebar-btn" href="/help"><span class="sb-icon">❓</span><span class="sb-label">Help</span></a>
-      <a class="sidebar-btn" href="/report"><span class="sb-icon">🐛</span><span class="sb-label">Report / Request</span></a>
-      <a class="sidebar-btn" href="/live" target="_blank" style="display:block;text-decoration:none"><span class="sb-icon">🔴</span><span class="sb-label">Live Public Page ↗</span></a>
-      <a class="sidebar-btn" href="/directory" target="_blank" style="display:block;text-decoration:none"><span class="sb-icon">📖</span><span class="sb-label">Net Directory ↗</span></a>
+      <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
+      <button class="sidebar-btn active" onclick="showView('nets')" id="nav-nets"><span class="sb-icon">📡</span><span class="sb-label" data-i18n="My Nets">My Nets</span></button>
+      <button class="sidebar-btn" onclick="showView('history')" id="nav-history" style="display:none"><span class="sb-icon">📊</span><span class="sb-label" data-i18n="History">History</span></button>
+      <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none"><span class="sb-icon">🔑</span><span class="sb-label" data-i18n="Admin">Admin</span></a>
+      <a class="sidebar-btn" href="/tokens"><span class="sb-icon">⚙️</span><span class="sb-label" data-i18n="Account">Account</span></a>
+      <a class="sidebar-btn" href="/help"><span class="sb-icon">❓</span><span class="sb-label" data-i18n="Help">Help</span></a>
+      <a class="sidebar-btn" href="/report"><span class="sb-icon">🐛</span><span class="sb-label" data-i18n="Report / Request">Report / Request</span></a>
+      <a class="sidebar-btn" href="/live" target="_blank" style="display:block;text-decoration:none"><span class="sb-icon">🔴</span><span class="sb-label" data-i18n="Live Public Page ↗">Live Public Page ↗</span></a>
+      <a class="sidebar-btn" href="/directory" target="_blank" style="display:block;text-decoration:none"><span class="sb-icon">📖</span><span class="sb-label" data-i18n="Net Directory ↗">Net Directory ↗</span></a>
 
       <div id="net-sidebar-section" style="display:none">
         <hr style="border-color:var(--border);margin:8px 16px">
@@ -1292,8 +1297,9 @@
   <script src="/static/js/state.js?v=24"></script>
   <script src="/static/js/utils.js?v=21"></script>
   <script src="/static/js/offline-queue.js?v=2"></script>
-  <script src="/static/js/auth.js?v=29"></script>
+  <script src="/static/js/auth.js?v=30"></script>
   <script src="/static/js/theme.js?v=1"></script>
+  <script src="/static/js/i18n.js?v=1"></script>
   <script src="/static/js/views.js?v=19"></script>
   <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/report.js?v=20"></script>
@@ -1301,14 +1307,14 @@
   <script src="/static/js/sessions.js?v=28"></script>
   <script src="/static/js/checkins.js?v=36"></script>
   <script src="/static/js/history.js?v=21"></script>
-  <script src="/static/js/admin.js?v=37"></script>
+  <script src="/static/js/admin.js?v=38"></script>
   <script src="/static/js/schedules.js?v=21"></script>
   <script src="/static/js/tokens.js?v=22"></script>
   <script src="/static/js/dmr.js?v=20"></script>
   <script src="/static/js/aprs.js?v=38"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
   <script src="/static/js/aprs-map.js?v=39"></script>
-  <script src="/static/js/app.js?v=25"></script>
+  <script src="/static/js/app.js?v=26"></script>
   <script src="/static/js/pwa.js?v=1"></script>
 </body>
 </html>

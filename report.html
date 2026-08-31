@@ -12,7 +12,7 @@
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;})();</script>
+  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;var l=localStorage.getItem('nt_lang');if(l&&l!=='en')document.documentElement.lang=l;})();</script>
 </head>
 <body>
 <div id="toast"></div>
@@ -36,20 +36,25 @@
         <option value="high-contrast">High Contrast</option>
         <option value="system">System</option>
       </select>
+      <select id="lang-select" class="btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
+        <option value="en">English</option>
+      </select>
+      <a id="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+        style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
       <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
     </div>
   </header>
   <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
   <main>
     <nav id="sidebar">
-      <div class="sidebar-section">Navigation</div>
-      <a class="sidebar-btn" href="/">📻 Net Control</a>
-      <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none">🔑 Admin</a>
-      <a class="sidebar-btn" href="/tokens">⚙️ Account</a>
-      <a class="sidebar-btn" href="/help">❓ Help</a>
-      <a class="sidebar-btn" href="/report">🐛 Report / Request</a>
-      <a class="sidebar-btn" href="/live" target="_blank">📡 Live Public Page ↗</a>
-      <a class="sidebar-btn" href="/directory" target="_blank">📖 Net Directory ↗</a>
+      <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
+      <a class="sidebar-btn" href="/" data-i18n="📻 Net Control">📻 Net Control</a>
+      <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none" data-i18n="🔑 Admin">🔑 Admin</a>
+      <a class="sidebar-btn" href="/tokens" data-i18n="⚙️ Account">⚙️ Account</a>
+      <a class="sidebar-btn" href="/help" data-i18n="❓ Help">❓ Help</a>
+      <a class="sidebar-btn" href="/report" data-i18n="🐛 Report / Request">🐛 Report / Request</a>
+      <a class="sidebar-btn" href="/live" target="_blank" data-i18n="📡 Live Public Page ↗">📡 Live Public Page ↗</a>
+      <a class="sidebar-btn" href="/directory" target="_blank" data-i18n="📖 Net Directory ↗">📖 Net Directory ↗</a>
     </nav>
     <div id="content">
         <h2 class="section-title">Report a Problem / Submit a Request</h2>
@@ -86,8 +91,9 @@
 </div>
   <script src="/static/js/state.js?v=9"></script>
   <script src="/static/js/utils.js?v=8"></script>
-  <script src="/static/js/auth.js?v=29"></script>
+  <script src="/static/js/auth.js?v=30"></script>
   <script src="/static/js/theme.js?v=1"></script>
+  <script src="/static/js/i18n.js?v=1"></script>
   <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/report.js?v=7"></script>
   <script src="/static/js/pwa.js?v=1"></script>
@@ -106,6 +112,7 @@
       }
       await loadBranding();
       loadOrgBanner();   // fire-and-forget; non-blocking
+      syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
 
     }
     initPage();

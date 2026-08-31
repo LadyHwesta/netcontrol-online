@@ -34,6 +34,14 @@ The moment this ever runs with multiple workers or multiple instances behind a l
 
 `slowapi` has a built-in Redis storage backend for exactly this case, so Redis (not something like LSCache, which is a LiteSpeed-web-server page cache and doesn't fit a FastAPI backend unless deployed behind LiteSpeed specifically) would be the natural fix — but it's a real operational dependency (another service to run/monitor/secure) not worth taking on for a single-process, club-scale deployment. Revisit only if/when `--workers N` or multiple instances actually get adopted.
 
+### UI translation (argos-translate) covers only the login screen and shared nav so far
+The translation framework itself (`routers/translation.py`, `static/js/i18n.js`, the admin Languages tab, `extract_i18n_strings.py`) is complete and works end-to-end, but only a bounded slice of actual UI strings has been wrapped in `t()`/`data-i18n` — the auth/login screen and the shared sidebar nav across all pages (2026-08-31). Everything else is still plain hardcoded English:
+
+- **`checkins.js` and `admin.js`** — the hardest remaining files. A meaningful fraction of their strings are ternary/conditionally-composed sentence fragments (e.g. a tooltip that picks between two full English phrases based on state), not clean one-string-per-element cases — these need per-branch surgery, not a bulk find/replace.
+- **Everything else**: `nets.js`, `sessions.js`, `schedules.js`, `history.js`, `dmr.js`, `aprs.js`, and their corresponding sections of `index.html`, plus all of `admin.html`, `help.html`, `tokens.html`, `report.html` beyond the shared nav.
+- **`directory.html`/`public.html`** don't even load the shared JS helper files (`state.js`/`utils.js`/`i18n.js`) — they're self-contained pages with their own inline scripts. Wiring in translation there is a separate, smaller effort (they got the pre-paint `<html lang>` script as part of this work, but not `t()`/the switcher).
+- Re-run `python3 extract_i18n_strings.py` after each batch of new `t()`/`data-i18n` call sites, so an admin's "enable a language" bulk pre-translate stays comprehensive.
+
 ~~No email verification on registration~~ — resolved; see Resolved section.
 
 ~~FCC callsign lookup depends on an external service~~ — resolved; see Resolved section.

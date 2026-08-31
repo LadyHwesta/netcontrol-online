@@ -786,6 +786,87 @@ async function loadDbStats() {
   }
 }
 
+// ============================================================
+// LANGUAGES (UI translation via argos-translate, opt-in TRANSLATION_ENABLED)
+// ============================================================
+const LANG_STATUS_BADGE = {
+  pending: '<span class="badge badge-gray">Pending</span>',
+  installing: '<span class="badge badge-blue">Installing…</span>',
+  ready: '<span class="badge badge-green">Ready</span>',
+  error: '<span class="badge badge-red">Error</span>',
+};
+
+let _languagesPollTimer = null;
+
+async function loadLanguages() {
+  const table = document.getElementById('languages-table');
+  const empty = document.getElementById('languages-empty');
+  const addCard = document.getElementById('languages-add-card');
+  const disabledNote = document.getElementById('languages-disabled-note');
+  clearTimeout(_languagesPollTimer);
+
+  let rows;
+  try {
+    rows = await apiFetch('/admin/languages');
+  } catch (e) {
+    toast(e.message, 'error');
+    return;
+  }
+
+  // /admin/languages itself doesn't say whether TRANSLATION_ENABLED is set --
+  // an empty list either means "not configured yet" or "configured, nothing
+  // enabled yet". POST /admin/languages 503s with a clear message either way,
+  // so the add form stays available and simply surfaces that on first use
+  // rather than a separate status check here.
+  disabledNote.style.display = 'none';
+  addCard.style.display = '';
+
+  if (!rows.length) {
+    table.style.display = 'none';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  table.style.display = '';
+
+  document.getElementById('languages-tbody').innerHTML = rows.map(l => `
+    <tr>
+      <td>${esc(l.display_name)}</td>
+      <td class="mono">${esc(l.code)}</td>
+      <td>${LANG_STATUS_BADGE[l.model_status] || esc(l.model_status)}${l.error_message ? ` <span class="text-muted" style="font-size:11px" title="${esc(l.error_message)}">ⓘ</span>` : ''}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="disableLanguage('${esc(l.code)}')">Disable</button></td>
+    </tr>
+  `).join('');
+
+  // Model install + bulk pre-translation run in the background server-side --
+  // poll while anything is still pending/installing so the admin sees it
+  // flip to Ready without a manual refresh.
+  if (rows.some(l => l.model_status === 'pending' || l.model_status === 'installing')) {
+    _languagesPollTimer = setTimeout(loadLanguages, 5000);
+  }
+}
+
+async function enableLanguage() {
+  const code = document.getElementById('lang-add-code').value.trim().toLowerCase();
+  const name = document.getElementById('lang-add-name').value.trim();
+  if (!code || !name) return toast('Enter both a language code and a display name', 'error');
+  try {
+    await apiFetch('/admin/languages', { method: 'POST', body: JSON.stringify({ code, display_name: name }) });
+    document.getElementById('lang-add-code').value = '';
+    document.getElementById('lang-add-name').value = '';
+    toast(`Enabling ${name} — installing its model and pre-translating in the background`, 'success');
+    loadLanguages();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function disableLanguage(code) {
+  if (!confirm(`Disable ${code}? It will stop appearing in the language switcher. Already-translated text stays cached and re-enabling later is instant.`)) return;
+  try {
+    await apiFetch(`/admin/languages/${encodeURIComponent(code)}`, { method: 'DELETE' });
+    loadLanguages();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function loadAnnouncements() {
   try {
     const data = await apiFetch('/system/announcements');

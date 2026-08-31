@@ -81,6 +81,10 @@ class ThemeUpdate(BaseModel):
     theme: Literal["lcars", "dark", "light", "high-contrast", "system"]
 
 
+class LanguageUpdate(BaseModel):
+    language: Optional[str] = None  # ISO code, or null to reset to English/browser default
+
+
 class GmrsCallsignUpdate(BaseModel):
     gmrs_callsign: Optional[str] = None
 
@@ -431,6 +435,18 @@ async def update_theme(
     db: AsyncSession = Depends(get_db),
 ):
     current_user.theme = data.theme
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+
+@router.patch("/auth/language", response_model=UserOut)
+async def update_language(
+    data: LanguageUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    current_user.language = data.language
     await db.commit()
     await db.refresh(current_user)
     return current_user

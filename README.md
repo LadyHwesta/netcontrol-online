@@ -517,6 +517,28 @@ bantime  = 600
 
 Create the log directory first: `sudo mkdir -p /var/log/nettracker && sudo chown netcontrol: /var/log/nettracker`
 
+## UI Translation (argos-translate)
+
+Optional, off by default. Translates the app's own UI into other languages using [Argos Translate](https://github.com/argosopentech/argos-translate), an offline neural machine translation library — no third-party API, no data leaving the server.
+
+**This is a genuinely heavy dependency.** `argostranslate` pulls in `ctranslate2`, `spacy`, and `stanza` — a real ML stack, not a lightweight dictionary lookup, next to everything else in `requirements.txt`. Each language you enable also downloads its own translation model. Test on a non-production instance first if you're on a small or resource-constrained server, and expect a noticeably larger install and higher RAM usage than the rest of this app needs.
+
+**Enabling it:**
+
+1. Set `TRANSLATION_ENABLED=true` in `.env` and install the optional dependency:
+   ```bash
+   venv/bin/pip install argostranslate
+   ```
+   (already listed, commented as optional, in `requirements.txt` — a plain `pip install -r requirements.txt` skips nothing extra unless you also flip the env var and actually enable a language)
+2. Restart the app, then run `migrate.py` if this is an existing install (adds `translation_cache`, `enabled_languages`, and a `language` column on `users` — a fresh install creates all three automatically on first startup).
+3. In **Admin → Languages**, enter a language code (e.g. `es`, `fr`, `de` — any [argos-translate-supported](https://github.com/argosopentech/argos-translate#supported-languages) code) and a display name, then click **Enable Language**. This kicks off a background job that downloads that language's model and pre-translates the app's known UI strings — can take a few minutes the first time; the tab shows Pending → Installing → Ready.
+
+**How it works:** translation is a cache, not a build step — the English text itself is the cache key (hashed), so there's no separate translation-key file to keep in sync with the actual wording. Once a language is Ready, its strings serve instantly from the database; any brand-new string not yet in the cache falls back to English for that one view and translates itself in the background for next time. A visitor's browser language is auto-detected and applied automatically the first time they visit, but only if that language has already been enabled — nothing is ever auto-translated into a language nobody turned on.
+
+**Coverage today** is the login/registration screen and the shared navigation — not yet the full app (nets, sessions, check-in flow, admin panel, etc.). See `TECH_DEBT.md` for what's tracked as follow-up. Net scripts, welcome messages, and announcements can also be translated on demand via a Translate button wherever they're edited, independent of the UI-chrome coverage above.
+
+Machine translation isn't perfect, especially for ham-radio-specific terms (ARES, ICS-205, callsign, etc.) — a small "🌐 via Argos Translate" credit appears next to the language switcher whenever a translated language is active, so it's always clear the wording was machine-generated.
+
 ## Contributing
 
 Pull requests are welcome. For major changes please open an issue first to discuss what you'd like to change.

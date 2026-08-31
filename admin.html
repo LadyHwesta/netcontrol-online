@@ -7,12 +7,12 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=15">
+  <link rel="stylesheet" href="/static/app.css?v=16">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;})();</script>
+  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;var l=localStorage.getItem('nt_lang');if(l&&l!=='en')document.documentElement.lang=l;})();</script>
 </head>
 <body>
 <div id="toast"></div>
@@ -36,20 +36,25 @@
         <option value="high-contrast">High Contrast</option>
         <option value="system">System</option>
       </select>
+      <select id="lang-select" class="btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
+        <option value="en">English</option>
+      </select>
+      <a id="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+        style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
       <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
     </div>
   </header>
   <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
   <main>
     <nav id="sidebar">
-      <div class="sidebar-section">Navigation</div>
-      <a class="sidebar-btn" href="/">📻 Net Control</a>
-      <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none">🔑 Admin</a>
-      <a class="sidebar-btn" href="/tokens">⚙️ Account</a>
-      <a class="sidebar-btn" href="/help">❓ Help</a>
-      <a class="sidebar-btn" href="/report">🐛 Report / Request</a>
-      <a class="sidebar-btn" href="/live" target="_blank">📡 Live Public Page ↗</a>
-      <a class="sidebar-btn" href="/directory" target="_blank">📖 Net Directory ↗</a>
+      <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
+      <a class="sidebar-btn" href="/" data-i18n="📻 Net Control">📻 Net Control</a>
+      <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none" data-i18n="🔑 Admin">🔑 Admin</a>
+      <a class="sidebar-btn" href="/tokens" data-i18n="⚙️ Account">⚙️ Account</a>
+      <a class="sidebar-btn" href="/help" data-i18n="❓ Help">❓ Help</a>
+      <a class="sidebar-btn" href="/report" data-i18n="🐛 Report / Request">🐛 Report / Request</a>
+      <a class="sidebar-btn" href="/live" target="_blank" data-i18n="📡 Live Public Page ↗">📡 Live Public Page ↗</a>
+      <a class="sidebar-btn" href="/directory" target="_blank" data-i18n="📖 Net Directory ↗">📖 Net Directory ↗</a>
     </nav>
     <div id="content">
       <h2 class="section-title">Admin</h2>
@@ -61,6 +66,7 @@
         <button class="tab-btn" id="admin-tab-email"      onclick="switchAdminTab('email')">📧 Email</button>
         <button class="tab-btn" id="admin-tab-netrepo"    onclick="switchAdminTab('netrepo')">🌐 Net Repository</button>
         <button class="tab-btn" id="admin-tab-dbstats"    onclick="switchAdminTab('dbstats')">🗄️ DB Stats</button>
+        <button class="tab-btn" id="admin-tab-languages"  onclick="switchAdminTab('languages')">🌐 Languages</button>
         <button class="tab-btn" id="admin-tab-announce"   onclick="switchAdminTab('announce')">📢 Announcements</button>
         <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')">🔀 Reassign</button>
       </div>
@@ -324,6 +330,41 @@
         </div>
       </div><!-- /admin-panel-dbstats -->
 
+      <!-- ── Languages panel (UI translation via argos-translate) ── -->
+      <div id="admin-panel-languages" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">ENABLED LANGUAGES</h3>
+          <p id="languages-disabled-note" class="text-muted" style="font-size:12px;display:none">
+            Translation isn't configured on this server — set <code style="background:var(--surface);padding:1px 5px;border-radius:3px">TRANSLATION_ENABLED=true</code> in <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code> and install <code style="background:var(--surface);padding:1px 5px;border-radius:3px">argostranslate</code> (see README) to use this tab.
+          </p>
+          <div style="overflow-x:auto">
+            <table class="tbl" id="languages-table" style="display:none">
+              <thead><tr><th>Language</th><th>Code</th><th>Status</th><th></th></tr></thead>
+              <tbody id="languages-tbody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="languages-empty" style="display:none"><p>No languages enabled yet.</p></div>
+        </div>
+
+        <div class="card" id="languages-add-card" style="display:none">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">ENABLE A LANGUAGE</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 10px">
+            Enabling a language installs its argos-translate model and pre-translates the app's known UI strings in the background — this can take a while the first time. Any argos-translate-supported <a href="https://github.com/argosopentech/argos-translate#supported-languages" target="_blank" style="color:var(--lc-orange)">language code</a> works (e.g. <code style="background:var(--surface);padding:1px 5px;border-radius:3px">es</code>, <code style="background:var(--surface);padding:1px 5px;border-radius:3px">fr</code>, <code style="background:var(--surface);padding:1px 5px;border-radius:3px">de</code>).
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Language Code</label>
+              <input class="form-control mono" id="lang-add-code" placeholder="es" style="max-width:120px" />
+            </div>
+            <div class="form-group">
+              <label>Display Name</label>
+              <input class="form-control" id="lang-add-name" placeholder="Español" style="max-width:200px" />
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="enableLanguage()">Enable Language</button>
+        </div>
+      </div><!-- /admin-panel-languages -->
+
       <!-- ── Announcements panel (super admin only, instance-wide) ─── -->
       <div id="admin-panel-announce" style="display:none">
         <div class="card">
@@ -445,20 +486,22 @@
 </div>
 <script src="/static/js/state.js?v=10"></script>
 <script src="/static/js/utils.js?v=8"></script>
-<script src="/static/js/auth.js?v=29"></script>
+<script src="/static/js/auth.js?v=30"></script>
 <script src="/static/js/theme.js?v=1"></script>
+<script src="/static/js/i18n.js?v=1"></script>
 <script src="/static/js/branding.js?v=23"></script>
-<script src="/static/js/admin.js?v=37"></script>
+<script src="/static/js/admin.js?v=38"></script>
 <script src="/static/js/pwa.js?v=1"></script>
 <script>
   function switchAdminTab(tab) {
-    ['operators', 'branding', 'email', 'netrepo', 'dbstats', 'announce', 'reassign'].forEach(t => {
+    ['operators', 'branding', 'email', 'netrepo', 'dbstats', 'languages', 'announce', 'reassign'].forEach(t => {
       document.getElementById('admin-panel-' + t).style.display = t === tab ? '' : 'none';
       document.getElementById('admin-tab-' + t).classList.toggle('active', t === tab);
     });
     if (tab === 'email') loadAdminUsers(); // refreshes email status card
     if (tab === 'netrepo') loadNetRepoStatus();
     if (tab === 'dbstats') loadDbStats();
+    if (tab === 'languages') loadLanguages();
     if (tab === 'announce') loadAnnouncements();
     if (tab === 'reassign') loadReassignTab();
   }
@@ -488,12 +531,13 @@
     if (navAdmin) navAdmin.style.display = '';
     await loadBranding();
       loadOrgBanner();   // fire-and-forget; non-blocking
+    syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
 
     loadOrgEditForm();   // fire-and-forget; non-blocking — shown for org admins and super admins alike
 
     if (orgAdminOnly) {
-      // Branding/Email/Net Repository/DB Stats/Announcements/Reassign are super-admin-only, instance-wide concerns
-      ['branding', 'email', 'netrepo', 'dbstats', 'announce', 'reassign'].forEach(t => {
+      // Branding/Email/Net Repository/DB Stats/Languages/Announcements/Reassign are super-admin-only, instance-wide concerns
+      ['branding', 'email', 'netrepo', 'dbstats', 'languages', 'announce', 'reassign'].forEach(t => {
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
       document.querySelector('#content h2.section-title').textContent = 'Organization Admin';

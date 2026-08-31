@@ -21,6 +21,7 @@ class UserOut(BaseModel):
     is_admin: bool
     notify_new_registrations: bool
     theme: str
+    language: Optional[str] = None
     email_verified: bool
     created_at: datetime
     current_org_id: Optional[int] = None

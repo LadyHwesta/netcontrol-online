@@ -78,7 +78,8 @@ if (window._setpwToken) {
 if (token && !window._setpwToken) {
   enterApp();
 } else {
-  loadLoginMessage();   // fire-and-forget; non-blocking — staying on the login screen
+  loadLoginMessage();      // fire-and-forget; non-blocking — staying on the login screen
+  syncLangFromUser(null);  // fire-and-forget; non-blocking — auto-detects browser language here too
 }
 
 // Bot protection: Turnstile / reCAPTCHA / ALTCHA (issue #1 follow-up) —
