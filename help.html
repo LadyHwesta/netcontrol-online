@@ -64,6 +64,23 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-30 — aprs.fi Attribution, Manually-Reported Positions, Org-Scoped Keys (v2.16.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The station map now credits <a href="https://aprs.fi" target="_blank" style="color:var(--lc-orange)">aprs.fi</a> as the data source with a real link back (bottom-right corner, alongside the OpenStreetMap credit) whenever a net's APRS source is aprs.fi — required by their terms of use. Shown on both the authenticated live-session map and the public live page.</li>
+              <li>An operator with no APRS capability who can read off their own GPS coordinates over the air can still show up on the map — click the <strong>📍</strong> next to any checked-in callsign in the live check-in list to set or edit their position. Works after the check-in itself, not just at check-in time, and independently of whether the net has any APRS integration configured at all. Shown in a distinct color from real APRS-tracked stations, merged onto the same map.</li>
+              <li><strong>aprs.fi API key</strong> is now set once per organization (Admin → Operators → Your Organization) instead of separately for every net — every net in the org using aprs.fi as its source shares it. Existing per-net keys were carried forward automatically by the migration.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-30 — Welcome Messages (v2.15.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>A Super Admin can set a message shown on the <strong>login screen</strong> before anyone signs in, and a <strong>post-login welcome popup</strong> — both new fields under <strong>Admin → Announcements</strong>. The popup is dismissible and shown once per distinct message: editing the text pops it up again for everyone, but an unchanged message doesn't nag returning users on every login.</li>
+              <li>An org admin can separately set a <strong>banner message</strong> for just their own organization's members (Admin → Operators → Your Organization) — shown at the top of every page, instance-wide messages and per-org banners stay independent of each other.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-30 — Database Stats Panel (v2.14.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <strong>Admin → DB Stats</strong> tab (Postgres deployments only — hidden/no-op on SQLite): database size, connection counts, and largest tables, plus a slowest-queries panel if the <a href="https://www.postgresql.org/docs/current/pgstatstatements.html" target="_blank" style="color:var(--lc-orange)">pg_stat_statements</a> extension is enabled on the server. Built natively instead of integrating a separate tool like pghero, which would mean running a second language runtime as its own service.</li>
