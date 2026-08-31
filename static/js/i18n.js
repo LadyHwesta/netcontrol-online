@@ -47,6 +47,8 @@ async function _flushMissingTranslations() {
       body: JSON.stringify({ lang: currentLang, texts }),
     });
     Object.assign(translationCache, result);
+    translatePage();  // re-render now that these strings are cached -- otherwise they'd
+                       // sit translated-but-unshown until the next full page load
   } catch { /* best-effort — next page load will retry via the bulk preload */ }
 }
 
