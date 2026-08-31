@@ -3,10 +3,20 @@
 // ============================================================
 // Two separate jobs, kept deliberately apart:
 //   1. Precache index.html's own asset shell so the app still loads with no
-//      connection (issue #9's "offline basics"). Cache-first ONLY for the
-//      exact URLs listed below — every other request (all API calls, every
-//      other page) passes straight to the network untouched. Never serve a
-//      stale cached API response.
+//      connection (issue #9's "offline basics"), for the exact URLs listed
+//      below only — every other request (all API calls, every other page)
+//      passes straight to the network untouched. Never serve a stale
+//      cached API response.
+//
+//      Network-FIRST, falling back to cache only on a failed fetch (e.g.
+//      genuinely offline) -- NOT cache-first. This app ships frequent
+//      small updates, and cache-first meant a plain reload could silently
+//      keep serving an old shell (old JS/CSS, `/` itself) until the new
+//      service worker happened to finish its own install/activate cycle in
+//      the background -- a real "why do I have to hard-refresh" bug users
+//      hit constantly during active development. Network-first fixes that
+//      for the common (online) case while still keeping the offline
+//      fallback issue #9 exists for.
 //   2. Best-effort Background Sync for queued check-ins (see
 //      static/js/offline-queue.js, imported below) — a bonus chance to
 //      flush if the tab is backgrounded/closed while offline. NOT the
@@ -18,10 +28,10 @@
 // hand-maintained. Bump CACHE_NAME whenever PRECACHE_URLS changes, and keep
 // the ?v=N query strings here in sync with the versions index.html actually
 // loads (see index.html's own <script>/<link> tags) — a stale precache
-// entry just means offline mode serves an older shell, not a broken one,
-// but it's worth keeping current.
+// entry now only matters for the offline-fallback case, but it's worth
+// keeping current regardless.
 
-const CACHE_NAME = 'netcontrol-online-shell-v54';
+const CACHE_NAME = 'netcontrol-online-shell-v55';
 
 const PRECACHE_URLS = [
   '/',
@@ -81,14 +91,11 @@ self.addEventListener('fetch', event => {
   if (!PRECACHE_URLS.includes(key)) return;  // not app shell — network only, untouched
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-        return res;
-      });
-    })
+    fetch(event.request).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+      return res;
+    }).catch(() => caches.match(event.request))
   );
 });
 

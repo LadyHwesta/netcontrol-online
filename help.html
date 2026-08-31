@@ -69,6 +69,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Fix: Service Worker Served Stale Pages on Normal Refresh (v2.20.3)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The service worker's offline app-shell cache was <strong>cache-first</strong>: once a page/script was cached, every later plain reload kept serving that same cached copy indefinitely, even after a new version was deployed — only a hard refresh (or an already-cycled service worker update, which can lag a deploy by a while) actually picked up the new code. Switched to <strong>network-first</strong>, falling back to the cache only when a fetch genuinely fails (offline) — a normal reload now always gets the latest version when you have a connection, while offline app-shell loading (issue #9) is unaffected.</li>
+              <li>This one-time deploy still needs a hard refresh (or fully closing and reopening the tab) to pick up the fixed service worker itself — every deploy after this one shouldn't.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Language Switcher on the Login Screen (v2.20.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The login/registration screen now has its own language switcher (top-right corner) — previously the only way to change language before logging in was browser auto-detect, with no manual override.</li>
