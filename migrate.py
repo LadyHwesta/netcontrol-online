@@ -492,6 +492,21 @@ MIGRATIONS = [
          model_status VARCHAR(20) NOT NULL DEFAULT 'pending',
          error_message TEXT,
          enabled_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""),
+
+    # Per-org language opt-in (multi-tenancy follow-up) -- separates "is this
+    # language's model installed on the server" (enabled_languages, above)
+    # from "does this org's admin want it in their users' switcher".
+    ("table: org_enabled_languages",
+     """CREATE TABLE IF NOT EXISTS org_enabled_languages (
+         id SERIAL PRIMARY KEY,
+         org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+         code VARCHAR(10) NOT NULL,
+         enabled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         UNIQUE (org_id, code))"""),
+    ("index: org_enabled_languages org_id",
+     "CREATE INDEX IF NOT EXISTS ix_org_enabled_languages_org_id ON org_enabled_languages (org_id)"),
+    ("index: org_enabled_languages code",
+     "CREATE INDEX IF NOT EXISTS ix_org_enabled_languages_code ON org_enabled_languages (code)"),
 ]
 
 # ---------------------------------------------------------------------------

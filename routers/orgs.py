@@ -8,17 +8,18 @@ import secrets
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import Checkin, Net, NetSession, Organization, OrganizationMembership, SystemSetting, User
+from models import Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrgEnabledLanguage, SystemSetting, User
 from routers import helpers
 from routers.deps import get_current_user
 from routers.helpers import _get_or_create_org, _net_to_out
 from routers.schemas import AdminUserOut, NetOut, OrganizationOut, UserOut
+from routers.translation import _translation_configured, run_enable_language_job
 
 router = APIRouter()
 
@@ -148,6 +149,94 @@ async def update_org_aprs_key(org_id: int, data: OrgAprsKeyUpdate, admin: User =
     org.aprs_fi_api_key = (data.aprs_fi_api_key or "").strip() or None
     await db.commit()
     return OrgAprsKeyOut(aprs_fi_api_key=org.aprs_fi_api_key)
+
+
+# ---------------------------------------------------------------------------
+# UI translation (argos-translate, opt-in TRANSLATION_ENABLED) — per-org
+# opt-in into the server-wide language catalog (models.EnabledLanguage).
+# Each org's admin manages their own org's list independently; installing a
+# not-yet-seen language's model is shared, one-time work triggered by
+# whichever org asks for it first (see OrgEnabledLanguage's docstring).
+# ---------------------------------------------------------------------------
+
+class OrgLanguageOut(BaseModel):
+    code: str
+    display_name: str
+    model_status: str
+    error_message: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class OrgLanguageCreate(BaseModel):
+    code: str
+    display_name: str
+
+
+@router.get("/orgs/{org_id}/languages", response_model=list[OrgLanguageOut])
+async def org_list_languages(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(
+        select(EnabledLanguage)
+        .join(OrgEnabledLanguage, OrgEnabledLanguage.code == EnabledLanguage.code)
+        .filter(OrgEnabledLanguage.org_id == org_id)
+        .order_by(EnabledLanguage.display_name)
+    )).scalars().all()
+    return rows
+
+
+@router.post("/orgs/{org_id}/languages", response_model=OrgLanguageOut, status_code=201)
+async def org_enable_language(
+    org_id: int,
+    data: OrgLanguageCreate,
+    background_tasks: BackgroundTasks,
+    admin: User = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Opts this org into a language. If nobody on this server has enabled
+    this code before, this also creates the shared catalog row and kicks off
+    the real work (model install + bulk pretranslate) -- same background job
+    as before, just no longer gated behind a super admin. If another org
+    already enabled this code, this org just piggybacks on the existing
+    (possibly already-ready) catalog row -- no re-install, no re-download."""
+    if not _translation_configured():
+        raise HTTPException(503, "Translation isn't configured on this server (set TRANSLATION_ENABLED=true)")
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    code = data.code.strip().lower()
+
+    already = (await db.execute(select(OrgEnabledLanguage).filter(
+        OrgEnabledLanguage.org_id == org_id, OrgEnabledLanguage.code == code,
+    ))).scalar_one_or_none()
+    if already:
+        raise HTTPException(400, f"{code} is already enabled for this organization")
+
+    lang = (await db.execute(select(EnabledLanguage).filter(EnabledLanguage.code == code))).scalar_one_or_none()
+    if lang is None:
+        lang = EnabledLanguage(code=code, display_name=data.display_name.strip(), model_status="pending")
+        db.add(lang)
+        await db.flush()
+        background_tasks.add_task(run_enable_language_job, code, lang.display_name)
+
+    db.add(OrgEnabledLanguage(org_id=org_id, code=code))
+    await db.commit()
+    await db.refresh(lang)
+    return lang
+
+
+@router.delete("/orgs/{org_id}/languages/{code}", status_code=204)
+async def org_disable_language(org_id: int, code: str, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    """Removes this org's opt-in only. The installed model, its
+    translation_cache rows, and the shared EnabledLanguage catalog row are
+    left untouched -- other orgs may still be using it (super-admin-only
+    GET/DELETE /admin/languages covers fully removing a language from the
+    server's catalog)."""
+    row = (await db.execute(select(OrgEnabledLanguage).filter(
+        OrgEnabledLanguage.org_id == org_id, OrgEnabledLanguage.code == code,
+    ))).scalar_one_or_none()
+    if row:
+        await db.delete(row)
+        await db.commit()
 
 
 class OrgJoinRequest(BaseModel):

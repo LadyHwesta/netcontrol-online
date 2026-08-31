@@ -65,3 +65,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+async def get_current_user_optional(token: str | None = Depends(oauth2_scheme_optional), db: AsyncSession = Depends(get_db)) -> User | None:
+    """Same identity resolution as get_current_user, but for endpoints that
+    are public and must keep working for a logged-out caller -- returns None
+    instead of 401ing when there's no token or it doesn't resolve to a user.
+    First use: GET /i18n/languages, which serves anonymous visitors (the
+    login screen) as well as logged-in ones (scoped to their current org)."""
+    if not token:
+        return None
+    try:
+        return await get_current_user(token=token, db=db)
+    except HTTPException:
+        return None

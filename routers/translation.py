@@ -28,8 +28,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import SessionLocal, get_db
-from models import EnabledLanguage, TranslationCache, User
-from routers.deps import get_current_user, limiter
+from models import EnabledLanguage, OrgEnabledLanguage, TranslationCache, User
+from routers.deps import get_current_user, get_current_user_optional, limiter
 from routers.helpers import STATIC_DIR
 
 router = APIRouter()
@@ -174,14 +174,28 @@ class TranslateResponse(BaseModel):
 
 
 @router.get("/i18n/languages", response_model=list[LanguageOut])
-async def list_enabled_languages(db: AsyncSession = Depends(get_db)):
+async def list_enabled_languages(
+    user: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
     """Languages the language switcher / browser-language auto-detect may
     offer. Not gated on _translation_configured() -- an empty list is
-    already the correct no-op response when translation is off."""
-    return (
-        (await db.execute(select(EnabledLanguage).filter(EnabledLanguage.model_status == "ready").order_by(EnabledLanguage.display_name)))
-        .scalars().all()
-    )
+    already the correct no-op response when translation is off.
+
+    Per-org isolation (multi-tenancy follow-up): a logged-in user only sees
+    languages their own current org has opted into (OrgEnabledLanguage). An
+    anonymous caller -- the login screen, or a public page before any org
+    context exists -- instead sees the union of every ready language any
+    org on this server has enabled; there's no org to scope by yet, and
+    nothing sensitive is exposed by a visitor knowing a language exists."""
+    q = select(EnabledLanguage).filter(EnabledLanguage.model_status == "ready")
+    if user and user.current_org_id:
+        q = q.join(OrgEnabledLanguage, OrgEnabledLanguage.code == EnabledLanguage.code).filter(
+            OrgEnabledLanguage.org_id == user.current_org_id
+        )
+    else:
+        q = q.join(OrgEnabledLanguage, OrgEnabledLanguage.code == EnabledLanguage.code).distinct()
+    return (await db.execute(q.order_by(EnabledLanguage.display_name))).scalars().all()
 
 
 @router.get("/i18n/{lang}")

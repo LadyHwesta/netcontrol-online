@@ -69,6 +69,17 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Per-Organization Language Management (v2.20.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Enabling a language is now <strong>any org admin's</strong> call, not just the super admin's — no more asking a super admin every time a new organization wants a language turned on.</li>
+              <li><strong>Fully isolated per org:</strong> one org enabling Spanish doesn't put Spanish in another org's switcher, and disabling it only affects that org. The heavy part — downloading and installing a language's argos-translate model — still only ever happens once per language across the whole server; a second org enabling the same code instantly reuses it.</li>
+              <li>New <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">GET/POST/DELETE /orgs/{org_id}/languages</code> replace the old instance-wide admin endpoint for actually turning a language on. The super-admin-only <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">GET/DELETE /admin/languages</code> still exist, now repurposed as a server-wide catalog view (which languages are installed, how many orgs use each) and a hard uninstall that removes a language everywhere at once.</li>
+              <li>Fixed a real bug alongside this: a string that missed the translation cache on first render (e.g. right after enabling a language) stayed in English until a full page reload, even though the server-side translation had already arrived — it now swaps in live, no reload needed.</li>
+              <li><strong>Upgrading an existing install:</strong> adds a new <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">org_enabled_languages</code> table — run <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">migrate.py</code> (see Help → Database Migrations) or let <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">./deploy.sh</code> do it automatically.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Net Creation/Edit Form (v2.19.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Extends UI translation (see below) to the <strong>Nets</strong> view: the New/Edit Net form (Details tab, Net Script editor, DMR/APRS integration, Sharing) plus its save/delete/error toasts — the second slice of the incremental rollout tracked in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">TECH_DEBT.md</code>.</li>

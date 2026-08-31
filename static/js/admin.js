@@ -788,6 +788,10 @@ async function loadDbStats() {
 
 // ============================================================
 // LANGUAGES (UI translation via argos-translate, opt-in TRANSLATION_ENABLED)
+// Org-scoped (multi-tenancy follow-up): every org admin manages their own
+// org's enabled-languages list independently via /orgs/{org_id}/languages --
+// a super admin viewing this tab acts on their own current_org_id too, same
+// as the Organization edit form above, not some separate instance-wide list.
 // ============================================================
 const LANG_STATUS_BADGE = {
   pending: '<span class="badge badge-gray">Pending</span>',
@@ -807,16 +811,16 @@ async function loadLanguages() {
 
   let rows;
   try {
-    rows = await apiFetch('/admin/languages');
+    rows = await apiFetch(`/orgs/${currentUser.current_org_id}/languages`);
   } catch (e) {
     toast(e.message, 'error');
     return;
   }
 
-  // /admin/languages itself doesn't say whether TRANSLATION_ENABLED is set --
+  // This endpoint itself doesn't say whether TRANSLATION_ENABLED is set --
   // an empty list either means "not configured yet" or "configured, nothing
-  // enabled yet". POST /admin/languages 503s with a clear message either way,
-  // so the add form stays available and simply surfaces that on first use
+  // enabled yet for this org". POST 503s with a clear message either way, so
+  // the add form stays available and simply surfaces that on first use
   // rather than a separate status check here.
   disabledNote.style.display = 'none';
   addCard.style.display = '';
@@ -851,7 +855,7 @@ async function enableLanguage() {
   const name = document.getElementById('lang-add-name').value.trim();
   if (!code || !name) return toast('Enter both a language code and a display name', 'error');
   try {
-    await apiFetch('/admin/languages', { method: 'POST', body: JSON.stringify({ code, display_name: name }) });
+    await apiFetch(`/orgs/${currentUser.current_org_id}/languages`, { method: 'POST', body: JSON.stringify({ code, display_name: name }) });
     document.getElementById('lang-add-code').value = '';
     document.getElementById('lang-add-name').value = '';
     toast(`Enabling ${name} — installing its model and pre-translating in the background`, 'success');
@@ -860,9 +864,9 @@ async function enableLanguage() {
 }
 
 async function disableLanguage(code) {
-  if (!confirm(`Disable ${code}? It will stop appearing in the language switcher. Already-translated text stays cached and re-enabling later is instant.`)) return;
+  if (!confirm(`Disable ${code}? It will stop appearing in your organization's language switcher. Already-translated text stays cached and re-enabling later is instant.`)) return;
   try {
-    await apiFetch(`/admin/languages/${encodeURIComponent(code)}`, { method: 'DELETE' });
+    await apiFetch(`/orgs/${currentUser.current_org_id}/languages/${encodeURIComponent(code)}`, { method: 'DELETE' });
     loadLanguages();
   } catch (e) { toast(e.message, 'error'); }
 }

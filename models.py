@@ -617,10 +617,13 @@ class TranslationCache(Base):
 
 
 class EnabledLanguage(Base):
-    """A language a super admin has turned on for the UI translation feature.
-    Presence of a 'ready' row is what the language switcher and browser-
-    language auto-detect actually offer -- argos-translate itself supports
-    many more languages than any given instance has chosen to enable."""
+    """The catalog of argos-translate models actually installed on this
+    server -- one row per language code, server-wide, regardless of how many
+    orgs use it. Installing a model is real, shared work (a download + a
+    background pretranslate job), so it only ever happens once per code no
+    matter which org's admin was the one to trigger it. Which orgs' users
+    actually see a 'ready' row in their switcher is a separate, per-org
+    question -- see OrgEnabledLanguage below."""
     __tablename__ = "enabled_languages"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -633,3 +636,26 @@ class EnabledLanguage(Base):
 
     def __repr__(self):
         return f"<EnabledLanguage {self.code} status={self.model_status}>"
+
+
+class OrgEnabledLanguage(Base):
+    """One org's opt-in to a language from the EnabledLanguage catalog --
+    this is what actually makes a language show up in that org's switcher
+    and auto-detect list. Deliberately isolated per org (multi-tenancy,
+    issue #1): Org A's admin enabling Spanish doesn't affect Org B's users
+    at all. Enabling a not-yet-installed code creates the shared
+    EnabledLanguage catalog row (and kicks off its install) the first time
+    any org asks for it; every org after that just adds its own row here,
+    no re-install. Disabling only removes this org's own opt-in -- the
+    installed model and cached translations stay in place for other orgs
+    still using it (see routers/orgs.py's org-scoped languages endpoints)."""
+    __tablename__ = "org_enabled_languages"
+    __table_args__ = (UniqueConstraint("org_id", "code", name="uq_org_enabled_language"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    code = Column(String(10), nullable=False, index=True)  # references EnabledLanguage.code
+    enabled_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<OrgEnabledLanguage org_id={self.org_id} code={self.code}>"
