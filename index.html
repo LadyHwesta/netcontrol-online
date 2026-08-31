@@ -251,8 +251,8 @@
       <!-- NETS VIEW -->
       <div id="view-nets">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-          <h2 class="section-title mb-0">Nets</h2>
-          <button class="btn btn-primary btn-sm" onclick="showNetForm()">+ New Net</button>
+          <h2 class="section-title mb-0" data-i18n="Nets">Nets</h2>
+          <button class="btn btn-primary btn-sm" onclick="showNetForm()" data-i18n="+ New Net">+ New Net</button>
         </div>
 
         <!-- Net form -->
@@ -265,107 +265,107 @@
                live preview. Save/Cancel stay outside both tabs since they submit the
                whole form regardless of which tab is showing. -->
           <div class="tab-bar" id="net-form-tab-bar">
-            <button type="button" class="tab-btn active" id="net-form-tab-details-btn" onclick="switchNetFormTab('details')">Details</button>
-            <button type="button" class="tab-btn" id="net-form-tab-script-btn" onclick="switchNetFormTab('script')">📜 Net Script</button>
+            <button type="button" class="tab-btn active" id="net-form-tab-details-btn" onclick="switchNetFormTab('details')" data-i18n="Details">Details</button>
+            <button type="button" class="tab-btn" id="net-form-tab-script-btn" onclick="switchNetFormTab('script')" data-i18n="📜 Net Script">📜 Net Script</button>
           </div>
 
           <div id="net-form-details-panel">
           <div class="form-group">
-            <label>Net Name *</label>
+            <label data-i18n="Net Name *">Net Name *</label>
             <input class="form-control" id="net-name" placeholder="Monday Night 2m Net" oninput="renderScriptPreview()" />
           </div>
           <div style="margin-bottom:14px">
-            <label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px">Net Type</label>
+            <label style="font-size:12px;font-weight:700;color:var(--text-muted);display:block;margin-bottom:6px" data-i18n="Net Type">Net Type</label>
             <div style="display:flex;gap:16px">
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700">
                 <input type="radio" name="net-type" value="ham" checked onchange="onNetTypeChange()" style="accent-color:var(--lc-orange);width:15px;height:15px" />
-                📻 Ham Radio
+                <span data-i18n="📻 Ham Radio">📻 Ham Radio</span>
               </label>
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700">
                 <input type="radio" name="net-type" value="gmrs" onchange="onNetTypeChange()" style="accent-color:#22c55e;width:15px;height:15px" />
-                📡 GMRS
+                <span data-i18n="📡 GMRS">📡 GMRS</span>
               </label>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Frequency</label>
+              <label data-i18n="Frequency">Frequency</label>
               <input class="form-control" id="net-freq" placeholder="146.520 MHz" />
             </div>
             <div class="form-group" id="net-dmr-tg-group" style="max-width:140px">
-              <label>DMR Talk Group</label>
+              <label data-i18n="DMR Talk Group">DMR Talk Group</label>
               <input class="form-control" id="net-dmr-tg" placeholder="3117" />
             </div>
           </div>
           <div class="form-group">
-            <label>Description</label>
-            <textarea class="form-control" id="net-desc" rows="2" placeholder="Optional notes"></textarea>
+            <label data-i18n="Description">Description</label>
+            <textarea class="form-control" id="net-desc" rows="2" placeholder="Optional notes" data-i18n-placeholder="Optional notes"></textarea>
           </div>
           <div id="net-ares-section" style="margin-bottom:14px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700">
               <input type="checkbox" id="net-ares" style="accent-color:var(--lc-orange);width:16px;height:16px" />
-              ARES / ACES Net — enables evacuation zone tracking per station
+              <span data-i18n="ARES / ACES Net — enables evacuation zone tracking per station">ARES / ACES Net — enables evacuation zone tracking per station</span>
             </label>
           </div>
           <div id="net-broadcast-section" style="margin-bottom:14px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700">
               <input type="checkbox" id="net-has-broadcast" onchange="onBroadcastToggle()" style="accent-color:var(--lc-blue);width:16px;height:16px" />
-              Additional Broadcast — this net carries a segment like Amateur Radio Newsline
+              <span data-i18n="Additional Broadcast — this net carries a segment like Amateur Radio Newsline">Additional Broadcast — this net carries a segment like Amateur Radio Newsline</span>
             </label>
             <div id="net-broadcast-label-group" class="form-group" style="display:none;margin-top:8px;max-width:320px">
-              <label style="font-size:12px">Broadcast Name</label>
+              <label style="font-size:12px" data-i18n="Broadcast Name">Broadcast Name</label>
               <input class="form-control" id="net-broadcast-label" placeholder="Amateur Radio Newsline" style="font-size:13px" />
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Adds a Broadcaster role to this net's Schedule sign-ups, alongside Net Control.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Adds a Broadcaster role to this net's Schedule sign-ups, alongside Net Control.">Adds a Broadcaster role to this net's Schedule sign-ups, alongside Net Control.</div>
             </div>
           </div>
           <div id="net-reminder-section" style="margin-bottom:14px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700">
               <input type="checkbox" id="net-reminder-enabled" onchange="onReminderToggle()" style="accent-color:var(--lc-blue);width:16px;height:16px" />
-              Reminder Emails — notify whoever's signed up before their net starts
+              <span data-i18n="Reminder Emails — notify whoever's signed up before their net starts">Reminder Emails — notify whoever's signed up before their net starts</span>
             </label>
             <div id="net-reminder-minutes-group" class="form-group" style="display:none;margin-top:8px;max-width:160px">
-              <label style="font-size:12px">Minutes Before</label>
+              <label style="font-size:12px" data-i18n="Minutes Before">Minutes Before</label>
               <input class="form-control" id="net-reminder-minutes" type="number" min="1" max="1440" placeholder="30" style="font-size:13px" />
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Sent to whoever's signed up as Net Control / Broadcaster on the Schedule tab for that date. Requires SMTP to be configured and the reminders cron job running — see Help.</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Sent to whoever's signed up as Net Control / Broadcaster on the Schedule tab for that date. Requires SMTP to be configured and the reminders cron job running — see Help.">Sent to whoever's signed up as Net Control / Broadcaster on the Schedule tab for that date. Requires SMTP to be configured and the reminders cron job running — see Help.</div>
             </div>
           </div>
           <div id="net-public-listed-section" style="margin-bottom:14px">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700">
               <input type="checkbox" id="net-public-listed" onchange="onPublicListedToggle()" style="accent-color:var(--lc-blue);width:16px;height:16px" />
-              List in Public Net Directory — visible at /directory, no login required
+              <span data-i18n="List in Public Net Directory — visible at /directory, no login required">List in Public Net Directory — visible at /directory, no login required</span>
             </label>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Shows this net's name, frequency, description, and weekly schedule to anyone browsing the directory.</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Shows this net's name, frequency, description, and weekly schedule to anyone browsing the directory.">Shows this net's name, frequency, description, and weekly schedule to anyone browsing the directory.</div>
           </div>
           <!-- Net Repository directory metadata — optional, only relevant once Public Directory is on -->
           <div id="net-repo-metadata-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">🌐 Net Repository Details</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">All optional — helps other operators find this net on the central Net Repository directory. Leave any of these blank if they don't apply.</div>
+            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:4px" data-i18n="🌐 Net Repository Details">🌐 Net Repository Details</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px" data-i18n="All optional — helps other operators find this net on the central Net Repository directory. Leave any of these blank if they don't apply.">All optional — helps other operators find this net on the central Net Repository directory. Leave any of these blank if they don't apply.</div>
             <div class="form-row">
               <div class="form-group">
-                <label>Band</label>
+                <label data-i18n="Band">Band</label>
                 <input class="form-control" id="net-band" placeholder="2m" style="font-size:13px" />
               </div>
               <div class="form-group">
-                <label>Mode</label>
+                <label data-i18n="Mode">Mode</label>
                 <input class="form-control" id="net-mode" placeholder="FM" style="font-size:13px" />
               </div>
               <div class="form-group">
-                <label>CTCSS Tone</label>
+                <label data-i18n="CTCSS Tone">CTCSS Tone</label>
                 <input class="form-control" id="net-ctcss-tone" placeholder="100.0" style="font-size:13px" />
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Region</label>
+                <label data-i18n="Region">Region</label>
                 <input class="form-control" id="net-region" placeholder="Snohomish County" style="font-size:13px" />
               </div>
               <div class="form-group">
-                <label>State</label>
+                <label data-i18n="State">State</label>
                 <input class="form-control" id="net-state" placeholder="WA" style="font-size:13px" />
               </div>
             </div>
             <div class="form-group">
-              <label>Website <span class="text-muted" style="font-size:11px">(falls back to Admin → Branding's website if left blank)</span></label>
+              <label><span data-i18n="Website">Website</span> <span class="text-muted" style="font-size:11px" data-i18n="(falls back to Admin → Branding's website if left blank)">(falls back to Admin → Branding's website if left blank)</span></label>
               <input class="form-control" id="net-website" placeholder="https://your-club-website.org" style="font-size:13px" />
             </div>
           </div>
@@ -375,121 +375,121 @@
                WPSD/Pi-Star hotspot's last-heard feed already reports every mode it
                hears — this is one integration with a mode filter, not six. -->
           <div id="net-dmr-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:10px">📻 Digital Voice Integration</div>
+            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:10px" data-i18n="📻 Digital Voice Integration">📻 Digital Voice Integration</div>
             <div class="form-row">
               <div class="form-group mb-0">
-                <label style="font-size:12px">Mode</label>
+                <label style="font-size:12px" data-i18n="Mode">Mode</label>
                 <select class="form-control" id="dmr-mode" onchange="onDmrModeChange()" style="font-size:13px">
                   <option value="dmr">DMR</option>
                   <option value="dstar">D-Star</option>
-                  <option value="ysf">YSF (Yaesu Fusion)</option>
+                  <option value="ysf" data-i18n="YSF (Yaesu Fusion)">YSF (Yaesu Fusion)</option>
                   <option value="nxdn">NXDN</option>
                   <option value="p25">P25</option>
                   <option value="m17">M17</option>
                 </select>
               </div>
               <div class="form-group mb-0">
-                <label style="font-size:12px">Source</label>
+                <label style="font-size:12px" data-i18n="Source">Source</label>
                 <select class="form-control" id="dmr-source" onchange="onDmrSourceChange()" style="font-size:13px">
-                  <option value="none">— Disabled —</option>
-                  <option value="wpsd">WPSD Hotspot</option>
-                  <option value="pistar">Pi-Star Hotspot</option>
-                  <option value="brandmeister">BrandMeister Network (DMR only)</option>
+                  <option value="none" data-i18n="— Disabled —">— Disabled —</option>
+                  <option value="wpsd" data-i18n="WPSD Hotspot">WPSD Hotspot</option>
+                  <option value="pistar" data-i18n="Pi-Star Hotspot">Pi-Star Hotspot</option>
+                  <option value="brandmeister" data-i18n="BrandMeister Network (DMR only)">BrandMeister Network (DMR only)</option>
                 </select>
               </div>
             </div>
             <div id="dmr-hotspot-fields" style="display:none">
               <div class="form-group">
-                <label style="font-size:12px">Hotspot API URL</label>
+                <label style="font-size:12px" data-i18n="Hotspot API URL">Hotspot API URL</label>
                 <input class="form-control" id="dmr-url" placeholder="http://wpsd.local/api" style="font-size:13px" />
                 <div style="font-size:11px;color:var(--text-muted);margin-top:4px">WPSD: <code>http://&lt;host&gt;/api</code> &nbsp;|&nbsp; Pi-Star: <code>http://&lt;host&gt;</code></div>
               </div>
               <div class="form-group">
                 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600">
                   <input type="checkbox" id="dmr-direct" style="accent-color:var(--lc-orange);width:14px;height:14px" />
-                  Direct mode (browser fetches hotspot — use for local network access)
+                  <span data-i18n="Direct mode (browser fetches hotspot — use for local network access)">Direct mode (browser fetches hotspot — use for local network access)</span>
                 </label>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:3px">When unchecked the server proxies the request (requires hotspot to be publicly reachable from the server).</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="When unchecked the server proxies the request (requires hotspot to be publicly reachable from the server).">When unchecked the server proxies the request (requires hotspot to be publicly reachable from the server).</div>
               </div>
             </div>
             <div id="dmr-bm-fields" style="display:none">
               <div class="form-group">
-                <label style="font-size:12px">Talk Group ID to Monitor</label>
+                <label style="font-size:12px" data-i18n="Talk Group ID to Monitor">Talk Group ID to Monitor</label>
                 <input class="form-control" id="dmr-tg" type="number" placeholder="e.g. 3117" style="font-size:13px" />
-                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">BrandMeister TG number — e.g. 3117 (Illinois), 3100 (USA Bridge)</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px" data-i18n="BrandMeister TG number — e.g. 3117 (Illinois), 3100 (USA Bridge)">BrandMeister TG number — e.g. 3117 (Illinois), 3100 (USA Bridge)</div>
               </div>
             </div>
             <div class="form-group">
-              <label style="font-size:12px">Filter Callsign (excluded from heard list)</label>
-              <input class="form-control mono" id="dmr-filter" placeholder="Your NCS callsign" style="font-size:13px;text-transform:uppercase" />
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Defaults to the net owner's callsign if left blank.</div>
+              <label style="font-size:12px" data-i18n="Filter Callsign (excluded from heard list)">Filter Callsign (excluded from heard list)</label>
+              <input class="form-control mono" id="dmr-filter" placeholder="Your NCS callsign" style="font-size:13px;text-transform:uppercase" data-i18n-placeholder="Your NCS callsign" />
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Defaults to the net owner's callsign if left blank.">Defaults to the net owner's callsign if left blank.</div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <button class="btn btn-primary btn-sm" onclick="saveDmrConfig()">Save Config</button>
-              <button class="btn btn-danger btn-sm" id="dmr-delete-btn" style="display:none" onclick="deleteDmrConfig()">Remove</button>
-              <button class="btn btn-ghost btn-sm" id="dmr-relay-btn" style="display:none" onclick="downloadRelayScript()" title="Download a Python relay script that pushes hotspot data from your local network">📥 Relay Script</button>
+              <button class="btn btn-primary btn-sm" onclick="saveDmrConfig()" data-i18n="Save Config">Save Config</button>
+              <button class="btn btn-danger btn-sm" id="dmr-delete-btn" style="display:none" onclick="deleteDmrConfig()" data-i18n="Remove">Remove</button>
+              <button class="btn btn-ghost btn-sm" id="dmr-relay-btn" style="display:none" onclick="downloadRelayScript()" title="Download a Python relay script that pushes hotspot data from your local network" data-i18n-title="Download a Python relay script that pushes hotspot data from your local network" data-i18n="📥 Relay Script">📥 Relay Script</button>
             </div>
             <div id="dmr-relay-note" style="display:none;margin-top:8px;font-size:11px;color:var(--text-muted);background:var(--surface);border:1px solid var(--lc-border);border-radius:5px;padding:8px">
-              <strong style="color:var(--lc-orange)">CORS/local network?</strong>
-              Run <strong>dmr_relay.py</strong> on any machine that can reach your hotspot (the Pi itself works great).
-              It fetches locally and pushes to this server — no CORS, no port forwarding needed.
-              Create an API token under <strong>⚙️ Account</strong> in the sidebar and paste it into the script.
+              <strong style="color:var(--lc-orange)" data-i18n="CORS/local network?">CORS/local network?</strong>
+              <span data-i18n="Run">Run</span> <strong>dmr_relay.py</strong> <span data-i18n="on any machine that can reach your hotspot (the Pi itself works great).">on any machine that can reach your hotspot (the Pi itself works great).</span>
+              <span data-i18n="It fetches locally and pushes to this server — no CORS, no port forwarding needed.">It fetches locally and pushes to this server — no CORS, no port forwarding needed.</span>
+              <span data-i18n="Create an API token under">Create an API token under</span> <strong>⚙️ Account</strong> <span data-i18n="in the sidebar and paste it into the script.">in the sidebar and paste it into the script.</span>
             </div>
           </div>
 
           <!-- APRS Map Integration (issue #22) — only shown when editing an existing net you can edit -->
           <div id="net-aprs-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:10px">🗺️ APRS Map</div>
+            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:10px" data-i18n="🗺️ APRS Map">🗺️ APRS Map</div>
             <div class="form-group">
-              <label style="font-size:12px">Source</label>
+              <label style="font-size:12px" data-i18n="Source">Source</label>
               <select class="form-control" id="aprs-source" onchange="onAprsSourceChange()" style="font-size:13px">
-                <option value="none">— Disabled —</option>
-                <option value="aprs_fi">aprs.fi (online, needs a free API key)</option>
-                <option value="relay">Relay script (public APRS-IS or local hardware)</option>
+                <option value="none" data-i18n="— Disabled —">— Disabled —</option>
+                <option value="aprs_fi" data-i18n="aprs.fi (online, needs a free API key)">aprs.fi (online, needs a free API key)</option>
+                <option value="relay" data-i18n="Relay script (public APRS-IS or local hardware)">Relay script (public APRS-IS or local hardware)</option>
               </select>
             </div>
             <div id="aprs-fi-fields" style="display:none">
               <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
-                Positions are looked up for whoever is currently checked in to this net's active session, using your organization's aprs.fi API key
-                (set once for the whole org under <strong>Admin → Operators → Your Organization</strong> — no per-net key needed).
+                <span data-i18n="Positions are looked up for whoever is currently checked in to this net's active session, using your organization's aprs.fi API key (set once for the whole org under">Positions are looked up for whoever is currently checked in to this net's active session, using your organization's aprs.fi API key
+                (set once for the whole org under</span> <strong>Admin → Operators → Your Organization</strong> <span data-i18n="— no per-net key needed).">— no per-net key needed).</span>
               </div>
             </div>
             <div id="aprs-relay-fields" style="display:none">
               <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">
-                Positions arrive via <strong>aprs_relay.py</strong> — point it at the public APRS-IS network for online use, or at a local Direwolf/TNC/igate for offline use.
+                <span data-i18n="Positions arrive via">Positions arrive via</span> <strong>aprs_relay.py</strong> <span data-i18n="— point it at the public APRS-IS network for online use, or at a local Direwolf/TNC/igate for offline use.">— point it at the public APRS-IS network for online use, or at a local Direwolf/TNC/igate for offline use.</span>
               </div>
-              <button class="btn btn-ghost btn-sm" id="aprs-relay-btn" onclick="downloadAprsRelayScript()" title="Download the APRS-IS relay script, pre-filled with this net's server/ID">📥 Relay Script</button>
+              <button class="btn btn-ghost btn-sm" id="aprs-relay-btn" onclick="downloadAprsRelayScript()" title="Download the APRS-IS relay script, pre-filled with this net's server/ID" data-i18n-title="Download the APRS-IS relay script, pre-filled with this net's server/ID" data-i18n="📥 Relay Script">📥 Relay Script</button>
             </div>
             <div class="form-group">
-              <label style="font-size:12px">Filter Callsign (excluded from the map)</label>
-              <input class="form-control mono" id="aprs-filter" placeholder="Your NCS callsign" style="font-size:13px;text-transform:uppercase" />
-              <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Defaults to the net owner's callsign if left blank.</div>
+              <label style="font-size:12px" data-i18n="Filter Callsign (excluded from the map)">Filter Callsign (excluded from the map)</label>
+              <input class="form-control mono" id="aprs-filter" placeholder="Your NCS callsign" style="font-size:13px;text-transform:uppercase" data-i18n-placeholder="Your NCS callsign" />
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Defaults to the net owner's callsign if left blank.">Defaults to the net owner's callsign if left blank.</div>
             </div>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;margin-top:10px">
               <input type="checkbox" id="net-aprs-map-enabled" style="accent-color:var(--lc-blue);width:16px;height:16px" />
-              Show map on public live page
+              <span data-i18n="Show map on public live page">Show map on public live page</span>
             </label>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Field-team positions can be sensitive — the map stays visible to logged-in operators either way; this only controls whether it's also shown on the public, no-login live page.</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Field-team positions can be sensitive — the map stays visible to logged-in operators either way; this only controls whether it's also shown on the public, no-login live page.">Field-team positions can be sensitive — the map stays visible to logged-in operators either way; this only controls whether it's also shown on the public, no-login live page.</div>
           </div>
 
           <!-- Sharing section — only shown when editing an existing net you own -->
           <div id="net-sharing-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--lc-blue);margin-bottom:10px">🔗 Sharing</div>
+            <div style="font-size:13px;font-weight:700;color:var(--lc-blue);margin-bottom:10px" data-i18n="🔗 Sharing">🔗 Sharing</div>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;margin-bottom:6px">
               <input type="checkbox" id="net-share-all" style="accent-color:var(--lc-blue);width:16px;height:16px"
                 onchange="onShareAllChanged()" />
-              Share with all registered users
+              <span data-i18n="Share with all registered users">Share with all registered users</span>
             </label>
             <label id="net-share-all-edit-wrap" style="display:none;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-muted);margin:0 0 10px 24px">
               <input type="checkbox" id="net-share-all-edit" style="accent-color:var(--lc-orange)"
                 onchange="onShareAllEditChanged()" />
-              Everyone can also edit this net, not just view/check in
+              <span data-i18n="Everyone can also edit this net, not just view/check in">Everyone can also edit this net, not just view/check in</span>
             </label>
             <div id="net-share-users" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--lc-border);border-radius:6px;padding:8px 10px">
-              <div class="text-muted" style="font-size:12px;margin-bottom:6px">Select individual users — check "Can edit" to also grant them edit rights, not just view/check-in access:</div>
+              <div class="text-muted" style="font-size:12px;margin-bottom:6px" data-i18n="Select individual users — check &quot;Can edit&quot; to also grant them edit rights, not just view/check-in access:">Select individual users — check "Can edit" to also grant them edit rights, not just view/check-in access:</div>
               <div id="net-share-user-list"></div>
             </div>
-            <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="saveSharing()">Save Sharing</button>
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="saveSharing()" data-i18n="Save Sharing">Save Sharing</button>
           </div>
           </div><!-- /net-form-details-panel -->
 
@@ -501,63 +501,63 @@
                  the top. -->
             <div class="script-editor-columns">
               <div class="script-editor-main">
-                <textarea class="form-control mono" id="net-script" rows="16" placeholder="Optional — paste your net control script here" oninput="renderScriptPreview()"></textarea>
+                <textarea class="form-control mono" id="net-script" rows="16" placeholder="Optional — paste your net control script here" oninput="renderScriptPreview()" data-i18n-placeholder="Optional — paste your net control script here"></textarea>
                 <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-                  Markup: <code style="background:var(--surface);padding:1px 4px;border-radius:3px">**bold**</code>
+                  <span data-i18n="Markup:">Markup:</span> <code style="background:var(--surface);padding:1px 4px;border-radius:3px">**bold**</code>
                   <code style="background:var(--surface);padding:1px 4px;border-radius:3px">*italic*</code>
                   <code style="background:var(--surface);padding:1px 4px;border-radius:3px"># heading</code>
                   <code style="background:var(--surface);padding:1px 4px;border-radius:3px">- list</code>
-                  <code style="background:var(--surface);padding:1px 4px;border-radius:3px">---</code> rule — use the Format tools alongside the editor or type them directly.
+                  <code style="background:var(--surface);padding:1px 4px;border-radius:3px">---</code> <span data-i18n="rule — use the Format tools alongside the editor or type them directly.">rule — use the Format tools alongside the editor or type them directly.</span>
                 </div>
 
                 <div style="margin-top:14px">
-                  <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:6px">PREVIEW <span class="text-muted" style="font-weight:400;font-size:11px">(sample names — the real script fills in live values)</span></div>
+                  <div style="font-size:12px;font-weight:700;color:var(--lc-orange);letter-spacing:.05em;margin-bottom:6px"><span data-i18n="PREVIEW">PREVIEW</span> <span class="text-muted" style="font-weight:400;font-size:11px" data-i18n="(sample names — the real script fills in live values)">(sample names — the real script fills in live values)</span></div>
                   <div id="net-script-preview" style="border:1px solid var(--lc-blue);border-radius:8px;padding:12px;min-height:80px;font-size:13px;line-height:1.5;white-space:pre-wrap"></div>
                 </div>
               </div>
 
               <div class="script-editor-vars">
                 <div style="border:1px solid var(--lc-blue);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-                  <div style="font-size:12px;font-weight:700;color:var(--lc-blue);letter-spacing:.05em;margin-bottom:8px">✏️ FORMAT</div>
+                  <div style="font-size:12px;font-weight:700;color:var(--lc-blue);letter-spacing:.05em;margin-bottom:8px" data-i18n="✏️ FORMAT">✏️ FORMAT</div>
                   <div style="display:flex;gap:6px;flex-wrap:wrap">
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="wrapScriptSelection('**','**')" title="Bold"><strong>B</strong></button>
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="wrapScriptSelection('*','*')" title="Italic"><em>I</em></button>
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('# ')" title="Heading 1">H1</button>
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('## ')" title="Heading 2">H2</button>
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('### ')" title="Heading 3">H3</button>
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('- ')" title="Bullet list">• List</button>
-                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptRule()" title="Horizontal rule">— Rule</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="wrapScriptSelection('**','**')" title="Bold" data-i18n-title="Bold"><strong>B</strong></button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="wrapScriptSelection('*','*')" title="Italic" data-i18n-title="Italic"><em>I</em></button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('# ')" title="Heading 1" data-i18n-title="Heading 1">H1</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('## ')" title="Heading 2" data-i18n-title="Heading 2">H2</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('### ')" title="Heading 3" data-i18n-title="Heading 3">H3</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptLinePrefix('- ')" title="Bullet list" data-i18n-title="Bullet list" data-i18n="• List">• List</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="insertScriptRule()" title="Horizontal rule" data-i18n-title="Horizontal rule" data-i18n="— Rule">— Rule</button>
                   </div>
                 </div>
 
                 <button type="button" onclick="toggleScriptVarsPanel()" style="width:100%;background:var(--surface);border:1px solid var(--lc-blue);border-radius:8px 8px 0 0;color:var(--lc-blue);padding:8px 12px;text-align:left;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                  <span>🔤 INSERT A VARIABLE</span>
+                  <span data-i18n="🔤 INSERT A VARIABLE">🔤 INSERT A VARIABLE</span>
                   <span id="script-vars-toggle-icon">▶</span>
                 </button>
                 <div id="script-vars-body" style="display:none;border:1px solid var(--lc-blue);border-top:none;border-radius:0 0 8px 8px;padding:10px 12px;font-size:12px">
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_name}}')">{{net_name}}</button><span class="text-muted">The net's name</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control}}')">{{net_control}}</button><span class="text-muted">Net Control — name and callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_callsign}}')">{{net_control_callsign}}</button><span class="text-muted">Just the callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_name}}')">{{net_control_name}}</button><span class="text-muted">Just the name</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster}}')">{{broadcaster}}</button><span class="text-muted">Broadcaster — name and callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_callsign}}')">{{broadcaster_callsign}}</button><span class="text-muted">Just the callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_name}}')">{{broadcaster_name}}</button><span class="text-muted">Just the name</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcast_label}}')">{{broadcast_label}}</button><span class="text-muted">The net's custom broadcast name</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_next}}')">{{net_control_next}}</button><span class="text-muted">Next week's Net Control — name and callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_next_callsign}}')">{{net_control_next_callsign}}</button><span class="text-muted">Just the callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_next_name}}')">{{net_control_next_name}}</button><span class="text-muted">Just the name</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_next}}')">{{broadcaster_next}}</button><span class="text-muted">Next week's Broadcaster — name and callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_next_callsign}}')">{{broadcaster_next_callsign}}</button><span class="text-muted">Just the callsign</span></div>
-                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_next_name}}')">{{broadcaster_next_name}}</button><span class="text-muted">Just the name</span></div>
-                  <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Net Control falls back to whoever started the session if nobody signed up on the Schedule tab; the <code style="background:var(--surface);padding:1px 4px;border-radius:3px">_next</code> variables never fall back — they stay blank until someone actually signs up.</div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_name}}')">{{net_name}}</button><span class="text-muted" data-i18n="The net's name">The net's name</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control}}')">{{net_control}}</button><span class="text-muted" data-i18n="Net Control — name and callsign">Net Control — name and callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_callsign}}')">{{net_control_callsign}}</button><span class="text-muted" data-i18n="Just the callsign">Just the callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_name}}')">{{net_control_name}}</button><span class="text-muted" data-i18n="Just the name">Just the name</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster}}')">{{broadcaster}}</button><span class="text-muted" data-i18n="Broadcaster — name and callsign">Broadcaster — name and callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_callsign}}')">{{broadcaster_callsign}}</button><span class="text-muted" data-i18n="Just the callsign">Just the callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_name}}')">{{broadcaster_name}}</button><span class="text-muted" data-i18n="Just the name">Just the name</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcast_label}}')">{{broadcast_label}}</button><span class="text-muted" data-i18n="The net's custom broadcast name">The net's custom broadcast name</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_next}}')">{{net_control_next}}</button><span class="text-muted" data-i18n="Next week's Net Control — name and callsign">Next week's Net Control — name and callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_next_callsign}}')">{{net_control_next_callsign}}</button><span class="text-muted" data-i18n="Just the callsign">Just the callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{net_control_next_name}}')">{{net_control_next_name}}</button><span class="text-muted" data-i18n="Just the name">Just the name</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_next}}')">{{broadcaster_next}}</button><span class="text-muted" data-i18n="Next week's Broadcaster — name and callsign">Next week's Broadcaster — name and callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_next_callsign}}')">{{broadcaster_next_callsign}}</button><span class="text-muted" data-i18n="Just the callsign">Just the callsign</span></div>
+                  <div class="script-var-row"><button type="button" class="btn btn-ghost btn-sm mono" onclick="insertScriptText('{{broadcaster_next_name}}')">{{broadcaster_next_name}}</button><span class="text-muted" data-i18n="Just the name">Just the name</span></div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:6px"><span data-i18n="Net Control falls back to whoever started the session if nobody signed up on the Schedule tab; the">Net Control falls back to whoever started the session if nobody signed up on the Schedule tab; the</span> <code style="background:var(--surface);padding:1px 4px;border-radius:3px">_next</code> <span data-i18n="variables never fall back — they stay blank until someone actually signs up.">variables never fall back — they stay blank until someone actually signs up.</span></div>
                 </div>
               </div>
             </div>
           </div><!-- /net-form-script-panel -->
 
           <div style="display:flex;gap:8px;margin-top:14px">
-            <button class="btn btn-primary" onclick="saveNet()">Save</button>
-            <button class="btn btn-ghost" onclick="cancelNetForm()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveNet()" data-i18n="Save">Save</button>
+            <button class="btn btn-ghost" onclick="cancelNetForm()" data-i18n="Cancel">Cancel</button>
           </div>
         </div>
 
@@ -1303,7 +1303,7 @@
   <script src="/static/js/views.js?v=19"></script>
   <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/report.js?v=20"></script>
-  <script src="/static/js/nets.js?v=28"></script>
+  <script src="/static/js/nets.js?v=29"></script>
   <script src="/static/js/sessions.js?v=28"></script>
   <script src="/static/js/checkins.js?v=36"></script>
   <script src="/static/js/history.js?v=21"></script>

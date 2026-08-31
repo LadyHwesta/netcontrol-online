@@ -69,6 +69,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Net Creation/Edit Form (v2.19.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Extends UI translation (see below) to the <strong>Nets</strong> view: the New/Edit Net form (Details tab, Net Script editor, DMR/APRS integration, Sharing) plus its save/delete/error toasts — the second slice of the incremental rollout tracked in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">TECH_DEBT.md</code>.</li>
+              <li>No backend changes — this only adds <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">data-i18n</code> markup and <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">t()</code> calls to already-shipped screens.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — UI Translation via Argos Translate (v2.19.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Optional, off by default (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">TRANSLATION_ENABLED=true</code>) — translates the UI using <a href="https://github.com/argosopentech/argos-translate" target="_blank" style="color:var(--lc-orange)">Argos Translate</a>, an offline neural MT library. New <strong>Admin → Languages</strong> tab lets a super admin enable any language it supports; a background job installs the model and pre-translates the app's known strings.</li>

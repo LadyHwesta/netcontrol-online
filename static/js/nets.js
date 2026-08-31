@@ -60,7 +60,7 @@ function renderNets() {
 
 function showNetForm() {
   editNetId = null;
-  document.getElementById('net-form-title').textContent = 'New Net';
+  document.getElementById('net-form-title').textContent = t('New Net');
   document.getElementById('net-name').value = '';
   document.getElementById('net-freq').value = '';
   document.getElementById('net-dmr-tg').value = '';
@@ -257,7 +257,7 @@ async function editNet(id) {
   const n = nets.find(x => x.id === id);
   if (!n) return;
   editNetId = id;
-  document.getElementById('net-form-title').textContent = 'Edit Net';
+  document.getElementById('net-form-title').textContent = t('Edit Net');
   document.getElementById('net-name').value = n.name;
   document.getElementById('net-freq').value = n.frequency || '';
   document.getElementById('net-dmr-tg').value = n.dmr_talkgroup || '';
@@ -323,7 +323,7 @@ async function saveNet() {
   const state = document.getElementById('net-state').value.trim() || null;
   const website = document.getElementById('net-website').value.trim() || null;
   const aprs_map_enabled = is_gmrs ? false : document.getElementById('net-aprs-map-enabled').checked;
-  if (!name) return toast('Net name is required', 'error');
+  if (!name) return toast(t('Net name is required'), 'error');
   try {
     if (editNetId) {
       await apiFetch(`/nets/${editNetId}`, { method: 'PUT', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
@@ -337,10 +337,10 @@ async function saveNet() {
         await apiFetch(`/nets/${editNetId}/shares`, { method: 'PUT', body: JSON.stringify(_shareStatePayload()) });
       }
       await saveAprsConfigIfVisible(editNetId);
-      toast('Net updated');
+      toast(t('Net updated'));
     } else {
       await apiFetch('/nets', { method: 'POST', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
-      toast('Net created');
+      toast(t('Net created'));
     }
     cancelNetForm();
     await loadNets();
@@ -444,7 +444,7 @@ async function saveSharing() {
   if (!editNetId) return;
   try {
     await apiFetch(`/nets/${editNetId}/shares`, { method: 'PUT', body: JSON.stringify(_shareStatePayload()) });
-    toast('Sharing saved');
+    toast(t('Sharing saved'));
     await loadNets();
     // Re-render to update share info on card without closing form
     const n = nets.find(x => x.id === editNetId);
@@ -458,10 +458,10 @@ async function saveSharing() {
 }
 
 async function deleteNet(id) {
-  if (!confirm('Delete this net and ALL its sessions and check-ins? This cannot be undone.')) return;
+  if (!confirm(t('Delete this net and ALL its sessions and check-ins? This cannot be undone.'))) return;
   try {
     await apiFetch(`/nets/${id}`, { method: 'DELETE' });
-    toast('Net deleted');
+    toast(t('Net deleted'));
     await loadNets();
   } catch (e) { toast(e.message, 'error'); }
 }
