@@ -6,7 +6,7 @@ async function saveGmrsCallsign() {
   try {
     currentUser = await apiFetch('/auth/gmrs-callsign', { method: 'PATCH', body: JSON.stringify({ gmrs_callsign }) });
     document.getElementById('profile-gmrs-callsign').value = currentUser.gmrs_callsign || '';
-    toast('Profile saved');
+    toast(t('Profile saved'));
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -21,56 +21,56 @@ async function loadApiTokens() {
   try {
     const tokens = await apiFetch('/auth/tokens');
     if (!tokens || tokens.length === 0) {
-      el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;margin:0">No API tokens yet. Create one above.</p>';
+      el.innerHTML = `<p style="color:var(--text-muted);font-size:13px;margin:0">${t('No API tokens yet. Create one above.')}</p>`;
       return;
     }
-    el.innerHTML = tokens.map(t => `
+    el.innerHTML = tokens.map(tok => `
       <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--lc-border)">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${esc(t.name)}</div>
+          <div style="font-size:13px;font-weight:600">${esc(tok.name)}</div>
           <div style="font-size:11px;color:var(--text-muted)">
-            Created ${fmt(t.created_at)}
-            ${t.last_used_at ? ' · Last used ' + fmt(t.last_used_at) : ' · Never used'}
+            ${t('Created')} ${fmt(tok.created_at)}
+            ${tok.last_used_at ? ' · ' + t('Last used') + ' ' + fmt(tok.last_used_at) : ' · ' + t('Never used')}
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="copyRelayScriptForToken(${t.id}, '${esc(t.name)}')" title="Download relay script pre-configured for this token">📥 Relay Script</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteApiToken(${t.id})">Revoke</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyRelayScriptForToken(${tok.id}, '${esc(tok.name)}')" title="${t('Download relay script pre-configured for this token')}">📥 ${t('Relay Script')}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteApiToken(${tok.id})">${t('Revoke')}</button>
       </div>
     `).join('');
   } catch(e) {
-    el.innerHTML = `<p style="color:var(--lc-red);font-size:13px;margin:0">Error: ${esc(e.message)}</p>`;
+    el.innerHTML = `<p style="color:var(--lc-red);font-size:13px;margin:0">${t('Error:')} ${esc(e.message)}</p>`;
   }
 }
 
 async function createApiToken() {
   const name = document.getElementById('new-token-name').value.trim();
-  if (!name) { toast('Enter a label for the token', 'error'); return; }
+  if (!name) { toast(t('Enter a label for the token'), 'error'); return; }
   try {
     const result = await apiFetch('/auth/tokens', { method: 'POST', body: JSON.stringify({ name }) });
     _lastCreatedToken = result.token;
     document.getElementById('new-token-value').textContent = result.token;
     document.getElementById('new-token-reveal').style.display = '';
     document.getElementById('new-token-name').value = '';
-    toast('Token created — copy it now!');
+    toast(t('Token created — copy it now!'));
     loadApiTokens();
   } catch(e) {
-    toast('Error: ' + e.message, 'error');
+    toast(t('Error:') + ' ' + e.message, 'error');
   }
 }
 
 function copyNewToken() {
   if (!_lastCreatedToken) return;
-  navigator.clipboard.writeText(_lastCreatedToken).then(() => toast('Token copied to clipboard'));
+  navigator.clipboard.writeText(_lastCreatedToken).then(() => toast(t('Token copied to clipboard')));
 }
 
 async function deleteApiToken(id) {
-  if (!confirm('Revoke this token? Any scripts using it will stop working immediately.')) return;
+  if (!confirm(t('Revoke this token? Any scripts using it will stop working immediately.'))) return;
   try {
     await apiFetch(`/auth/tokens/${id}`, { method: 'DELETE' });
-    toast('Token revoked');
+    toast(t('Token revoked'));
     loadApiTokens();
   } catch(e) {
-    toast('Error: ' + e.message, 'error');
+    toast(t('Error:') + ' ' + e.message, 'error');
   }
 }
 
@@ -78,7 +78,7 @@ function copyRelayScriptForToken(tokenId, tokenName) {
   // Prompt user to generate a token — we can't retrieve the raw value, so we
   // direct them to create a fresh one and use downloadRelayScript() which will
   // prompt for the token value.
-  toast('Generate a new token above, copy it, then use the 📥 Relay Script button in the net\'s DMR config with that token.', 'info');
+  toast(t("Generate a new token above, copy it, then use the 📥 Relay Script button in the net's DMR config with that token."), 'info');
 }
 
 function downloadRelayScript() {
@@ -215,7 +215,7 @@ while True:
   a.download = 'dmr_relay.py';
   a.click();
   URL.revokeObjectURL(a.href);
-  toast('dmr_relay.py downloaded — create an API token under 🪙 API Tokens and paste it into the script.');
+  toast(t('dmr_relay.py downloaded — create an API token under 🪙 API Tokens and paste it into the script.'));
 }
 
 onEnter(['new-token-name'], createApiToken);

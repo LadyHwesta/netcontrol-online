@@ -57,49 +57,49 @@
       <a class="sidebar-btn" href="/directory" target="_blank" data-i18n="📖 Net Directory ↗">📖 Net Directory ↗</a>
     </nav>
     <div id="content">
-        <h2 class="section-title">Account</h2>
+        <h2 class="section-title" data-i18n="Account">Account</h2>
 
         <div class="card" style="max-width:600px;margin-bottom:16px">
-          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">PROFILE</h3>
-          <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="PROFILE">PROFILE</h3>
+          <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)" data-i18n="If you hold a separate GMRS license, set that callsign here — Net Control on a GMRS net shows this instead of your amateur callsign (in the duty bar, net script, and public live page). Leave blank to always use your amateur callsign.">
             If you hold a separate GMRS license, set that callsign here — Net Control on a GMRS net shows this
             instead of your amateur callsign (in the duty bar, net script, and public live page). Leave blank to
             always use your amateur callsign.
           </p>
           <div style="display:flex;gap:8px;align-items:flex-end">
             <div class="form-group" style="flex:1;max-width:220px;margin:0">
-              <label>GMRS Callsign</label>
+              <label data-i18n="GMRS Callsign">GMRS Callsign</label>
               <input class="form-control mono" id="profile-gmrs-callsign" placeholder="WSMC512" style="text-transform:uppercase" maxlength="12" />
             </div>
-            <button class="btn btn-primary" onclick="saveGmrsCallsign()">Save</button>
+            <button class="btn btn-primary" onclick="saveGmrsCallsign()" data-i18n="Save">Save</button>
           </div>
         </div>
 
         <div class="card" style="max-width:600px;margin-bottom:16px">
           <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">
-            API tokens let scripts (like the DMR relay) authenticate without storing your password.
-            Each token starts with <code style="background:var(--surface);padding:1px 5px;border-radius:3px">nt_</code> and works anywhere a Bearer token is accepted.
-            Tokens are shown <strong>only at creation</strong> — copy it before leaving this page.
+            <span data-i18n="API tokens let scripts (like the DMR relay) authenticate without storing your password. Each token starts with">API tokens let scripts (like the DMR relay) authenticate without storing your password.
+            Each token starts with</span> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">nt_</code> <span data-i18n="and works anywhere a Bearer token is accepted. Tokens are shown">and works anywhere a Bearer token is accepted.
+            Tokens are shown</span> <strong data-i18n="only at creation">only at creation</strong> <span data-i18n="— copy it before leaving this page.">— copy it before leaving this page.</span>
           </p>
           <div style="display:flex;gap:8px;align-items:flex-end">
             <div class="form-group" style="flex:1;margin:0">
-              <label>Token Label</label>
+              <label data-i18n="Token Label">Token Label</label>
               <input class="form-control" id="new-token-name" placeholder="e.g. DMR Relay – shack Pi" maxlength="100" />
             </div>
-            <button class="btn btn-primary" onclick="createApiToken()" style="white-space:nowrap">+ Create Token</button>
+            <button class="btn btn-primary" onclick="createApiToken()" style="white-space:nowrap" data-i18n="+ Create Token">+ Create Token</button>
           </div>
           <div id="new-token-reveal" style="display:none;margin-top:14px;background:var(--surface);border:1px solid var(--lc-orange);border-radius:6px;padding:12px">
-            <div style="font-size:12px;color:var(--lc-orange);font-weight:700;margin-bottom:6px">⚠ Copy this token now — it will not be shown again</div>
+            <div style="font-size:12px;color:var(--lc-orange);font-weight:700;margin-bottom:6px" data-i18n="⚠ Copy this token now — it will not be shown again">⚠ Copy this token now — it will not be shown again</div>
             <div style="display:flex;gap:8px;align-items:center">
               <code id="new-token-value" style="flex:1;word-break:break-all;font-size:12px;color:var(--text)"></code>
-              <button class="btn btn-ghost btn-sm" onclick="copyNewToken()">📋 Copy</button>
+              <button class="btn btn-ghost btn-sm" onclick="copyNewToken()" data-i18n="📋 Copy">📋 Copy</button>
             </div>
           </div>
         </div>
 
         <div class="card" style="max-width:600px">
-          <h3 style="margin:0 0 12px;font-size:13px;color:var(--lc-orange);letter-spacing:.08em">EXISTING TOKENS</h3>
-          <div id="tokens-list"><span style="color:var(--text-muted);font-size:13px">Loading…</span></div>
+          <h3 style="margin:0 0 12px;font-size:13px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="EXISTING TOKENS">EXISTING TOKENS</h3>
+          <div id="tokens-list"><span style="color:var(--text-muted);font-size:13px" data-i18n="Loading…">Loading…</span></div>
         </div>
       </div>
     </div>
@@ -111,7 +111,7 @@
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=24"></script>
-  <script src="/static/js/tokens.js?v=9"></script>
+  <script src="/static/js/tokens.js?v=23"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {

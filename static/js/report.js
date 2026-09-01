@@ -6,8 +6,8 @@ async function submitReport() {
   const subject = document.getElementById('report-subject').value.trim();
   const body    = document.getElementById('report-body').value.trim();
 
-  if (!subject) { showReportStatus('Please enter a subject.', 'error'); return; }
-  if (!body)    { showReportStatus('Please enter some details.', 'error'); return; }
+  if (!subject) { showReportStatus(t('Please enter a subject.'), 'error'); return; }
+  if (!body)    { showReportStatus(t('Please enter some details.'), 'error'); return; }
 
   const btn = document.querySelector('#content .btn-primary');
   btnLoading(btn, true);
@@ -16,12 +16,12 @@ async function submitReport() {
       method: 'POST',
       body: JSON.stringify({ type, subject, body }),
     });
-    showReportStatus('Your message was sent successfully. Thank you!', 'success');
+    showReportStatus(t('Your message was sent successfully. Thank you!'), 'success');
     document.getElementById('report-subject').value = '';
     document.getElementById('report-body').value = '';
     document.getElementById('report-type').value = 'Bug Report';
   } catch (e) {
-    showReportStatus('Failed to send: ' + e.message, 'error');
+    showReportStatus(t('Failed to send:') + ' ' + e.message, 'error');
   } finally {
     btnLoading(btn, false);
   }
