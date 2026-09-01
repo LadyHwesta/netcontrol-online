@@ -363,6 +363,22 @@
     .form-control:focus { border-bottom-color: var(--lc-gold); background: var(--surface2); }
     .form-control::placeholder { color: var(--overlay-strong); }
     select.form-control { cursor: pointer; }
+    /* The native time/date picker icon (Chrome/Safari's calendar-picker-indicator)
+       is a fixed dark-gray glyph regardless of page theme -- invisible against
+       every theme here except "light" (issue follow-up: every other theme, the
+       unset/default LCARS one included, has a dark --bg). Inverted by default,
+       reverted only for the one genuinely light theme. Firefox has no equivalent
+       pseudo-element to style, so this only fixes Chrome/Safari/Edge -- still the
+       large majority of users, and better than leaving every dark theme broken. */
+    input[type="time"]::-webkit-calendar-picker-indicator,
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
+    }
+    [data-theme="light"] input[type="time"]::-webkit-calendar-picker-indicator,
+    [data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: none;
+    }
     .form-row { display: flex; gap: 12px; }
     .form-row .form-group { flex: 1; }
 
@@ -989,4 +1005,8 @@
       body * { visibility: hidden; }
       #history-print-area, #history-print-area * { visibility: visible; }
       #history-print-area { position: absolute; top: 0; left: 0; width: 100%; }
+      /* The on-screen border/shadow (history.js's renderHistoryPrintable) exists
+         only to set this "paper" preview apart from a dark theme's own page
+         background -- not wanted on the actual printed page. */
+      #history-print-area > div { border: none !important; box-shadow: none !important; }
     }

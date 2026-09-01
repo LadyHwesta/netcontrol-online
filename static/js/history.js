@@ -251,7 +251,7 @@ function renderHistoryPrintable(rows) {
   }).join('');
 
   document.getElementById('history-print-area').innerHTML = `
-    <div style="font-family:Arial,sans-serif;color:#000;padding:10px">
+    <div style="font-family:Arial,sans-serif;color:#000;background:#fff;padding:10px;border:1px solid #ccc;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.25)">
       <h1 style="font-size:18px;margin:0 0 4px">${esc(netName)} — ${t('Checkin History Report')}</h1>
       <p style="font-size:11px;color:#555;margin:0 0 16px">${t('Generated')} ${esc(generated)} &middot; ${tn(rows.length, '{n} operator', '{n} operators')}</p>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
