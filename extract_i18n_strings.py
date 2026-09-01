@@ -37,8 +37,11 @@ OUTPUT_PATH = ROOT / "static" / "i18n" / "known_strings.json"
 # Matches t('...') / t("...") — the first argument only (the English
 # source text); a second `, context` argument, if present, is ignored
 # here since the manifest only needs the distinct source strings for
-# pre-translation, not the disambiguation context.
-T_CALL_RE = re.compile(r"""\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1""")
+# pre-translation, not the disambiguation context. Also matches _t(...),
+# aprs-map.js's local fallback alias for pages (public.html) that don't
+# load i18n.js at all -- same call shape, still worth pre-warming wherever
+# i18n.js IS loaded.
+T_CALL_RE = re.compile(r"""\b_?t\(\s*(['"])((?:\\.|(?!\1).)*)\1""")
 
 # Matches tn(n, '...', '...') — both the singular and plural template
 # arguments (each its own independent t()-style cache key, containing a

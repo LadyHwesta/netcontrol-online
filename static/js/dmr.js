@@ -114,7 +114,7 @@ async function saveDmrConfig() {
     document.getElementById('dmr-delete-btn').style.display = '';
     document.getElementById('dmr-relay-btn').style.display = '';
     document.getElementById('dmr-relay-note').style.display = '';
-    toast('Config saved');
+    toast(t('Config saved'));
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -130,7 +130,7 @@ async function deleteDmrConfig() {
     document.getElementById('dmr-url').value = '';
     document.getElementById('dmr-tg').value  = '';
     document.getElementById('dmr-delete-btn').style.display = 'none';
-    toast('Digital voice integration removed');
+    toast(t('Digital voice integration removed'));
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -214,7 +214,7 @@ async function refreshDmrHeard(netIdArg) {
             const age = cached.age_seconds;
             // Render immediately with age note, then return
             if (entries.length === 0 || !entries.some(e => e.callsign)) {
-              document.getElementById('dmr-last-refresh').textContent = 'Relay is running but no stations heard yet.';
+              document.getElementById('dmr-last-refresh').textContent = t('Relay is running but no stations heard yet.');
             } else {
               const filter = (currentDmrConfig.filter_callsign || (currentUser && currentUser.callsign) || '').toUpperCase();
               if (filter) entries = entries.filter(e => e.callsign !== filter);
@@ -223,15 +223,14 @@ async function refreshDmrHeard(netIdArg) {
               if (entries.length > 0) { cnt.textContent = entries.length; cnt.style.display = ''; }
               else cnt.style.display = 'none';
             }
-            document.getElementById('dmr-last-refresh').textContent = `Via relay script (${age}s ago)`;
+            document.getElementById('dmr-last-refresh').textContent = `${t('Via relay script')} (${age}s ${t('ago')})`;
             return;
           } catch (_cacheErr) {
             // All three paths failed
             document.getElementById('dmr-last-refresh').innerHTML =
-              '<span style="color:var(--lc-orange)">⚠ Could not reach hotspot</span> — ' +
-              'direct fetch (CORS) and server proxy both failed, and no relay data is available. ' +
-              'Run <strong>dmr_relay.py</strong> on a machine that can reach the hotspot ' +
-              '(download it from the net\'s DMR config section).';
+              `<span style="color:var(--lc-orange)">⚠ ${t('Could not reach hotspot')}</span> — ` +
+              t('direct fetch (CORS) and server proxy both failed, and no relay data is available. Run') + ' ' +
+              '<strong>dmr_relay.py</strong> ' + t("on a machine that can reach the hotspot (download it from the net's DMR config section).");
             return;
           }
         }
@@ -241,17 +240,16 @@ async function refreshDmrHeard(netIdArg) {
       try {
         entries = await apiFetch(`/nets/${netId}/dmr/lastheard`);
       } catch (proxyErr) {
-        const msg = proxyErr.message || 'Unknown error';
+        const msg = proxyErr.message || t('Unknown error');
         document.getElementById('dmr-last-refresh').innerHTML =
-          `<span style="color:var(--lc-orange)">⚠ Proxy fetch failed</span> — ${esc(msg)}. ` +
-          'In proxy mode the <em>server</em> fetches your hotspot — it must be reachable from the server ' +
-          '(local LAN addresses like 192.168.x.x won\'t work from a remote server). ' +
-          'Enable <strong>Direct mode</strong> if your browser can reach the hotspot instead.';
+          `<span style="color:var(--lc-orange)">⚠ ${t('Proxy fetch failed')}</span> — ${esc(msg)}. ` +
+          t('In proxy mode the') + ' <em>' + t('server') + '</em> ' + t("fetches your hotspot — it must be reachable from the server (local LAN addresses like 192.168.x.x won't work from a remote server). Enable") + ' ' +
+          '<strong>' + t('Direct mode') + '</strong> ' + t('if your browser can reach the hotspot instead.');
         return;
       }
     }
   } catch (e) {
-    document.getElementById('dmr-last-refresh').textContent = `Error: ${e.message}`;
+    document.getElementById('dmr-last-refresh').textContent = `${t('Error:')} ${e.message}`;
     return;
   }
 
@@ -261,7 +259,7 @@ async function refreshDmrHeard(netIdArg) {
 
   renderDmrHeard(entries);
   const now = new Date().toLocaleTimeString();
-  document.getElementById('dmr-last-refresh').textContent = `Last refresh: ${now}`;
+  document.getElementById('dmr-last-refresh').textContent = `${t('Last refresh:')} ${now}`;
   const cnt = document.getElementById('dmr-heard-count');
   if (entries.length > 0) { cnt.textContent = entries.length; cnt.style.display = ''; }
   else cnt.style.display = 'none';
@@ -275,19 +273,19 @@ function renderDmrHeard(entries) {
   dmrHeardEntries = entries;
   const el = document.getElementById('dmr-heard-list');
   if (entries.length === 0) {
-    el.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No stations heard recently.</p>';
+    el.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No stations heard recently.')}</p>`;
     return;
   }
   const mode = currentDmrConfig ? currentDmrConfig.mode : 'dmr';
-  const tgLabel = (mode === 'dstar' || mode === 'ysf' || mode === 'm17') ? 'Reflector' : 'Talk Group';
+  const tgLabel = (mode === 'dstar' || mode === 'ysf' || mode === 'm17') ? t('Reflector') : t('Talk Group');
   const showRegion = !!(currentDmrConfig && currentDmrConfig.source_type === 'brandmeister');
   el.innerHTML = `<table class="tbl" style="font-size:12px"><thead><tr>
-    <th>Callsign</th><th>Name</th><th>${tgLabel}</th>${showRegion ? '<th>Region</th>' : ''}<th>Heard</th><th></th>
+    <th>${t('Callsign')}</th><th>${t('Name')}</th><th>${tgLabel}</th>${showRegion ? `<th>${t('Region')}</th>` : ''}<th>${t('Heard')}</th><th></th>
   </tr></thead><tbody>` +
   entries.map((e, i) => {
     const already = lastKnownCheckins && lastKnownCheckins.some(c => c.callsign === e.callsign);
     const btnClass = already ? 'btn-ghost' : 'btn-success';
-    const btnText  = already ? '✓ Checked In' : '+ Check In';
+    const btnText  = already ? '✓ ' + t('Checked In') : '+ ' + t('Check In');
     const dur = e.duration ? ` <span class="text-muted">${esc(e.duration)}s</span>` : '';
     return `<tr style="${already ? 'opacity:.55' : ''}">
       <td><span class="callsign">${esc(e.callsign)}</span>${e.dmr_id ? ` <span class="text-muted" style="font-size:10px">${esc(e.dmr_id)}</span>` : ''}</td>

@@ -49,7 +49,7 @@ async function saveAprsConfigIfVisible(netId) {
 function downloadAprsRelayScript() {
   if (!editNetId) return;
   triggerDownload(`/nets/${editNetId}/aprs/relay-script`);
-  toast('aprs_relay.py downloaded — create an API token under 🪙 API Tokens and pass it with --token (or NT_TOKEN).');
+  toast(t('aprs_relay.py downloaded — create an API token under 🪙 API Tokens and pass it with --token (or NT_TOKEN).'));
 }
 
 // ============================================================
@@ -100,7 +100,7 @@ async function refreshAprsMap(netIdArg) {
   try {
     lastAprsPositions = await apiFetch(`/nets/${netId}/aprs/positions`);
   } catch (e) {
-    document.getElementById('aprs-map-last-refresh').textContent = `Error: ${e.message}`;
+    document.getElementById('aprs-map-last-refresh').textContent = `${t('Error:')} ${e.message}`;
     return;
   }
   if (aprsMapPanelOpen) {
@@ -108,7 +108,7 @@ async function refreshAprsMap(netIdArg) {
     invalidateAprsMapSize('aprs-map-container');
   }
   const now = new Date().toLocaleTimeString();
-  document.getElementById('aprs-map-last-refresh').textContent = `Last refresh: ${now}`;
+  document.getElementById('aprs-map-last-refresh').textContent = `${t('Last refresh:')} ${now}`;
   const cnt = document.getElementById('aprs-map-count');
   if (lastAprsPositions.length > 0) { cnt.textContent = lastAprsPositions.length; cnt.style.display = ''; }
   else cnt.style.display = 'none';

@@ -69,6 +69,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: History, DMR &amp; APRS (v2.20.8)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Extends UI translation to the <strong>History</strong> view (which had no coverage at all until now — filters, all three report templates, CSV export column headers) and the dynamic rendering behind the Digital Voice and APRS map panels (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">history.js</code>, <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">dmr.js</code>, <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">aprs.js</code>, <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">aprs-map.js</code>) — only their static panel headers were covered before.</li>
+              <li><code style="background:var(--surface2);padding:1px 5px;border-radius:3px">aprs-map.js</code> is shared with the public live page, which loads no translation framework at all — it now falls back to plain English there instead of erroring, and translates wherever <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">i18n.js</code> actually is loaded.</li>
+              <li>No backend changes.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Admin Panel (v2.20.7)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Extends UI translation to the entire <strong>Admin</strong> page — every tab's static markup (Operators, Branding, Email, Net Repository, DB Stats, Languages, Announcements, Reassign) and <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">admin.js</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">branding.js</code>'s dynamic rendering (user/member tables, pending-approval cards, status badges, all toasts/confirms).</li>

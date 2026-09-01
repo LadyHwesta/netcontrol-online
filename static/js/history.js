@@ -22,7 +22,7 @@ async function loadHistory(netId) {
   document.getElementById('history-th-zone').style.display = historyNetIsAres ? '' : 'none';
 
   const zoneFilterSel = document.getElementById('history-zone-filter');
-  zoneFilterSel.innerHTML = '<option value="">All Zones</option>';
+  zoneFilterSel.innerHTML = `<option value="">${t('All Zones')}</option>`;
   zoneFilterSel.value = '';
   zoneFilterSel.style.display = historyNetIsAres ? '' : 'none';
   historyZones = {};
@@ -89,7 +89,7 @@ function renderHistoryRoster(rows) {
     const cached = historyLookupCache[r.callsign];
     const licenseCell = cached
       ? buildLicensePills(cached)
-      : `<button class="btn btn-ghost btn-sm" onclick="lookupHistoryRow('${esc(r.callsign)}')">🔍</button>`;
+      : `<button class="btn btn-ghost btn-sm" onclick="lookupHistoryRow('${esc(r.callsign)}')" title="${t('Look up FCC license data')}">🔍</button>`;
     const lastNetBadge = r.checked_in_last_session
       ? `<span class="badge badge-green">✓</span>`
       : `<span class="badge badge-gray">—</span>`;
@@ -104,7 +104,7 @@ function renderHistoryRoster(rows) {
       <td><span class="callsign">${esc(r.callsign)}</span></td>
       <td id="hist-name-${esc(r.callsign)}">
         <span class="hist-name-display">${esc(r.name || '—')}</span>
-        <button type="button" title="Set preferred name / remark for this station"
+        <button type="button" title="${t('Set preferred name / remark for this station')}"
           onclick="toggleHistoryRemarkEditor(this, '${esc(r.callsign)}')"
           style="background:none;border:none;color:var(--lc-orange);cursor:pointer;font-size:11px;padding:0 2px;opacity:0.7">✏️</button>
       </td>
@@ -120,7 +120,7 @@ function renderHistoryRoster(rows) {
 }
 
 function buildLicensePills(result) {
-  if (result.status !== 'found') return '<span class="lookup-notfound" style="font-size:11px">Not found</span>';
+  if (result.status !== 'found') return `<span class="lookup-notfound" style="font-size:11px">${t('Not found')}</span>`;
   const parts = [];
   if (result.license_class) parts.push(`<span class="lookup-pill lookup-pill-class">${esc(result.license_class)}</span>`);
   if (result.state)         parts.push(`<span class="lookup-pill lookup-pill-state">${esc(result.state)}</span>`);
@@ -141,7 +141,7 @@ async function lookupHistoryRow(callsign) {
       nameEl.textContent = result.name;
     }
   } catch {
-    licEl.innerHTML = '<span class="lookup-notfound" style="font-size:11px">Error</span>';
+    licEl.innerHTML = `<span class="lookup-notfound" style="font-size:11px">${t('Error')}</span>`;
   }
 }
 
@@ -158,10 +158,10 @@ async function toggleHistoryRemarkEditor(btn, callsign) {
   editor.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap';
   editor.innerHTML = `
     <input class="form-control hist-pref-input" style="width:120px;font-size:12px"
-      placeholder="Preferred name" value="${esc((current && current.preferred_name) || '')}" />
+      placeholder="${t('Preferred name')}" value="${esc((current && current.preferred_name) || '')}" />
     <input class="form-control hist-remark-input" style="width:140px;font-size:12px"
-      placeholder="Notes" value="${esc((current && current.remark) || '')}" />
-    <button class="btn btn-primary btn-sm" type="button">Save</button>
+      placeholder="${t('Notes')}" value="${esc((current && current.remark) || '')}" />
+    <button class="btn btn-primary btn-sm" type="button">${t('Save')}</button>
     <button class="btn btn-ghost btn-sm" type="button">✕</button>`;
   const prefInput = editor.querySelector('.hist-pref-input');
   const remarkInput = editor.querySelector('.hist-remark-input');
@@ -169,7 +169,7 @@ async function toggleHistoryRemarkEditor(btn, callsign) {
   const doSave = async () => {
     try {
       await saveStationRemark(callsign, remarkInput.value, prefInput.value);
-      toast('Saved', 'success');
+      toast(t('Saved'), 'success');
       // Refresh the underlying data without resetting the active search/filter.
       historyData = await apiFetch(`/nets/${currentNetId}/history?limit=1000`).catch(() => historyData);
       filterHistory();
@@ -205,10 +205,10 @@ function renderHistorySummary(rows) {
       <div style="font-size:11px;color:var(--text-muted);letter-spacing:.04em;margin-top:2px">${label}</div>
     </div>`;
   document.getElementById('history-summary-cards').innerHTML =
-    card('OPERATORS SHOWN', uniqueOperators) +
-    card('COMBINED CHECK-INS', totalCheckins) +
-    card('AVG. PER OPERATOR', avgPerOperator) +
-    card('SESSIONS LOGGED', historySessionCount);
+    card(t('OPERATORS SHOWN'), uniqueOperators) +
+    card(t('COMBINED CHECK-INS'), totalCheckins) +
+    card(t('AVG. PER OPERATOR'), avgPerOperator) +
+    card(t('SESSIONS LOGGED'), historySessionCount);
 
   const tbody = document.getElementById('history-summary-tbody');
   tbody.innerHTML = rows.map(r => {
@@ -229,11 +229,11 @@ function renderHistorySummary(rows) {
 // ------------------------------------------------------------
 function renderHistoryPrintable(rows) {
   const net = nets.find(n => n.id === currentNetId);
-  const netName = net ? net.name : 'Net';
+  const netName = net ? net.name : t('Net');
   const generated = new Date().toLocaleString();
 
   const td = 'border:1px solid #ccc;padding:3px 6px';
-  const zoneTh = historyNetIsAres ? `<th style="border:1px solid #999;padding:4px 6px;text-align:left">Zone</th>` : '';
+  const zoneTh = historyNetIsAres ? `<th style="border:1px solid #999;padding:4px 6px;text-align:left">${t('Zone')}</th>` : '';
   const rowsHtml = rows.map(r => {
     const cached = historyLookupCache[r.callsign];
     const license = cached && cached.status === 'found'
@@ -252,17 +252,17 @@ function renderHistoryPrintable(rows) {
 
   document.getElementById('history-print-area').innerHTML = `
     <div style="font-family:Arial,sans-serif;color:#000;padding:10px">
-      <h1 style="font-size:18px;margin:0 0 4px">${esc(netName)} — Checkin History Report</h1>
-      <p style="font-size:11px;color:#555;margin:0 0 16px">Generated ${esc(generated)} &middot; ${rows.length} operator${rows.length === 1 ? '' : 's'}</p>
+      <h1 style="font-size:18px;margin:0 0 4px">${esc(netName)} — ${t('Checkin History Report')}</h1>
+      <p style="font-size:11px;color:#555;margin:0 0 16px">${t('Generated')} ${esc(generated)} &middot; ${tn(rows.length, '{n} operator', '{n} operators')}</p>
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead>
           <tr style="background:#eee">
-            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Callsign</th>
-            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Name</th>
-            <th style="border:1px solid #999;padding:4px 6px;text-align:left">License</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">${t('Callsign')}</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">${t('Name')}</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">${t('License')}</th>
             ${zoneTh}
-            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Total Check-ins</th>
-            <th style="border:1px solid #999;padding:4px 6px;text-align:left">Last Check-in</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">${t('Total Check-ins')}</th>
+            <th style="border:1px solid #999;padding:4px 6px;text-align:left">${t('Last Check-in')}</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -325,24 +325,24 @@ function filterHistory() {
 
 function downloadHistoryCSV() {
   const rows = historyFilteredRows.length ? historyFilteredRows : historyData;
-  if (!rows.length) return toast('No history to download', 'error');
+  if (!rows.length) return toast(t('No history to download'), 'error');
   const net = nets.find(n => n.id === currentNetId);
-  const netName = net ? net.name : 'net';
+  const netName = net ? net.name : t('net');
   const preset = document.getElementById('history-csv-preset').value;
 
   let header, csvRows;
   if (preset === 'minimal') {
-    header = ['Callsign', 'Name', 'Total Check-ins'];
+    header = [t('Callsign'), t('Name'), t('Total Check-ins')];
     csvRows = rows.map(r => [r.callsign, r.name || '', r.total_checkins]);
   } else if (preset === 'license') {
-    header = ['Callsign', 'Name', 'License Class', 'State', 'Grid'];
+    header = [t('Callsign'), t('Name'), t('License Class'), t('State'), t('Grid')];
     csvRows = rows.map(r => {
       const cached = historyLookupCache[r.callsign];
       return [r.callsign, r.name || '', cached?.license_class || '', cached?.state || '', cached?.grid || ''];
     });
   } else {
-    header = ['Callsign', 'Name', 'License Class', 'State', 'Grid', 'Past 14 Days', 'Total Check-ins', 'Last Check-in'];
-    if (historyNetIsAres) header.push('Zone');
+    header = [t('Callsign'), t('Name'), t('License Class'), t('State'), t('Grid'), t('Past 14 Days'), t('Total Check-ins'), t('Last Check-in')];
+    if (historyNetIsAres) header.push(t('Zone'));
     csvRows = rows.map(r => {
       const cached = historyLookupCache[r.callsign];
       const row = [

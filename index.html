@@ -1216,47 +1216,47 @@
       <!-- HISTORY VIEW -->
       <div id="view-history" style="display:none">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="historyBack()">← Back</button>
-          <h2 class="section-title mb-0">Checkin History</h2>
+          <button class="btn btn-ghost btn-sm" onclick="historyBack()" data-i18n="← Back">← Back</button>
+          <h2 class="section-title mb-0" data-i18n="Checkin History">Checkin History</h2>
           <select id="history-net-select" class="form-control" style="max-width:220px;font-size:13px" onchange="onHistoryNetChange()"></select>
         </div>
         <div class="card">
           <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
-            <input class="form-control" id="history-search" placeholder="Filter by callsign or name..." style="max-width:220px" oninput="filterHistory()" />
+            <input class="form-control" id="history-search" placeholder="Filter by callsign or name..." style="max-width:220px" oninput="filterHistory()" data-i18n-placeholder="Filter by callsign or name..." />
             <select class="form-control" id="history-filter" style="max-width:210px" onchange="filterHistory()">
-              <option value="all">All Operators</option>
-              <option value="last_net">✓ Checked In — Last Net</option>
-              <option value="missed_last">✗ Missed Last Net</option>
-              <option value="active_2w">Active — Past 2 Weeks</option>
-              <option value="regular_4w">Regular — 2+ in Past 4 Weeks</option>
-              <option value="frequent_4w">Frequent — 3+ in Past 4 Weeks</option>
-              <option value="inactive_4w">Inactive — Past 4 Weeks</option>
+              <option value="all" data-i18n="All Operators">All Operators</option>
+              <option value="last_net" data-i18n="✓ Checked In — Last Net">✓ Checked In — Last Net</option>
+              <option value="missed_last" data-i18n="✗ Missed Last Net">✗ Missed Last Net</option>
+              <option value="active_2w" data-i18n="Active — Past 2 Weeks">Active — Past 2 Weeks</option>
+              <option value="regular_4w" data-i18n="Regular — 2+ in Past 4 Weeks">Regular — 2+ in Past 4 Weeks</option>
+              <option value="frequent_4w" data-i18n="Frequent — 3+ in Past 4 Weeks">Frequent — 3+ in Past 4 Weeks</option>
+              <option value="inactive_4w" data-i18n="Inactive — Past 4 Weeks">Inactive — Past 4 Weeks</option>
             </select>
-            <input class="form-control" type="number" min="0" id="history-min-checkins" placeholder="Min. check-ins" style="max-width:120px" oninput="filterHistory()" title="Only show operators with at least this many total check-ins" />
+            <input class="form-control" type="number" min="0" id="history-min-checkins" placeholder="Min. check-ins" style="max-width:120px" oninput="filterHistory()" title="Only show operators with at least this many total check-ins" data-i18n-placeholder="Min. check-ins" data-i18n-title="Only show operators with at least this many total check-ins" />
             <span style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px">
-              Last check-in:
-              <input class="form-control" type="date" id="history-date-from" style="max-width:145px" onchange="filterHistory()" title="From" />
+              <span data-i18n="Last check-in:">Last check-in:</span>
+              <input class="form-control" type="date" id="history-date-from" style="max-width:145px" onchange="filterHistory()" title="From" data-i18n-title="From" />
               &ndash;
-              <input class="form-control" type="date" id="history-date-to" style="max-width:145px" onchange="filterHistory()" title="To" />
+              <input class="form-control" type="date" id="history-date-to" style="max-width:145px" onchange="filterHistory()" title="To" data-i18n-title="To" />
             </span>
             <select class="form-control" id="history-zone-filter" style="max-width:140px;display:none" onchange="filterHistory()">
-              <option value="">All Zones</option>
+              <option value="" data-i18n="All Zones">All Zones</option>
             </select>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-ghost btn-sm" onclick="lookupAllHistory()" title="Fetch FCC license data for all callsigns">🔍 Lookup All</button>
-            <select class="form-control" id="history-csv-preset" style="max-width:150px" title="CSV export columns">
-              <option value="full">Full</option>
-              <option value="minimal">Minimal</option>
-              <option value="license">License Detail</option>
+            <button class="btn btn-ghost btn-sm" onclick="lookupAllHistory()" title="Fetch FCC license data for all callsigns" data-i18n-title="Fetch FCC license data for all callsigns" data-i18n="🔍 Lookup All">🔍 Lookup All</button>
+            <select class="form-control" id="history-csv-preset" style="max-width:150px" title="CSV export columns" data-i18n-title="CSV export columns">
+              <option value="full" data-i18n="Full">Full</option>
+              <option value="minimal" data-i18n="Minimal">Minimal</option>
+              <option value="license" data-i18n="License Detail">License Detail</option>
             </select>
-            <button class="btn btn-ghost btn-sm" onclick="downloadHistoryCSV()" title="Download the currently-filtered results as CSV">⬇ CSV</button>
+            <button class="btn btn-ghost btn-sm" onclick="downloadHistoryCSV()" title="Download the currently-filtered results as CSV" data-i18n-title="Download the currently-filtered results as CSV" data-i18n="⬇ CSV">⬇ CSV</button>
           </div>
 
           <div class="tab-bar" id="history-template-bar" style="margin-bottom:14px">
-            <button class="tab-btn active" id="history-tpl-roster" onclick="switchHistoryTemplate('roster')">📋 Roster</button>
-            <button class="tab-btn" id="history-tpl-summary" onclick="switchHistoryTemplate('summary')">📊 Summary Stats</button>
-            <button class="tab-btn" id="history-tpl-printable" onclick="switchHistoryTemplate('printable')">🖨 Printable Report</button>
+            <button class="tab-btn active" id="history-tpl-roster" onclick="switchHistoryTemplate('roster')" data-i18n="📋 Roster">📋 Roster</button>
+            <button class="tab-btn" id="history-tpl-summary" onclick="switchHistoryTemplate('summary')" data-i18n="📊 Summary Stats">📊 Summary Stats</button>
+            <button class="tab-btn" id="history-tpl-printable" onclick="switchHistoryTemplate('printable')" data-i18n="🖨 Printable Report">🖨 Printable Report</button>
           </div>
 
           <!-- ROSTER: the original per-callsign table -->
@@ -1265,15 +1265,15 @@
               <table class="tbl" id="history-table">
                 <thead>
                   <tr>
-                    <th>Callsign</th>
-                    <th>Name</th>
-                    <th>License</th>
-                    <th id="history-th-zone" style="display:none">Zone</th>
-                    <th>Last Net</th>
-                    <th>Past 2 Wks</th>
-                    <th>Past 4 Wks</th>
-                    <th>Total</th>
-                    <th>Last Check-in</th>
+                    <th data-i18n="Callsign">Callsign</th>
+                    <th data-i18n="Name">Name</th>
+                    <th data-i18n="License">License</th>
+                    <th id="history-th-zone" style="display:none" data-i18n="Zone">Zone</th>
+                    <th data-i18n="Last Net">Last Net</th>
+                    <th data-i18n="Past 2 Wks">Past 2 Wks</th>
+                    <th data-i18n="Past 4 Wks">Past 4 Wks</th>
+                    <th data-i18n="Total">Total</th>
+                    <th data-i18n="Last Check-in">Last Check-in</th>
                   </tr>
                 </thead>
                 <tbody id="history-tbody"></tbody>
@@ -1286,7 +1286,7 @@
             <div id="history-summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px"></div>
             <div style="overflow-x:auto">
               <table class="tbl">
-                <thead><tr><th>Callsign</th><th>Name</th><th>Total Check-ins</th><th>Attendance</th></tr></thead>
+                <thead><tr><th data-i18n="Callsign">Callsign</th><th data-i18n="Name">Name</th><th data-i18n="Total Check-ins">Total Check-ins</th><th data-i18n="Attendance">Attendance</th></tr></thead>
                 <tbody id="history-summary-tbody"></tbody>
               </table>
             </div>
@@ -1294,11 +1294,11 @@
 
           <!-- PRINTABLE REPORT: clean layout for window.print(), no action buttons -->
           <div id="history-view-printable" style="display:none">
-            <div style="margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Print</button></div>
+            <div style="margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="window.print()" data-i18n="🖨 Print">🖨 Print</button></div>
             <div id="history-print-area"></div>
           </div>
 
-          <div class="empty" id="history-empty" style="display:none"><p>No history found.</p></div>
+          <div class="empty" id="history-empty" style="display:none"><p data-i18n="No history found.">No history found.</p></div>
         </div>
       </div>
 
@@ -1318,14 +1318,14 @@
   <script src="/static/js/nets.js?v=29"></script>
   <script src="/static/js/sessions.js?v=30"></script>
   <script src="/static/js/checkins.js?v=38"></script>
-  <script src="/static/js/history.js?v=21"></script>
+  <script src="/static/js/history.js?v=22"></script>
   <script src="/static/js/admin.js?v=40"></script>
   <script src="/static/js/schedules.js?v=23"></script>
   <script src="/static/js/tokens.js?v=22"></script>
-  <script src="/static/js/dmr.js?v=20"></script>
-  <script src="/static/js/aprs.js?v=38"></script>
+  <script src="/static/js/dmr.js?v=21"></script>
+  <script src="/static/js/aprs.js?v=39"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
-  <script src="/static/js/aprs-map.js?v=39"></script>
+  <script src="/static/js/aprs-map.js?v=40"></script>
   <script src="/static/js/app.js?v=26"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 </body>

@@ -9,11 +9,18 @@ const _aprsMaps = {};         // containerId -> Leaflet map instance
 const _aprsMarkerLayers = {}; // containerId -> L.layerGroup
 const _aprsFiAttributionAdded = {}; // containerId -> bool
 
+// This module is shared with public.html (issue #22), which is a self-
+// contained page with no i18n.js loaded at all (see TECH_DEBT.md) -- a bare
+// t() call here would throw ReferenceError there. Falls back to identity so
+// this file works untranslated on the public page and translated wherever
+// i18n.js is actually loaded (the authenticated session panel).
+const _t = typeof t === 'function' ? t : (s => s);
+
 // aprs.fi's terms require crediting them as the data source with a link
 // back, wherever their data is displayed -- https://aprs.fi/page/api. Added
 // to the same Leaflet attribution control as the OSM credit (bottom-right
 // corner), so it's a real visible link, not just text colored to blend in.
-const APRS_FI_ATTRIBUTION = 'Position data via <a href="https://aprs.fi" target="_blank" rel="noopener">aprs.fi</a>';
+const APRS_FI_ATTRIBUTION = () => `${_t('Position data via')} <a href="https://aprs.fi" target="_blank" rel="noopener">aprs.fi</a>`;
 
 // v1 shows only the latest known position per callsign -- no historical
 // track/trail rendering (documented follow-up in the issue #22 plan).
@@ -44,10 +51,10 @@ function updateAprsMap(containerId, positions, sourceType) {
 
   const wantsAttribution = sourceType === 'aprs_fi';
   if (wantsAttribution && !_aprsFiAttributionAdded[containerId]) {
-    map.attributionControl.addAttribution(APRS_FI_ATTRIBUTION);
+    map.attributionControl.addAttribution(APRS_FI_ATTRIBUTION());
     _aprsFiAttributionAdded[containerId] = true;
   } else if (!wantsAttribution && _aprsFiAttributionAdded[containerId]) {
-    map.attributionControl.removeAttribution(APRS_FI_ATTRIBUTION);
+    map.attributionControl.removeAttribution(APRS_FI_ATTRIBUTION());
     _aprsFiAttributionAdded[containerId] = false;
   }
 
@@ -75,7 +82,7 @@ function updateAprsMap(containerId, positions, sourceType) {
     if (p.altitude != null) details.push(`${p.altitude} ft`);
     if (details.length) lines.push(details.join(' · '));
     if (p.comment) lines.push(esc(p.comment));
-    if (p.source === 'manual') lines.push('<span style="color:#ff9900;font-size:11px">📍 Manually reported</span>');
+    if (p.source === 'manual') lines.push(`<span style="color:#ff9900;font-size:11px">📍 ${_t('Manually reported')}</span>`);
     if (p.heard_at) lines.push(`<span style="color:#888;font-size:11px">${esc(p.heard_at)}</span>`);
     marker.bindPopup(lines.join('<br>'));
     marker.addTo(layer);
