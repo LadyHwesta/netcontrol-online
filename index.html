@@ -279,6 +279,9 @@
           <div class="tab-bar" id="net-form-tab-bar">
             <button type="button" class="tab-btn active" id="net-form-tab-details-btn" onclick="switchNetFormTab('details')" data-i18n="Details">Details</button>
             <button type="button" class="tab-btn" id="net-form-tab-script-btn" onclick="switchNetFormTab('script')" data-i18n="📜 Net Script">📜 Net Script</button>
+            <!-- Only shown when editing an existing ARES/ACES net (issue follow-up) --
+                 same gating as the section it replaced. -->
+            <button type="button" class="tab-btn" id="net-form-tab-tactical-btn" style="display:none" onclick="switchNetFormTab('tactical')" data-i18n="🚨 Activation Roster">🚨 Activation Roster</button>
           </div>
 
           <div id="net-form-details-panel">
@@ -503,83 +506,6 @@
             <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Field-team positions can be sensitive — the map stays visible to logged-in operators either way; this only controls whether it's also shown on the public, no-login live page.">Field-team positions can be sensitive — the map stays visible to logged-in operators either way; this only controls whether it's also shown on the public, no-login live page.</div>
           </div>
 
-          <!-- Activation Roster planning (issue follow-up) — only shown for an
-               existing ARES/ACES net you can edit. Positions/shifts added here have
-               no session yet (session_id NULL server-side); they're pulled into the
-               session the moment this net's next activation is started, then this
-               list is empty again -- a one-time queue, not a persistent template. -->
-          <div id="net-tactical-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
-            <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:6px" data-i18n="🚨 Activation Roster (Planned)">🚨 Activation Roster (Planned)</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px" data-i18n="Queue up tactical positions and the Net Control rotation before your next activation, instead of only once the net is already live. They're pulled into the session the moment you start it as an activation — this list is then empty again for next time.">Queue up tactical positions and the Net Control rotation before your next activation, instead of only once the net is already live. They're pulled into the session the moment you start it as an activation — this list is then empty again for next time.</div>
-
-            <div style="font-size:12px;font-weight:700;margin-bottom:6px" data-i18n="🎯 Tactical Positions">🎯 Tactical Positions</div>
-            <div style="background:var(--surface2);border:1px solid var(--lc-border);border-radius:6px;padding:10px 12px;margin-bottom:8px">
-              <div class="form-row">
-                <div class="form-group mb-0">
-                  <label style="font-size:11px" data-i18n="Tactical Callsign *">Tactical Callsign *</label>
-                  <input class="form-control mono" id="plan-tac-callsign" placeholder="SHELTER 1" style="text-transform:uppercase;font-size:13px" />
-                </div>
-                <div class="form-group mb-0">
-                  <label style="font-size:11px" data-i18n="Location">Location</label>
-                  <input class="form-control" id="plan-tac-location" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
-                </div>
-              </div>
-              <div class="form-row" style="margin-top:8px">
-                <div class="form-group mb-0">
-                  <label style="font-size:11px" data-i18n="Assigned Operator Callsign">Assigned Operator Callsign</label>
-                  <input class="form-control mono" id="plan-tac-assigned-callsign" placeholder="Optional" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Optional" />
-                </div>
-                <div class="form-group mb-0">
-                  <label style="font-size:11px" data-i18n="Assigned Operator Name">Assigned Operator Name</label>
-                  <input class="form-control" id="plan-tac-assigned-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
-                </div>
-              </div>
-              <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addPlannedTacticalPosition()" data-i18n="+ Add Position">+ Add Position</button>
-            </div>
-            <div id="planned-tactical-list" style="margin-bottom:14px"></div>
-
-            <div style="font-size:12px;font-weight:700;margin-bottom:6px" data-i18n="🎙 Net Control Rotation">🎙 Net Control Rotation</div>
-            <div style="background:var(--surface2);border:1px solid var(--lc-border);border-radius:6px;padding:10px 12px;margin-bottom:8px">
-              <div class="form-row">
-                <div class="form-group mb-0">
-                  <label style="font-size:11px" data-i18n="Callsign *">Callsign *</label>
-                  <input class="form-control mono" id="plan-nc-callsign" placeholder="W1ABC" style="text-transform:uppercase;font-size:13px" />
-                </div>
-                <div class="form-group mb-0">
-                  <label style="font-size:11px" data-i18n="Name">Name</label>
-                  <input class="form-control" id="plan-nc-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
-                </div>
-              </div>
-              <div class="form-row" style="margin-top:8px">
-                <div class="form-group mb-0">
-                  <label style="font-size:11px"><span data-i18n="Scheduled Sign-On *">Scheduled Sign-On *</span> <span class="text-muted" data-i18n="(this year)">(this year)</span></label>
-                  <div style="display:flex;gap:6px">
-                    <select class="form-control" id="plan-nc-month" style="font-size:13px;width:78px">
-                      <option value="" data-i18n="Month">Month</option>
-                      <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
-                      <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
-                      <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
-                      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
-                    </select>
-                    <select class="form-control" id="plan-nc-day" style="font-size:13px;width:66px">
-                      <option value="" data-i18n="Day">Day</option>
-                      <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
-                      <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                      <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
-                      <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
-                      <option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option>
-                      <option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option>
-                      <option value="31">31</option>
-                    </select>
-                    <input class="form-control" type="time" id="plan-nc-time" style="font-size:13px;width:110px" />
-                  </div>
-                </div>
-              </div>
-              <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addPlannedNetControlShift()" data-i18n="+ Add Shift">+ Add Shift</button>
-            </div>
-            <div id="planned-net-control-list"></div>
-          </div>
-
           <!-- Sharing section — only shown when editing an existing net you own -->
           <div id="net-sharing-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
             <div style="font-size:13px;font-weight:700;color:var(--lc-blue);margin-bottom:10px" data-i18n="🔗 Sharing">🔗 Sharing</div>
@@ -662,6 +588,110 @@
               </div>
             </div>
           </div><!-- /net-form-script-panel -->
+
+          <!-- Activation Roster planning (issue follow-up) — its own tab, only
+               shown for an existing ARES/ACES net you can edit. Positions/shifts
+               added here have no session yet (session_id NULL server-side);
+               they're pulled into the session the moment this net's next
+               activation is started, then this list is empty again -- a
+               one-time queue, not a persistent template. Not folded into the
+               Save button below -- each add/remove here is its own immediate
+               API call, same as the live Station Schedule tab it mirrors. -->
+          <div id="net-form-tactical-panel" style="display:none">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px" data-i18n="Queue up tactical positions and the Net Control rotation before your next activation, instead of only once the net is already live. They're pulled into the session the moment you start it as an activation — this list is then empty again for next time.">Queue up tactical positions and the Net Control rotation before your next activation, instead of only once the net is already live. They're pulled into the session the moment you start it as an activation — this list is then empty again for next time.</div>
+
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px" data-i18n="🎯 Tactical Positions">🎯 Tactical Positions</div>
+            <div style="background:var(--surface2);border:1px solid var(--lc-border);border-radius:6px;padding:10px 12px;margin-bottom:8px">
+              <div class="form-row">
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Tactical Callsign *">Tactical Callsign *</label>
+                  <input class="form-control mono" id="plan-tac-callsign" placeholder="SHELTER 1" style="text-transform:uppercase;font-size:13px" />
+                </div>
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Location">Location</label>
+                  <input class="form-control" id="plan-tac-location" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
+                </div>
+              </div>
+              <div class="form-row" style="margin-top:8px">
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Assigned Operator Callsign">Assigned Operator Callsign</label>
+                  <input class="form-control mono" id="plan-tac-assigned-callsign" placeholder="Optional" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Optional" />
+                </div>
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Assigned Operator Name">Assigned Operator Name</label>
+                  <input class="form-control" id="plan-tac-assigned-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
+                </div>
+              </div>
+              <div class="form-row" style="margin-top:8px">
+                <div class="form-group mb-0">
+                  <label style="font-size:11px"><span data-i18n="Scheduled Sign-On">Scheduled Sign-On</span> <span class="text-muted" data-i18n="(this year)">(this year)</span></label>
+                  <div style="display:flex;gap:6px">
+                    <select class="form-control" id="plan-tac-month" style="font-size:13px;width:78px">
+                      <option value="" data-i18n="Month">Month</option>
+                      <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
+                      <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
+                      <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
+                      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+                    </select>
+                    <select class="form-control" id="plan-tac-day" style="font-size:13px;width:66px">
+                      <option value="" data-i18n="Day">Day</option>
+                      <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                      <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                      <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                      <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                      <option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option>
+                      <option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option>
+                      <option value="31">31</option>
+                    </select>
+                    <input class="form-control" type="time" id="plan-tac-time" style="font-size:13px;width:110px" />
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addPlannedTacticalPosition()" data-i18n="+ Add Position">+ Add Position</button>
+            </div>
+            <div id="planned-tactical-list" style="margin-bottom:14px"></div>
+
+            <div style="font-size:12px;font-weight:700;margin-bottom:6px" data-i18n="🎙 Net Control Rotation">🎙 Net Control Rotation</div>
+            <div style="background:var(--surface2);border:1px solid var(--lc-border);border-radius:6px;padding:10px 12px;margin-bottom:8px">
+              <div class="form-row">
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Callsign *">Callsign *</label>
+                  <input class="form-control mono" id="plan-nc-callsign" placeholder="W1ABC" style="text-transform:uppercase;font-size:13px" />
+                </div>
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Name">Name</label>
+                  <input class="form-control" id="plan-nc-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
+                </div>
+              </div>
+              <div class="form-row" style="margin-top:8px">
+                <div class="form-group mb-0">
+                  <label style="font-size:11px"><span data-i18n="Scheduled Sign-On *">Scheduled Sign-On *</span> <span class="text-muted" data-i18n="(this year)">(this year)</span></label>
+                  <div style="display:flex;gap:6px">
+                    <select class="form-control" id="plan-nc-month" style="font-size:13px;width:78px">
+                      <option value="" data-i18n="Month">Month</option>
+                      <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
+                      <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
+                      <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
+                      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+                    </select>
+                    <select class="form-control" id="plan-nc-day" style="font-size:13px;width:66px">
+                      <option value="" data-i18n="Day">Day</option>
+                      <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                      <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                      <option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option>
+                      <option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option>
+                      <option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option>
+                      <option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option>
+                      <option value="31">31</option>
+                    </select>
+                    <input class="form-control" type="time" id="plan-nc-time" style="font-size:13px;width:110px" />
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px" onclick="addPlannedNetControlShift()" data-i18n="+ Add Shift">+ Add Shift</button>
+            </div>
+            <div id="planned-net-control-list"></div>
+          </div><!-- /net-form-tactical-panel -->
 
           <div style="display:flex;gap:8px;margin-top:14px">
             <button class="btn btn-primary" onclick="saveNet()" data-i18n="Save">Save</button>
@@ -1412,7 +1442,7 @@
   <script src="/static/js/views.js?v=19"></script>
   <script src="/static/js/branding.js?v=24"></script>
   <script src="/static/js/report.js?v=21"></script>
-  <script src="/static/js/nets.js?v=31"></script>
+  <script src="/static/js/nets.js?v=32"></script>
   <script src="/static/js/sessions.js?v=31"></script>
   <script src="/static/js/checkins.js?v=39"></script>
   <script src="/static/js/history.js?v=22"></script>

@@ -85,7 +85,7 @@ function showNetForm() {
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
   document.getElementById('net-aprs-section').style.display = 'none';
-  document.getElementById('net-tactical-section').style.display = 'none';
+  document.getElementById('net-form-tab-tactical-btn').style.display = 'none';
   document.getElementById('net-aprs-map-enabled').checked = false;
   document.getElementById('aprs-default-lat').value = '';
   document.getElementById('aprs-default-lon').value = '';
@@ -122,7 +122,12 @@ function onNetTypeChange() {
     document.getElementById('net-dmr-section').style.display = 'none';
     document.getElementById('net-aprs-section').style.display = 'none';
     document.getElementById('net-aprs-map-enabled').checked = false;
-    document.getElementById('net-tactical-section').style.display = 'none';
+    document.getElementById('net-form-tab-tactical-btn').style.display = 'none';
+    // Bail out of the tactical tab if GMRS was just selected while it was open --
+    // its button is about to disappear.
+    if (document.getElementById('net-form-tactical-panel').style.display !== 'none') {
+      switchNetFormTab('details');
+    }
   }
 }
 
@@ -132,8 +137,10 @@ function onNetTypeChange() {
 function switchNetFormTab(tab) {
   document.getElementById('net-form-details-panel').style.display = tab === 'details' ? '' : 'none';
   document.getElementById('net-form-script-panel').style.display = tab === 'script' ? '' : 'none';
+  document.getElementById('net-form-tactical-panel').style.display = tab === 'tactical' ? '' : 'none';
   document.getElementById('net-form-tab-details-btn').classList.toggle('active', tab === 'details');
   document.getElementById('net-form-tab-script-btn').classList.toggle('active', tab === 'script');
+  document.getElementById('net-form-tab-tactical-btn').classList.toggle('active', tab === 'tactical');
   // The Details tab was designed/laid out at a narrower width; give the script
   // editor (toolbar + big textarea + preview) more room to breathe.
   document.getElementById('net-form-card').style.maxWidth = tab === 'script' ? '960px' : '500px';
@@ -253,7 +260,7 @@ function cancelNetForm() {
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
   document.getElementById('net-aprs-section').style.display = 'none';
-  document.getElementById('net-tactical-section').style.display = 'none';
+  document.getElementById('net-form-tab-tactical-btn').style.display = 'none';
   editNetId = null;
   shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [] };
   switchNetFormTab('details');
@@ -308,15 +315,12 @@ async function editNet(id) {
     document.getElementById('net-dmr-section').style.display = 'none';
     document.getElementById('net-aprs-section').style.display = 'none';
   }
-  // Activation Roster planning (issue follow-up) — same access level as live
-  // tactical-position management (plain net access is enough, not edit-rights
-  // specifically), but only worth showing at all for an ARES/ACES net.
-  if (n.is_ares) {
-    document.getElementById('net-tactical-section').style.display = '';
-    await loadActivationRoster(id);
-  } else {
-    document.getElementById('net-tactical-section').style.display = 'none';
-  }
+  // Activation Roster planning (issue follow-up) — its own tab; same access
+  // level as live tactical-position management (plain net access is enough,
+  // not edit-rights specifically), but only worth showing at all for an
+  // ARES/ACES net.
+  document.getElementById('net-form-tab-tactical-btn').style.display = n.is_ares ? '' : 'none';
+  if (n.is_ares) await loadActivationRoster(id);
 }
 
 async function saveNet() {
@@ -505,6 +509,7 @@ async function loadActivationRoster(netId) {
   try { shifts = await apiFetch(`/nets/${netId}/planned-net-control-shifts`); } catch {}
   renderPlannedTacticalPositions(positions);
   renderPlannedNetControlShifts(shifts);
+  setDefaultMonthDay('plan-tac-month', 'plan-tac-day');
   setDefaultMonthDay('plan-nc-month', 'plan-nc-day');
 }
 
@@ -520,6 +525,7 @@ function renderPlannedTacticalPositions(positions) {
       <div style="flex:1;min-width:140px">
         <span class="callsign">${esc(p.tactical_callsign)}</span>${p.location ? ` <span class="text-muted" style="font-size:12px">— ${esc(p.location)}</span>` : ''}
         ${p.assigned_callsign ? `<div style="font-size:12px;color:var(--text-muted)">${t('Planned')}: ${esc(p.assigned_callsign)}${p.assigned_name ? ` (${esc(p.assigned_name)})` : ''}</div>` : ''}
+        ${p.scheduled_start ? `<div class="text-muted" style="font-size:11px">🕐 ${t('Sign-on:')} ${fmt(p.scheduled_start)}</div>` : ''}
       </div>
       <button type="button" class="btn btn-danger btn-sm" onclick="removePlannedTacticalPosition(${p.id})">✕ ${t('Remove')}</button>
     </div>`).join('');
@@ -549,16 +555,28 @@ async function addPlannedTacticalPosition() {
   const location = document.getElementById('plan-tac-location').value.trim() || null;
   const assigned_callsign = document.getElementById('plan-tac-assigned-callsign').value.trim().toUpperCase() || null;
   const assigned_name = document.getElementById('plan-tac-assigned-name').value.trim() || null;
+  // Optional, same as the live version -- month + day only, current year (an
+  // activation doesn't span into next year), defaulting to today.
+  const month = document.getElementById('plan-tac-month').value;
+  const day = document.getElementById('plan-tac-day').value;
+  const time = document.getElementById('plan-tac-time').value;
+  let scheduled_start = null;
+  if (month && day) {
+    const year = new Date().getFullYear();
+    scheduled_start = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${time || '00:00'}`).toISOString();
+  }
   if (!tactical_callsign) return toast(t('Tactical callsign required'), 'error');
   try {
     await apiFetch(`/nets/${editNetId}/planned-tactical-positions`, {
       method: 'POST',
-      body: JSON.stringify({ tactical_callsign, location, assigned_callsign, assigned_name }),
+      body: JSON.stringify({ tactical_callsign, location, assigned_callsign, assigned_name, scheduled_start }),
     });
     document.getElementById('plan-tac-callsign').value = '';
     document.getElementById('plan-tac-location').value = '';
     document.getElementById('plan-tac-assigned-callsign').value = '';
     document.getElementById('plan-tac-assigned-name').value = '';
+    document.getElementById('plan-tac-time').value = '';
+    setDefaultMonthDay('plan-tac-month', 'plan-tac-day');
     toast(t('Position queued'), 'success');
     await loadActivationRoster(editNetId);
   } catch (e) { toast(e.message, 'error'); }
