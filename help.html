@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — demo_reset.py's Phantom passlib Dependency Removed (v2.24.3)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li><strong>Fixed:</strong> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">demo_reset.py</code> (the public demo's periodic reset script) hashed its demo account's password via <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">passlib</code> — a dependency the rest of the app has never actually used (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">routers/auth.py</code> hashes passwords with plain <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">bcrypt</code> directly) and that was never listed in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">requirements.txt</code>, so nothing had ever installed it. Every reset failed with "passlib not found — activate the virtualenv first," regardless of virtualenv.</li>
+              <li>Now reuses the app's own <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">hash_password()</code> instead — same hashing the real login/registration flow uses, one dependency removed rather than a second one added for the same job.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — migrate.py Self-Healing Against an Empty Database (v2.24.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li><strong>Fixed:</strong> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">migrate.py</code> failed entirely against a completely empty database ("relation ... does not exist" for every table) — it only ever ran <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">ALTER TABLE</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">CREATE TABLE IF NOT EXISTS</code> work on top of tables the app itself creates on startup, and <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">deploy.sh</code> runs it <em>before</em> restarting the app. Harmless on a normal redeploy (the app already created everything on a prior run), but hit exactly this on the public demo instance, whose reset job drops and recreates its entire schema on a cron.</li>

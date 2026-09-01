@@ -108,16 +108,19 @@ def run_migrations():
 async def create_demo_user():
     """Insert the demo admin account."""
     log(f"Creating demo user {DEMO_CALLSIGN}…")
-    try:
-        from passlib.context import CryptContext
-    except ImportError:
-        sys.exit("passlib not found — activate the virtualenv first.")
 
     from database import SessionLocal
     from models import User
+    # Same hashing the app itself uses (routers/auth.py: plain bcrypt, not
+    # passlib) -- this script used to bring in its own passlib dependency
+    # for the exact same job, which was never actually added to
+    # requirements.txt (issue follow-up: "passlib not found" on the demo
+    # instance, where nothing had ever installed it). Reusing the app's own
+    # function removes that phantom dependency entirely instead of adding
+    # passlib to requirements.txt for a second, redundant bcrypt wrapper.
+    from routers.auth import hash_password
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed = pwd_context.hash(DEMO_PASSWORD)
+    hashed = hash_password(DEMO_PASSWORD)
 
     async with SessionLocal() as db:
         try:
