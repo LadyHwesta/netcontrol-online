@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Per-Instance Redis Database Isolation (v2.26.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Deploy/ops refinement, not an in-app feature: yesterday's Redis support (for running multiple <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">uvicorn</code> workers safely) had no way to keep multiple <em>instances</em> sharing one Redis server from colliding — this server already supports several independent instances (main/testing/demo) side by side. New <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">REDIS_DB</code> setting in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> gives each instance its own numbered logical database.</li>
+              <li>As a second, independent layer of the same protection, every key this app writes to Redis is now also automatically namespaced by <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">SYSTEMD_SERVICE</code> — already required to be unique per instance — so two instances still can't collide even if <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">REDIS_DB</code> is left the same on both by mistake.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Optional Redis Support for Running with Multiple Workers (v2.26.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Deploy/ops change, not an in-app feature: an instance can now safely run more than one <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">uvicorn</code> worker process (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">WORKERS</code> in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code>, default <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">1</code>, unchanged). Previously the rate limiter and the DMR/APRS relay-push caches each held their own state in memory, private to whichever single worker happened to handle a given request — harmless with one worker, but with more than one the rate limiter silently multiplied every configured limit by the worker count, and the relay caches could serve stale data to whichever worker didn't get the latest push.</li>

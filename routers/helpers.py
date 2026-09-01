@@ -284,7 +284,38 @@ async def _set_setting(key: str, value: Optional[str], db: AsyncSession):
 # worker is unchanged -- this is why the existing in-memory-dict + DB
 # fallback stays in place underneath rather than being replaced.
 REDIS_URL = os.getenv("REDIS_URL")
+# Which logical Redis database (Redis's own SELECT n) this instance uses --
+# .env-configurable (issue follow-up) since deploy.sh already supports
+# several independent instances (main/testing/demo) sharing one server, and
+# by extension nothing stops them sharing one Redis server too. Always the
+# final word on the db index, overriding whatever (if anything) REDIS_URL's
+# own path already says -- see _redis_url_with_db below.
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+# Second, independent layer of the same protection (issue follow-up): every
+# key this app writes to Redis is namespaced by instance identity too, using
+# the same SYSTEMD_SERVICE deploy.sh already requires to be unique per
+# instance (for the systemd unit name and backup filenames) -- not a new
+# setting, and not optional the way REDIS_DB is. This means two instances
+# still can't collide even if REDIS_DB is left at the same value on both by
+# mistake -- REDIS_DB is real isolation (separate keyspaces, inspectable
+# separately via `redis-cli -n N`), this is a safety net under it, not a
+# substitute for setting it correctly.
+INSTANCE_KEY_PREFIX = os.getenv("SYSTEMD_SERVICE", "nettracker")
 _redis_client = None  # created lazily on first actual use, not at import time
+
+
+def _redis_url_with_db(base_url: str, db: int) -> str:
+    """Returns base_url with its Redis DB index overridden to `db`. Only
+    for the common redis://, rediss:// (and valkey equivalent) schemes,
+    where the URL path IS the db index -- other schemes (unix sockets,
+    sentinel, cluster, which don't support multiple logical databases the
+    same way, or address the db differently) are returned unchanged; set
+    the db directly in REDIS_URL for those instead."""
+    from urllib.parse import urlsplit, urlunsplit
+    parts = urlsplit(base_url)
+    if parts.scheme not in ("redis", "rediss", "valkey", "valkeys"):
+        return base_url
+    return urlunsplit((parts.scheme, parts.netloc, f"/{db}", parts.query, parts.fragment))
 
 
 def _get_redis_client():
@@ -304,7 +335,7 @@ def _get_redis_client():
                 "REDIS_URL is set but the redis package isn't installed — pip install redis"
             )
             return None
-        _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client = redis.from_url(_redis_url_with_db(REDIS_URL, REDIS_DB), decode_responses=True)
     return _redis_client
 
 
@@ -313,12 +344,12 @@ async def _redis_cache_write(key: str, value: str, ttl_seconds: int) -> None:
     optimization on top of the SystemSetting fallback that's already the
     real source of truth, so a Redis outage should degrade quietly back to
     single-worker-correct behavior, not break the request that triggered
-    the write."""
+    the write. `key` is namespaced with INSTANCE_KEY_PREFIX -- see above."""
     client = _get_redis_client()
     if client is None:
         return
     try:
-        await client.set(key, value, ex=ttl_seconds)
+        await client.set(f"{INSTANCE_KEY_PREFIX}:{key}", value, ex=ttl_seconds)
     except Exception as exc:
         logging.getLogger("netcontrol.redis").warning("Redis cache write failed for %s: %s", key, exc)
 
@@ -327,6 +358,7 @@ async def _redis_cache_read(key: str) -> Optional[str]:
     client = _get_redis_client()
     if client is None:
         return None
+    key = f"{INSTANCE_KEY_PREFIX}:{key}"
     try:
         return await client.get(key)
     except Exception as exc:

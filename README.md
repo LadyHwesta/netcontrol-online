@@ -230,8 +230,11 @@ Redis is otherwise unused by this app — it's not a general cache, a session st
 
 ```
 WORKERS=4
-REDIS_URL=redis://localhost:6379/0
+REDIS_URL=redis://localhost:6379
+REDIS_DB=0
 ```
+
+**Sharing one Redis server across multiple instances:** since [one server can already run several independent instances](#running-more-than-one-instance-on-the-same-server) of this app (main/testing/demo), nothing stops them sharing one Redis server too — set a different `REDIS_DB` (Redis's own numbered logical databases, `0`–`15` by default) on each instance pointed at it, so their cache/rate-limit data can't collide. As a second, independent layer of the same protection, every key this app writes to Redis is also automatically namespaced by `SYSTEMD_SERVICE` — already required to be unique per instance for the systemd unit itself to work — so two instances still can't collide even if `REDIS_DB` is left the same on both by mistake. `REDIS_DB` is the real isolation (a genuinely separate keyspace, inspectable on its own via `redis-cli -n N`); the automatic key prefix is a safety net under it, not a substitute for setting it correctly.
 
 #### Branching model
 

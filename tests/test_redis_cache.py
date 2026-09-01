@@ -46,6 +46,69 @@ def _clear_push_caches():
     aprs._aprs_push_cache.clear()
 
 
+class TestRedisUrlWithDb:
+    """_redis_url_with_db (issue follow-up) -- REDIS_DB in .env is always
+    the final word on which logical Redis database an instance uses, so
+    several instances (main/testing/demo) on one server can share a single
+    Redis server without their cache/rate-limit data colliding."""
+
+    def test_overrides_existing_db_in_path(self):
+        assert helpers._redis_url_with_db("redis://localhost:6379/0", 3) == "redis://localhost:6379/3"
+
+    def test_adds_db_when_url_has_none(self):
+        assert helpers._redis_url_with_db("redis://localhost:6379", 2) == "redis://localhost:6379/2"
+
+    def test_preserves_auth_and_query_string(self):
+        assert helpers._redis_url_with_db("redis://user:pass@host:6379/0?ssl_cert_reqs=none", 5) \
+            == "redis://user:pass@host:6379/5?ssl_cert_reqs=none"
+
+    def test_rediss_scheme_supported(self):
+        assert helpers._redis_url_with_db("rediss://host:6379", 1) == "rediss://host:6379/1"
+
+    def test_unsupported_scheme_left_unchanged(self):
+        """Unix sockets, sentinel, and cluster URLs don't address the db
+        index via the URL path the same way -- left alone rather than
+        corrupted by blindly overwriting the path."""
+        original = "redis+sentinel://host:26379/mymaster"
+        assert helpers._redis_url_with_db(original, 4) == original
+
+
+class TestInstanceKeyPrefixAvoidsCollisions:
+    """Two 'instances' sharing the same Redis database (misconfigured
+    REDIS_DB, or none set) still can't collide -- INSTANCE_KEY_PREFIX
+    namespaces every key this app writes, independent of REDIS_DB."""
+
+    async def test_different_prefixes_isolate_same_underlying_store(self, monkeypatch):
+        shared_backing_store = {}
+
+        class _SharedFakeRedis:
+            async def get(self, key):
+                return shared_backing_store.get(key)
+
+            async def set(self, key, value, ex=None):
+                shared_backing_store[key] = value
+
+        fake = _SharedFakeRedis()
+        monkeypatch.setattr(helpers, "_get_redis_client", lambda: fake)
+
+        monkeypatch.setattr(helpers, "INSTANCE_KEY_PREFIX", "nettracker-main")
+        await helpers._redis_cache_write("dmr_cache_42", "data-from-main", 60)
+
+        monkeypatch.setattr(helpers, "INSTANCE_KEY_PREFIX", "nettracker-testing")
+        await helpers._redis_cache_write("dmr_cache_42", "data-from-testing", 60)
+
+        # Both land in the same underlying store (simulating one shared
+        # Redis database) under different keys, and each instance reads
+        # back only its own.
+        assert shared_backing_store == {
+            "nettracker-main:dmr_cache_42": "data-from-main",
+            "nettracker-testing:dmr_cache_42": "data-from-testing",
+        }
+        assert await helpers._redis_cache_read("dmr_cache_42") == "data-from-testing"
+        monkeypatch.setattr(helpers, "INSTANCE_KEY_PREFIX", "nettracker-main")
+        assert await helpers._redis_cache_read("dmr_cache_42") == "data-from-main"
+
+
 class TestRedisCacheHelpers:
     def test_no_redis_client_when_unconfigured(self, monkeypatch):
         monkeypatch.setattr(helpers, "REDIS_URL", None)

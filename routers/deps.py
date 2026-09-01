@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db  # noqa: F401  -- re-exported for `from routers.deps import get_db`
 from models import ApiToken, User
+from routers.helpers import INSTANCE_KEY_PREFIX, REDIS_DB, REDIS_URL, _redis_url_with_db
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-use-a-long-random-string")
 ALGORITHM = "HS256"
@@ -36,8 +37,20 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 # pre-existing constraint of slowapi/`limits` itself, not something this app
 # can avoid short of swapping rate-limiting libraries; negligible in
 # practice against a local/same-network Redis for an app this size.
-REDIS_URL = os.getenv("REDIS_URL")
-limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL)
+#
+# REDIS_URL/REDIS_DB/INSTANCE_KEY_PREFIX come from routers.helpers (single
+# source of truth, shared with the DMR/APRS relay-push caches) rather than
+# reading os.environ a second time here -- REDIS_DB (issue follow-up) lets
+# several instances on one server share a Redis server without colliding,
+# and key_prefix=INSTANCE_KEY_PREFIX is the same protection a second way (so
+# instances still can't collide even if REDIS_DB is left the same on both
+# by mistake) -- see routers/helpers.py's Redis cache section for the full
+# reasoning on both.
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=_redis_url_with_db(REDIS_URL, REDIS_DB) if REDIS_URL else None,
+    key_prefix=INSTANCE_KEY_PREFIX,
+)
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
