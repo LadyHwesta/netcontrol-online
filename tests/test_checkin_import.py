@@ -5,6 +5,9 @@ Tests for bulk check-in CSV import (issue #26):
 """
 
 import io
+from datetime import datetime, timezone
+
+from models import CallsignCache
 
 
 def _csv_file(content: str, filename: str = "checkins.csv"):
@@ -227,3 +230,138 @@ class TestImportSample:
         data = resp.json()
         assert data["imported"] == 2, data
         assert data["skipped"] == 0
+
+
+class TestImportLookupMissingNames:
+    """lookup_missing_names=true (issue follow-up): blank Name column cells get
+    filled from (1) this net's own check-in history, then (2) an FCC/GMRS
+    lookup. External API calls are never exercised directly here -- same
+    approach as tests/test_callsign.py -- a fresh CallsignCache row is seeded
+    so the FCC-fallback path is satisfied from the local cache instead of a
+    real network call."""
+
+    def test_default_off_leaves_blank_names_blank(self, client, admin_headers, session):
+        """Regression check: omitting the flag (or leaving it false) must
+        behave exactly as before this feature existed, even when a prior
+        check-in with a name would otherwise be available to fill it."""
+        client.post(f"/sessions/{session['id']}/checkins", json={
+            "callsign": "W1AW", "name": "Hiram Maxim", "has_traffic": False,
+        }, headers=admin_headers)
+        client.patch(f"/sessions/{session['id']}/end", headers=admin_headers)
+        other_session = client.post(f"/nets/{session['net_id']}/sessions", json={}, headers=admin_headers).json()
+
+        resp = client.post(
+            f"/sessions/{other_session['id']}/checkins/import",
+            files=_csv_file("Callsign,Name\nW1AW,\n"), headers=admin_headers,
+        )
+        data = resp.json()
+        assert data["imported"] == 1
+        assert data["names_looked_up"] == 0
+
+        checkins = client.get(f"/sessions/{other_session['id']}/checkins", headers=admin_headers).json()
+        assert checkins[0]["name"] in (None, "")
+
+    def test_fills_from_this_net_checkin_history(self, client, admin_headers, session):
+        """A callsign with a name on file from a previous check-in on the same
+        net (any session) gets that name -- checked before any FCC lookup is
+        attempted."""
+        client.post(f"/sessions/{session['id']}/checkins", json={
+            "callsign": "W1AW", "name": "Hiram Maxim", "has_traffic": False,
+        }, headers=admin_headers)
+        client.patch(f"/sessions/{session['id']}/end", headers=admin_headers)
+        other_session = client.post(f"/nets/{session['net_id']}/sessions", json={}, headers=admin_headers).json()
+
+        resp = client.post(
+            f"/sessions/{other_session['id']}/checkins/import",
+            files=_csv_file("Callsign,Name\nW1AW,\n"),
+            data={"lookup_missing_names": "true"}, headers=admin_headers,
+        )
+        data = resp.json()
+        assert data["imported"] == 1
+        assert data["names_looked_up"] == 1
+
+        checkins = client.get(f"/sessions/{other_session['id']}/checkins", headers=admin_headers).json()
+        assert checkins[0]["name"] == "Hiram Maxim"
+
+    async def test_falls_back_to_fcc_lookup_when_no_history(self, client, admin_headers, session, db):
+        """No prior check-in anywhere for this callsign -- falls back to the
+        FCC/GMRS lookup (satisfied here from a seeded cache row, so no real
+        network call happens)."""
+        db.add(CallsignCache(
+            callsign="KJ7ABC",
+            status="found",
+            name="Jane Doe",
+            license_class="T",
+            cached_at=datetime.now(timezone.utc),
+        ))
+        await db.commit()
+
+        resp = client.post(
+            f"/sessions/{session['id']}/checkins/import",
+            files=_csv_file("Callsign,Name\nKJ7ABC,\n"),
+            data={"lookup_missing_names": "true"}, headers=admin_headers,
+        )
+        data = resp.json()
+        assert data["imported"] == 1
+        assert data["names_looked_up"] == 1
+
+        checkins = client.get(f"/sessions/{session['id']}/checkins", headers=admin_headers).json()
+        assert checkins[0]["name"] == "Jane Doe"
+
+    async def test_leaves_name_blank_when_neither_source_has_anything(self, client, admin_headers, session, db):
+        """Neither this net's history nor the FCC/GMRS lookup has anything --
+        the row still imports, just with no name, same as the flag being off."""
+        db.add(CallsignCache(callsign="W1FAKE", status="not_found", cached_at=datetime.now(timezone.utc)))
+        await db.commit()
+
+        resp = client.post(
+            f"/sessions/{session['id']}/checkins/import",
+            files=_csv_file("Callsign,Name\nW1FAKE,\n"),
+            data={"lookup_missing_names": "true"}, headers=admin_headers,
+        )
+        data = resp.json()
+        assert data["imported"] == 1
+        assert data["names_looked_up"] == 0
+
+        checkins = client.get(f"/sessions/{session['id']}/checkins", headers=admin_headers).json()
+        assert checkins[0]["name"] in (None, "")
+
+    def test_row_with_name_already_provided_is_never_looked_up(self, client, admin_headers, session):
+        """A row that already has a Name is left exactly as given, even with
+        the flag on -- no history/FCC lookup is consulted for it at all (no
+        cache is seeded here, so an attempted lookup would either fail
+        silently or hit the network; asserting the given name survives
+        unchanged is the real regression guard)."""
+        resp = client.post(
+            f"/sessions/{session['id']}/checkins/import",
+            files=_csv_file("Callsign,Name\nW1AW,Explicit Name\n"),
+            data={"lookup_missing_names": "true"}, headers=admin_headers,
+        )
+        data = resp.json()
+        assert data["imported"] == 1
+        assert data["names_looked_up"] == 0
+
+        checkins = client.get(f"/sessions/{session['id']}/checkins", headers=admin_headers).json()
+        assert checkins[0]["name"] == "Explicit Name"
+
+    async def test_names_looked_up_count_accurate_across_multiple_rows(self, client, admin_headers, session, db):
+        """Three rows: one filled from history, one filled from FCC lookup,
+        one left blank -- names_looked_up must count only the two fills."""
+        client.post(f"/sessions/{session['id']}/checkins", json={
+            "callsign": "W1AW", "name": "Hiram Maxim", "has_traffic": False,
+        }, headers=admin_headers)
+        client.patch(f"/sessions/{session['id']}/end", headers=admin_headers)
+        other_session = client.post(f"/nets/{session['net_id']}/sessions", json={}, headers=admin_headers).json()
+
+        db.add(CallsignCache(callsign="KJ7ABC", status="found", name="Jane Doe", cached_at=datetime.now(timezone.utc)))
+        db.add(CallsignCache(callsign="W1FAKE", status="not_found", cached_at=datetime.now(timezone.utc)))
+        await db.commit()
+
+        resp = client.post(
+            f"/sessions/{other_session['id']}/checkins/import",
+            files=_csv_file("Callsign,Name\nW1AW,\nKJ7ABC,\nW1FAKE,\n"),
+            data={"lookup_missing_names": "true"}, headers=admin_headers,
+        )
+        data = resp.json()
+        assert data["imported"] == 3
+        assert data["names_looked_up"] == 2

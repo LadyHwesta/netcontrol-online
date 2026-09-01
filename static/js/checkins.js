@@ -23,6 +23,10 @@ function openCheckinImportModal() {
       <div class="form-group" style="margin-bottom:14px">
         <input type="file" id="checkin-import-file" accept=".csv,text/csv" class="form-control" />
       </div>
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        <input type="checkbox" id="checkin-import-lookup-names" style="accent-color:var(--lc-blue);width:15px;height:15px;margin-top:1px" />
+        <span>${t('Look up names left blank in the CSV')} — <span style="color:var(--text)">${t("this net's own check-in history first, then an FCC/GMRS lookup")}</span>. ${t('Slower for a long roster of callsigns the lookup has never cached before.')}</span>
+      </label>
       <div id="checkin-import-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
         <button class="btn btn-ghost" onclick="document.getElementById('checkin-import-modal').remove()">${t('Close')}</button>
@@ -37,10 +41,12 @@ async function submitCheckinImport(btn) {
   const fileInput = document.getElementById('checkin-import-file');
   const file = fileInput.files[0];
   if (!file) return toast(t('Choose a CSV file first'), 'error');
+  const lookupNames = document.getElementById('checkin-import-lookup-names').checked;
   btnLoading(btn, true);
   try {
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('lookup_missing_names', lookupNames);
     const res = await fetch(`${API}/sessions/${currentSessionId}/checkins/import`, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token },
@@ -49,10 +55,10 @@ async function submitCheckinImport(btn) {
     const result = await res.json();
     if (!res.ok) throw new Error(result.detail || t('Import failed'));
     renderCheckinImportResult(result);
-    toast(
-      tn(result.imported, 'Imported {n} check-in', 'Imported {n} check-ins') + (result.skipped ? `, ${t('{n} skipped').replace('{n}', result.skipped)}` : ''),
-      result.skipped ? 'error' : 'success'
-    );
+    let msg = tn(result.imported, 'Imported {n} check-in', 'Imported {n} check-ins');
+    if (result.names_looked_up) msg += `, ${tn(result.names_looked_up, '{n} name looked up', '{n} names looked up')}`;
+    if (result.skipped) msg += `, ${t('{n} skipped').replace('{n}', result.skipped)}`;
+    toast(msg, result.skipped ? 'error' : 'success');
     await loadCheckins();
     renderExpectedList();
   } catch (e) {
@@ -66,6 +72,7 @@ function renderCheckinImportResult(result) {
   const el = document.getElementById('checkin-import-result');
   if (!el) return;
   let html = `<div style="font-size:13px"><strong style="color:var(--lc-green)">${t('{n} imported').replace('{n}', result.imported)}</strong>`;
+  if (result.names_looked_up) html += `, ${tn(result.names_looked_up, '{n} name looked up', '{n} names looked up')}`;
   if (result.skipped > 0) {
     html += `, <strong style="color:var(--lc-red)">${t('{n} skipped').replace('{n}', result.skipped)}</strong></div>`;
     html += `<div style="max-height:160px;overflow-y:auto;margin-top:8px;font-size:12px;border:1px solid var(--lc-border);border-radius:6px;padding:8px">`;

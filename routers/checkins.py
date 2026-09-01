@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import Checkin, EvacZone, Net, NetSession, StationRemark, User
+from routers.callsign_lookup import lookup_callsign
 from routers.deps import get_current_user
 from routers.helpers import _get_editable_net, _get_session_for_user, _preferred_names_for_net, _tactical_callsigns_for_session
 from routers.schemas import CheckinOut
@@ -89,6 +90,40 @@ async def _is_first_checkin_for_net(net_id: int, callsign: str, db: AsyncSession
         .limit(1)
     )).scalar()
     return prior is None
+
+
+async def _lookup_name_for_import(net_id: int, callsign: str, current_user: User, db: AsyncSession) -> Optional[str]:
+    """Cascade used by the CSV importer's optional "look up missing names"
+    pass (issue follow-up) -- for a row with no Name column value:
+      1. This net's own check-in history -- the most recent prior check-in
+         by this callsign on this net (any session), if it has a name on
+         file. Often more accurate/personal than a fresh FCC lookup for a
+         repeat attendee (a preferred nickname vs. the FCC's legal name),
+         so it's tried first.
+      2. An FCC/GMRS lookup (the same one the manual check-in form's
+         as-you-type auto-fill uses), for a callsign that's never checked
+         in here before.
+    Returns None if neither source has anything -- the row is left with no
+    name, same as if the option had been off. lookup_callsign never raises
+    (every external call it makes is already caught internally and
+    cascaded), but wrapped defensively anyway so one row's lookup can never
+    abort the rest of a bulk import."""
+    name = (await db.execute(
+        select(Checkin.name)
+        .join(NetSession, NetSession.id == Checkin.session_id)
+        .filter(NetSession.net_id == net_id, Checkin.callsign == callsign, Checkin.name.isnot(None), Checkin.name != "")
+        .order_by(Checkin.checked_in_at.desc())
+        .limit(1)
+    )).scalar()
+    if name:
+        return name
+    try:
+        result = await lookup_callsign(callsign, current_user, db)
+        if result.status == "found" and result.name:
+            return result.name
+    except Exception:
+        pass
+    return None
 
 
 async def _create_checkin(session: NetSession, net: Optional[Net], data: CheckinCreate, db: AsyncSession) -> Checkin:
@@ -174,6 +209,7 @@ class CheckinImportResult(BaseModel):
     imported: int
     skipped: int
     errors: list[CheckinImportError]
+    names_looked_up: int = 0   # rows whose blank Name column got auto-filled (issue follow-up)
 
 
 # Header matching is deliberately loose -- letters/digits only, case-folded --
@@ -207,6 +243,7 @@ def _normalize_csv_header(header: str) -> str:
 async def import_checkins_csv(
     session_id: int,
     file: UploadFile = File(...),
+    lookup_missing_names: bool = Form(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -217,7 +254,15 @@ async def import_checkins_csv(
     same rules as add_checkin above, via the same _create_checkin helper.
     Each row is validated and inserted independently; one bad row is
     recorded in the response and skipped rather than aborting the rest. See
-    GET /checkins/import-sample for the expected column shape."""
+    GET /checkins/import-sample for the expected column shape.
+
+    lookup_missing_names (issue follow-up): when a row's Name column is
+    blank -- common for a roster that's just a list of callsigns -- fills
+    it in via _lookup_name_for_import (this net's own check-in history,
+    then an FCC/GMRS lookup) instead of leaving it empty. Off by default
+    since it's slower (a network round-trip per uncached callsign) and not
+    every import wants it; a row with a Name already provided is never
+    touched either way."""
     session = await _get_session_for_user(session_id, current_user, db)
     net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
 
@@ -233,6 +278,7 @@ async def import_checkins_csv(
         raise HTTPException(400, 'CSV must have a "Callsign" column — download the sample for the expected format')
 
     imported = 0
+    names_looked_up = 0
     errors: list[CheckinImportError] = []
     for row_num, raw_row in enumerate(reader, start=2):  # row 1 is the header
         if not any(cell.strip() for cell in raw_row):
@@ -243,9 +289,14 @@ async def import_checkins_csv(
             errors.append(CheckinImportError(row=row_num, reason="Missing callsign"))
             continue
         try:
+            name = (row.get("name") or "").strip() or None
+            if not name and lookup_missing_names:
+                name = await _lookup_name_for_import(session.net_id, callsign, current_user, db)
+                if name:
+                    names_looked_up += 1
             data = CheckinCreate(
                 callsign=callsign,
-                name=(row.get("name") or "").strip() or None,
+                name=name,
                 signal_report=(row.get("signal_report") or "").strip() or None,
                 comments=(row.get("comments") or "").strip() or None,
                 has_traffic=(row.get("has_traffic") or "").strip().lower() in ("1", "true", "yes", "y"),
@@ -260,7 +311,7 @@ async def import_checkins_csv(
         except Exception as e:
             errors.append(CheckinImportError(row=row_num, callsign=callsign, reason=str(e)))
 
-    return CheckinImportResult(imported=imported, skipped=len(errors), errors=errors)
+    return CheckinImportResult(imported=imported, skipped=len(errors), errors=errors, names_looked_up=names_looked_up)
 
 
 @router.get("/checkins/import-sample")

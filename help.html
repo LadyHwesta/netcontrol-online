@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — CSV Import Can Look Up Missing Names (v2.28.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The <strong>⬆ Import CSV</strong> modal has a new opt-in checkbox: <strong>Look up names left blank in the CSV</strong>. A roster that's just a column of callsigns no longer means typing every name in by hand first — for any row with no Name value, it's filled in automatically from (1) this net's own check-in history (the most recent prior check-in by that callsign, on any session), then (2) an FCC/GMRS lookup if that callsign has never checked in here before. A row that already has a name is never touched either way.</li>
+              <li>Off by default — it's slower for a long roster of callsigns the lookup has never cached before (a network round trip per uncached callsign) — and the import result now reports how many names it filled in, alongside the usual imported/skipped counts.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Create-User Org Picker Moved to the Add Operator Card (v2.27.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Yesterday's any-org (or new-org) user creation lived in its own <strong>CREATE USER</strong> card under Admin → 🔀 Reassign — not where a super admin naturally looked for it. It's now part of the existing <strong>ADD OPERATOR</strong> card (Your Organization tab) instead: for a super admin, an organization picker appears there (defaulting to their current org, changeable to any other, or <strong>+ Create New Organization</strong>); an org admin sees the card exactly as it's always been, no picker, since they can only ever act on their own org anyway. No new endpoints — same <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">POST /admin/users</code> from yesterday, just relocated on the page.</li>
