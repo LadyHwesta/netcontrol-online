@@ -6,21 +6,36 @@ Wipes all application data and recreates a clean database with a single
 demo admin account, then reloads the GMRS licence database from a local
 archive (faster than re-downloading 54 MB each time).
 
-Intended for the public demo site at demo.netcontrol.online.
+Intended ONLY for the public demo site at demo.netcontrol.online -- this
+does DROP SCHEMA public CASCADE, permanently erasing whatever database
+DATABASE_URL points at. Refuses to run at all unless DEMO_INSTANCE=true is
+set in the SAME checkout's .env (see below) -- a checkout used against the
+wrong instance's .env by mistake (issue follow-up: this happened once,
+against a live production database) simply won't run, no matter what
+directory a human ran it from or believed they were in. When run from a
+terminal (not cron), it also requires typing back the actual database name
+it resolved before doing anything -- catches "right box, wrong terminal
+session" even on a correctly-flagged instance. Neither check can be
+bypassed with a flag; both exist because a human made exactly this mistake
+once already.
 
 Usage
 -----
     python3 demo_reset.py
 
-Cron (every 4 hours):
-    0 */4 * * *  /opt/netcontrol/venv/bin/python3 /opt/netcontrol/demo_reset.py \\
+Cron (every 4 hours) -- no TTY, so the interactive confirmation above is
+skipped automatically; DEMO_INSTANCE=true in .env is still required:
+    0 */4 * * *  /opt/netcontrol-demo/venv/bin/python3 /opt/netcontrol-demo/demo_reset.py \\
                  >> /var/log/demo_reset.log 2>&1
 
 Environment variables (read from .env)
 ---------------------------------------
     DATABASE_URL      PostgreSQL connection string (required)
+    DEMO_INSTANCE     Must be exactly "true" -- required, no default. The
+                      single opt-in gate: this checkout's .env has to say
+                      so explicitly, not just "happen to be the demo".
     GMRS_ZIP_PATH     Path to the local l_gmrs.zip archive
-                      Default: /opt/netcontrol/data/l_gmrs.zip
+                      Default: /opt/netcontrol-demo/data/l_gmrs.zip
 """
 
 import asyncio
@@ -45,7 +60,23 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 if not DATABASE_URL:
     sys.exit("DATABASE_URL not set in .env")
 
-GMRS_ZIP_PATH = os.getenv("GMRS_ZIP_PATH", "/opt/netcontrol/data/l_gmrs.zip")
+# Fail-safe by default: an instance's .env has to explicitly opt in before
+# this script will touch its database at all. This is the primary guard --
+# see the module docstring above for why it exists. Deliberately not
+# skippable via a CLI flag; the whole point is that nothing short of
+# actually editing THIS checkout's .env should allow the wipe.
+if os.getenv("DEMO_INSTANCE", "").strip().lower() not in ("true", "1", "yes"):
+    sys.exit(
+        "Refusing to run: DEMO_INSTANCE is not set to true in this checkout's .env.\n"
+        "This script runs DROP SCHEMA public CASCADE, permanently erasing this\n"
+        "database. It's meant only for the disposable public demo instance.\n\n"
+        "If this really is the demo instance, add to its .env:\n"
+        "    DEMO_INSTANCE=true\n"
+        "and re-run. If you meant to target a different checkout, cd there instead --\n"
+        "this script only ever acts on the database in ITS OWN directory's .env."
+    )
+
+GMRS_ZIP_PATH = os.getenv("GMRS_ZIP_PATH", "/opt/netcontrol-demo/data/l_gmrs.zip")
 PYTHON = sys.executable   # same virtualenv python
 
 # Demo admin credentials
@@ -60,6 +91,31 @@ DEMO_PASSWORD = "Abcd1234"
 def log(msg: str):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     print(f"[{ts}] {msg}", flush=True)
+
+
+def _target_db_name(url: str) -> str:
+    """Just the database name portion of DATABASE_URL, for display and the
+    typed confirmation below -- never the host, user, or password."""
+    try:
+        return urlparse(url).path.lstrip("/") or "(unnamed)"
+    except Exception:
+        return "(unparseable)"
+
+
+def _confirm_target_interactively():
+    """Second guard, independent of DEMO_INSTANCE above (issue follow-up):
+    catches "right instance, wrong terminal session" -- a human who's SSH'd
+    into the correct, correctly-flagged demo box but isn't actually looking
+    at the shell they think they are. Skipped automatically when stdin
+    isn't a TTY (cron has no terminal to confirm from; DEMO_INSTANCE=true
+    is that path's only -- and sufficient -- gate)."""
+    if not sys.stdin.isatty():
+        return
+    db_name = _target_db_name(DATABASE_URL)
+    print(f"\nThis will PERMANENTLY ERASE the '{db_name}' database (DROP SCHEMA public CASCADE).")
+    typed = input(f"Type the database name ({db_name}) to confirm: ").strip()
+    if typed != db_name:
+        sys.exit("Confirmation did not match — aborting. Nothing was touched.")
 
 
 # ── Steps ─────────────────────────────────────────────────────────────────────
@@ -167,6 +223,7 @@ def load_gmrs_data():
 
 async def main():
     log("=== Demo reset starting ===")
+    _confirm_target_interactively()
     try:
         drop_and_recreate_schema()
         await create_tables()

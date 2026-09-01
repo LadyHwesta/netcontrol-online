@@ -74,6 +74,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — demo_reset.py Refuses to Run Without an Explicit Opt-In (v2.25.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Deploy/ops change, not an in-app feature: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">demo_reset.py</code> (drops and recreates the entire database — meant only for the disposable public demo) now refuses to run at all unless the checkout's own <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> explicitly sets <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">DEMO_INSTANCE=true</code> — not inferred from a path, branch, or anything else. Every other instance simply won't run it, no matter what directory someone is standing in.</li>
+              <li>When run from a terminal (not cron), it also prints the actual database name it resolved and requires typing it back before doing anything — catches "right box, wrong terminal session" even on a correctly-flagged instance. Cron runs skip that prompt automatically (no TTY).</li>
+              <li>Neither check is bypassable with a flag. See "Running the public demo" in README.md.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Automatic Pre-Deploy Database Backups (v2.25.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Deploy/ops change, not an in-app feature: every <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">deploy.sh</code> run on a <strong>main</strong> instance now backs its own database up into <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">backups/</code> before touching anything — <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">pg_dump | gzip</code> for Postgres, a plain file copy for SQLite — keeping the 14 most recent. A failed backup aborts the deploy rather than continuing on one that couldn't be trusted.</li>

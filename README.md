@@ -235,6 +235,16 @@ gunzip -c backups/<service>-<timestamp>.sql.gz | psql "$DATABASE_URL"
 ```
 (onto an empty database — this doesn't clear existing tables first).
 
+#### Running the public demo (demo_reset.py)
+
+If you're not running the public demo, you can skip this section entirely — `demo_reset.py` has no reason to exist on a production or testing instance, and the guard below is what stops it from doing anything if it's ever run there by mistake.
+
+`demo_reset.py` (`DROP SCHEMA public CASCADE`, then recreates a clean database with a single demo account — meant to run every few hours via cron so the public demo always looks fresh) refuses to run at all unless the checkout's own `.env` sets:
+```
+DEMO_INSTANCE=true
+```
+This is a deliberate, required opt-in with no default — a checkout is *not* the demo just because of its path or which branch it tracks. When run from a terminal (not cron), it also prints the actual database name it resolved and requires typing it back before doing anything, catching "right box, wrong terminal session" even on a correctly-flagged instance; cron runs (no TTY) skip that prompt automatically. Neither check can be bypassed with a flag — set `DEMO_INSTANCE=true` only in the one `.env` you actually want this script erasing on a schedule, and nowhere else.
+
 #### Troubleshooting a failed deploy
 
 First, always check the service logs — `deploy.sh` finishing without error only means the *deploy steps* succeeded (git pull, pip install, migrate.py, systemd restart); it doesn't mean the app actually started:
