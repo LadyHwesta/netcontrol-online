@@ -245,6 +245,8 @@ DEMO_INSTANCE=true
 ```
 This is a deliberate, required opt-in with no default — a checkout is *not* the demo just because of its path or which branch it tracks. When run from a terminal (not cron), it also prints the actual database name it resolved and requires typing it back before doing anything, catching "right box, wrong terminal session" even on a correctly-flagged instance; cron runs (no TTY) skip that prompt automatically. Neither check can be bypassed with a flag — set `DEMO_INSTANCE=true` only in the one `.env` you actually want this script erasing on a schedule, and nowhere else.
 
+A real crontab entry already runs with no controlling terminal, so the confirmation prompt above is a non-issue for it — nothing extra is needed beyond `DEMO_INSTANCE=true`. Redirect stdin from `/dev/null` explicitly anyway (see the cron line in the script's own docstring) so this stays true even if the same line is ever copied into something that *does* keep a terminal attached, rather than depending on cron's default behavior specifically.
+
 #### Troubleshooting a failed deploy
 
 First, always check the service logs — `deploy.sh` finishing without error only means the *deploy steps* succeeded (git pull, pip install, migrate.py, systemd restart); it doesn't mean the app actually started:

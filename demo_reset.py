@@ -24,9 +24,14 @@ Usage
     python3 demo_reset.py
 
 Cron (every 4 hours) -- no TTY, so the interactive confirmation above is
-skipped automatically; DEMO_INSTANCE=true in .env is still required:
+skipped automatically; DEMO_INSTANCE=true in .env is still required. The
+explicit `< /dev/null` isn't needed for a real crontab entry (cron already
+runs with no controlling terminal at all) -- it's there so this stays true
+even if this line is ever copied into something that DOES keep a terminal
+attached (a systemd timer with the wrong Type=, a manual `nohup ... &`),
+rather than depending on invocation context to get isatty() right:
     0 */4 * * *  /opt/netcontrol-demo/venv/bin/python3 /opt/netcontrol-demo/demo_reset.py \\
-                 >> /var/log/demo_reset.log 2>&1
+                 < /dev/null >> /var/log/demo_reset.log 2>&1
 
 Environment variables (read from .env)
 ---------------------------------------
