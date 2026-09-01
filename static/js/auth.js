@@ -298,12 +298,36 @@ function logout() {
   token = null;
   currentUser = null;
   localStorage.removeItem('nt_token');
+  localStorage.removeItem('nt_last_user');
   location.reload();
 }
 
 async function enterApp() {
   if (!currentUser) {
-    try { currentUser = await apiFetch('/auth/me'); } catch { logout(); return; }
+    try {
+      currentUser = await apiFetch('/auth/me');
+      // Cached purely so a later offline reload (below) has something to
+      // fall back to -- never read except in that one failure path.
+      localStorage.setItem('nt_last_user', JSON.stringify(currentUser));
+    } catch (e) {
+      // A plain fetch() failure (no network reachable at all) throws
+      // TypeError, before apiFetch ever sees a response to reject on --
+      // distinct from apiFetch's own `throw new Error(...)` for a real
+      // rejection from the server (401 = expired/invalid token). Only the
+      // latter should log the user out. Reloading the app, or relaunching
+      // it as an installed PWA, with no connection used to clear a
+      // perfectly valid token here just because it couldn't be re-verified
+      // -- bouncing to a login screen that also can't work offline, and
+      // defeating the whole point of the offline check-in queue below.
+      if (e instanceof TypeError) {
+        const cached = localStorage.getItem('nt_last_user');
+        if (!cached) { logout(); return; }  // never verified in this browser -- nothing to fall back to
+        currentUser = JSON.parse(cached);
+      } else {
+        logout();
+        return;
+      }
+    }
   }
   syncThemeFromUser(currentUser);
   document.getElementById('auth-page').style.display = 'none';
@@ -312,6 +336,7 @@ async function enterApp() {
   // Mobile: show just the callsign badge in the header
   const shortEl = document.getElementById('header-callsign-short');
   if (shortEl) shortEl.textContent = currentUser.callsign;
+  updateOfflineBanner();
   await loadBranding();
   loadOrgBanner();       // fire-and-forget; non-blocking
   syncLangFromUser(currentUser);   // fire-and-forget; non-blocking

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — NetControl Online</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/app.css?v=22">
+  <meta name="theme-color" content="#0a0a1a" />
+  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;})();</script>
+  <style>
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .offline-card{width:420px;max-width:100%;text-align:center}
+    .offline-card img{width:64px;height:64px;border-radius:22%;margin-bottom:16px}
+    .offline-card h1{font-size:20px;margin:0 0 8px}
+    .offline-card p{font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 20px}
+    #offline-status{font-size:12px;margin-top:14px;color:var(--text-muted)}
+    #offline-status.online{color:var(--lc-green)}
+  </style>
+</head>
+<body>
+  <!-- This page is the service worker's fallback (static/sw.js) for a page
+       navigation that fails while offline and isn't part of the precached
+       app shell -- e.g. a route never visited before this connection was
+       lost. It's a plain static file, not FastAPI-served, so it can render
+       with zero network dependency of its own. Reconnection is detected via
+       the standard 'online' event (same mechanism static/js/checkins.js's
+       offline check-in queue already relies on) -- no polling. -->
+  <div class="card offline-card">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" alt="" />
+    <h1>📡 You're offline</h1>
+    <p>This page hasn't been saved for offline use. The main app — My Nets, sessions, and check-ins — works without a connection; check-ins you log now will queue and send automatically once you're back online.</p>
+    <button class="btn btn-primary" onclick="location.href='/'">Go to My Nets</button>
+    <button class="btn btn-ghost" onclick="location.reload()">Try This Page Again</button>
+    <div id="offline-status">Waiting for a connection…</div>
+  </div>
+  <script>
+    function updateStatus() {
+      const el = document.getElementById('offline-status');
+      if (navigator.onLine) {
+        el.textContent = 'Back online — reloading…';
+        el.classList.add('online');
+        location.reload();
+      } else {
+        el.textContent = 'Waiting for a connection…';
+        el.classList.remove('online');
+      }
+    }
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    updateStatus();
+  </script>
+</body>
+</html>

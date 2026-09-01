@@ -1,4 +1,21 @@
 // ============================================================
+// OFFLINE BANNER — app-wide "no connection" indicator (issue #9 follow-up)
+// ============================================================
+// Distinct from checkins.js's #offline-queue-banner, which only appears once
+// something is actually queued, scoped to the live session view -- this one
+// is a plain "you have no network right now" notice visible from anywhere
+// in the app, so a reload/relaunch while offline (see auth.js's enterApp(),
+// which now stays logged in using a cached identity instead of bouncing to
+// a login screen) is understandable rather than looking like nets/history
+// data has simply vanished.
+function updateOfflineBanner() {
+  const banner = document.getElementById('app-offline-banner');
+  if (banner) banner.style.display = navigator.onLine ? 'none' : '';
+}
+window.addEventListener('online', updateOfflineBanner);
+window.addEventListener('offline', updateOfflineBanner);
+
+// ============================================================
 // SIDEBAR — STATS + COLLAPSE
 // ============================================================
 async function loadSidebarStats() {
