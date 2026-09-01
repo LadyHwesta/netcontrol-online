@@ -46,7 +46,7 @@ class User(Base):
     is_active = Column(Boolean, default=False, nullable=False)  # False until admin approves
     is_admin = Column(Boolean, default=False, nullable=False)
     notify_new_registrations = Column(Boolean, default=False, nullable=False)  # email opt-in for new signups
-    theme = Column(String(20), default="lcars", nullable=False)  # lcars | dark | light | high-contrast | system
+    theme = Column(String(20), default="lcars", nullable=False)  # lcars | dark | light | high-contrast | pink | purple | blue | matrix | earth | system
     language = Column(String(10), nullable=True)  # ISO code (e.g. "es"); null = English / browser default
     email_verified = Column(Boolean, default=True, nullable=False)  # False only when SMTP is configured and a verification email was actually sent
     verification_token = Column(String(64), nullable=True)

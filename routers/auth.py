@@ -78,7 +78,7 @@ class UserCreate(BaseModel):
 
 
 class ThemeUpdate(BaseModel):
-    theme: Literal["lcars", "dark", "light", "high-contrast", "system"]
+    theme: Literal["lcars", "dark", "light", "high-contrast", "pink", "purple", "blue", "matrix", "earth", "system"]
 
 
 class LanguageUpdate(BaseModel):

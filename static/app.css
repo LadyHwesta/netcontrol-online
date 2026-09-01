@@ -82,6 +82,95 @@
       --overlay-strong: rgba(255,255,255,.32); --hairline: rgba(255,255,255,.35);
     }
 
+    /* ── Fun/colorful themes (issue follow-up) — same token contract as every
+       theme above, just leaning into a specific palette instead of aiming for
+       neutral/accessible. Each picks a vivid primary (the --lc-orange slot,
+       the app's actual "accent" role regardless of literal name) plus a
+       contrasting secondary (--lc-gold) chosen deliberately to pop against
+       it, not just a duller shade of the same hue. */
+
+    [data-theme="pink"] {
+      /* Bubblegum / Y2K — hot pink with a sunshine-yellow pop and minty accents. */
+      --lc-orange: #FF2E93; --lc-gold: #FFD23F; --lc-tan: #FFB3D9; --lc-blue: #4DE8FF;
+      --lc-purple: #C13584; --lc-red: #FF3860; --lc-green: #2EDCA6;
+      --bg: #1A0714; --surface: #240A1C; --surface2: #33102A; --border: #4D1A3D;
+      --accent-hover: #FF5CAD; --success: #2EDCA6;
+      --text: #FFF0F7; --muted: #E8A0C8; --radius: 10px;
+      --text-muted: #E8A0C8; --lc-border: #4D1A3D; --lc-muted: #E8A0C8;
+      --on-accent: #1A0714;
+      --overlay-weak: rgba(255,255,255,.06); --overlay-med: rgba(255,255,255,.10);
+      --overlay-strong: rgba(255,255,255,.15); --hairline: rgba(255,255,255,.10);
+      --badge-green-bg: #0d2e24; --badge-blue-bg: #0d2b33; --badge-orange-bg: #3d0f28;
+      --badge-purple-bg: #2e1030;
+      --accent-tint: rgba(255,46,147,.18);
+    }
+
+    [data-theme="purple"] {
+      /* Amethyst — deep violet with an amber pop and a teal success color. */
+      --lc-orange: #A855F7; --lc-gold: #FFB800; --lc-tan: #D4B8FF; --lc-blue: #7B61FF;
+      --lc-purple: #7C3AED; --lc-red: #F5365C; --lc-green: #2DD4BF;
+      --bg: #0F0A1E; --surface: #17102C; --surface2: #221A3D; --border: #34275A;
+      --accent-hover: #C084FC; --success: #2DD4BF;
+      --text: #F3EFFF; --muted: #B39DDB; --radius: 6px;
+      --text-muted: #B39DDB; --lc-border: #34275A; --lc-muted: #B39DDB;
+      --on-accent: #14091F;
+      --overlay-weak: rgba(255,255,255,.06); --overlay-med: rgba(255,255,255,.10);
+      --overlay-strong: rgba(255,255,255,.15); --hairline: rgba(255,255,255,.09);
+      --badge-green-bg: #0f2b27; --badge-blue-bg: #191540; --badge-orange-bg: #2a1440;
+      --badge-purple-bg: #241247;
+      --accent-tint: rgba(168,85,247,.18);
+    }
+
+    [data-theme="blue"] {
+      /* Cyber Blue — electric blue with an amber pop and an emerald success color. */
+      --lc-orange: #2E9EFF; --lc-gold: #FFC300; --lc-tan: #AEE7FF; --lc-blue: #3B82F6;
+      --lc-purple: #8B5CF6; --lc-red: #FF4757; --lc-green: #00E5A0;
+      --bg: #050B1A; --surface: #0A1428; --surface2: #101E3A; --border: #1E3A5F;
+      --accent-hover: #5CC3FF; --success: #00E5A0;
+      --text: #EAF6FF; --muted: #7FB3E0; --radius: 4px;
+      --text-muted: #7FB3E0; --lc-border: #1E3A5F; --lc-muted: #7FB3E0;
+      --on-accent: #041018;
+      --overlay-weak: rgba(255,255,255,.06); --overlay-med: rgba(255,255,255,.10);
+      --overlay-strong: rgba(255,255,255,.15); --hairline: rgba(255,255,255,.09);
+      --badge-green-bg: #072a20; --badge-blue-bg: #101b3f; --badge-orange-bg: #0c2847;
+      --badge-purple-bg: #1c1440;
+      --accent-tint: rgba(46,158,255,.18);
+    }
+
+    [data-theme="matrix"] {
+      /* Matrix — green-on-black terminal, with an old-amber-monitor gold for
+         contrast and a magenta "glitch" accent standing in for purple/tags. */
+      --lc-orange: #00FF41; --lc-gold: #FFD700; --lc-tan: #8AFF9E; --lc-blue: #00FFD1;
+      --lc-purple: #FF2AFF; --lc-red: #FF2222; --lc-green: #00FF41;
+      --bg: #000000; --surface: #030A03; --surface2: #0A1A0A; --border: #1A3D1A;
+      --accent-hover: #39FF6E; --success: #00FF41;
+      --text: #DFFFE0; --muted: #4DBE6E; --radius: 2px;
+      --text-muted: #4DBE6E; --lc-border: #1A3D1A; --lc-muted: #4DBE6E;
+      --on-accent: #000000;
+      --overlay-weak: rgba(0,255,65,.06); --overlay-med: rgba(0,255,65,.10);
+      --overlay-strong: rgba(0,255,65,.16); --hairline: rgba(0,255,65,.12);
+      --badge-green-bg: #05230f; --badge-blue-bg: #04241f; --badge-orange-bg: #052a12;
+      --badge-purple-bg: #2a0526;
+      --accent-tint: rgba(0,255,65,.16);
+    }
+
+    [data-theme="earth"] {
+      /* Earth Tones — warm terracotta/ochre/sage, a calmer palette than the
+         other four but still leaning into real color instead of neutral gray. */
+      --lc-orange: #C1652F; --lc-gold: #D4A24E; --lc-tan: #D9BE96; --lc-blue: #5F8575;
+      --lc-purple: #8B5A6B; --lc-red: #B5462F; --lc-green: #7A8C4C;
+      --bg: #1A1410; --surface: #241C16; --surface2: #322820; --border: #4A3A2C;
+      --accent-hover: #D9793F; --success: #7A8C4C;
+      --text: #F2E8DA; --muted: #B8A489; --radius: 8px;
+      --text-muted: #B8A489; --lc-border: #4A3A2C; --lc-muted: #B8A489;
+      --on-accent: #1A1410;
+      --overlay-weak: rgba(255,245,230,.06); --overlay-med: rgba(255,245,230,.10);
+      --overlay-strong: rgba(255,245,230,.14); --hairline: rgba(255,245,230,.10);
+      --badge-green-bg: #26301a; --badge-blue-bg: #1c2b26; --badge-orange-bg: #33200f;
+      --badge-purple-bg: #2c1c22;
+      --accent-tint: rgba(193,101,47,.18);
+    }
+
     body {
       background: var(--bg);
       color: var(--text);

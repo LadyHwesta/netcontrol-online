@@ -21,7 +21,7 @@ class TestThemeDefault:
 
 
 class TestThemeUpdate:
-    @pytest.mark.parametrize("theme", ["lcars", "dark", "light", "high-contrast", "system"])
+    @pytest.mark.parametrize("theme", ["lcars", "dark", "light", "high-contrast", "pink", "purple", "blue", "matrix", "earth", "system"])
     def test_patch_each_valid_value(self, client, user_headers, theme):
         resp = client.patch("/auth/theme", json={"theme": theme}, headers=user_headers)
         assert resp.status_code == 200
