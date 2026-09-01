@@ -69,6 +69,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Documented Bulk CSV Import (v2.22.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The <strong>⬆ Import CSV</strong> button (a session toolbar feature since v2.9.0, for bulk-adding check-ins instead of typing each one in — built mainly for <strong>Log Past Net</strong>) had no mention in the Guide, only in this Changelog. Added a proper <strong>Bulk Import from CSV</strong> section under Check-In Workflow, plus a cross-reference from Log a Past Net. No functional change.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Pre-Activation Roster Planning; APRS Map/Dialog Overlap Fixed (v2.22.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>An ARES/ACES net's edit form now has an <strong>🚨 Activation Roster (Planned)</strong> section — queue up tactical positions (SHELTER 1, LOGISTICS, etc.) and the Net Control rotation before your next activation, instead of only once the net is already live. The moment you start that net's next activation session, everything queued here is pulled straight into it exactly as if it had been added live; the list is then empty again, ready for the next activation's (likely different) roster.</li>
@@ -931,6 +938,7 @@
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-lookup')" data-i18n="Callsign Lookup &amp; Search">Callsign Lookup &amp; Search</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-remarks')" data-i18n="Station Remarks">Station Remarks</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-checkin-form')" data-i18n="Manual Check-In Form">Manual Check-In Form</a>
+                <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-csv-import')" data-i18n="Bulk Import from CSV">Bulk Import from CSV</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-gmrs')" data-i18n="GMRS Nets">GMRS Nets</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-expected')" data-i18n="Expected Stations">Expected Stations</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('checkin','help-sec-traffic-mgmt')" data-i18n="Traffic Management">Traffic Management</a>
@@ -1034,6 +1042,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="MANUAL CHECK-IN FORM">MANUAL CHECK-IN FORM</h3>
           <p style="margin:0 0 8px">Fill in callsign, name (auto-filled from FCC), signal report, and optional comments. Check <strong>Has Traffic</strong> before clicking <strong>Check In</strong> or pressing Enter.</p>
           <p style="margin:0">Duplicate callsigns in the same session are automatically rejected.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:16px" id="help-sec-csv-import">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="BULK IMPORT FROM CSV">BULK IMPORT FROM CSV</h3>
+          <p style="margin:0 0 8px">Click <strong>⬆ Import CSV</strong> in a session's toolbar (next to <strong>⬇ CSV</strong> export) to add a whole roster at once instead of typing each check-in in by hand — built mainly for <strong>🕐 Log Past Net</strong>, where you're often re-entering a full paper roster after the fact, but it works on any session that can still take check-ins, live ones included.</p>
+          <p style="margin:0 0 8px">The dialog has a <strong>Download a sample CSV</strong> link showing the exact columns expected. Only <strong>Callsign</strong> is required; Name, Signal Report, Comments, Has Traffic, Evac Zone, and the two DMR fields are all optional and matched case-insensitively, so your own column headers don't need to match exactly.</p>
+          <p style="margin:0">Each row is validated independently — a bad row (a missing callsign, a duplicate) is reported and skipped without blocking the rest of the import.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px" id="help-sec-gmrs">
@@ -1167,7 +1182,7 @@ Thank you all for checking in. This net is now closed.</pre>
         <div class="card" style="margin-bottom:16px" id="help-sec-log-past">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="LOG A PAST NET">LOG A PAST NET</h3>
           <p style="margin:0 0 8px">Sometimes a net forms quickly with no access to the web tool. Click <strong>🕐 Log Past Net</strong> next to <strong>▶ Start New Session</strong> to enter it after the fact — set the <strong>Date &amp; Time of Net</strong> (month/day/time — always this year), and optionally who ran <strong>Net Control</strong> and, if the net carries one, the <strong>Broadcaster</strong>. Both default to whoever's scheduled or started the session for a normal session; for a logged one, set them directly since whoever's backfilling the log may not be who actually ran it.</p>
-          <p style="margin:0 0 8px">Submitting drops you straight into a check-in screen for it. Every check-in you add is stamped with the <strong>reported date/time</strong>, not the moment you happened to type it in — that's the whole point of logging it after the fact. The screen shows <strong>Logged</strong> instead of Live/Ended and skips anything meant for running a net in real time — no clock, Expected Stations, Digital Voice Last Heard, or Net Script panel — but the check-in form, roster, and CSV/ICS-205 export all work exactly as normal.</p>
+          <p style="margin:0 0 8px">Submitting drops you straight into a check-in screen for it. Every check-in you add is stamped with the <strong>reported date/time</strong>, not the moment you happened to type it in — that's the whole point of logging it after the fact. The screen shows <strong>Logged</strong> instead of Live/Ended and skips anything meant for running a net in real time — no clock, Expected Stations, Digital Voice Last Heard, or Net Script panel — but the check-in form, roster, and CSV/ICS-205 export all work exactly as normal. Re-typing a long paper roster one row at a time is tedious — click <strong>⬆ Import CSV</strong> in the toolbar instead to add the whole thing at once (see <strong>Bulk Import from CSV</strong> above).</p>
           <p style="margin:0">A logged session stays open to further check-ins until you click <strong>🔒 Close Log</strong> — the same button that reads <strong>■ End Session</strong> on a live one. Once closed, no more check-ins can be added; remove individual check-ins the usual way if you need to correct one before or after closing, or delete the whole session from the Sessions list to start over.</p>
         </div>
 
