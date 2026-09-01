@@ -429,6 +429,16 @@ MIGRATIONS = [
          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
          CONSTRAINT uq_aprs_config_net UNIQUE (net_id))"""),
 
+    # Default APRS map viewport (issue follow-up) — where the map opens before
+    # any position has been reported, e.g. a regional net's usual coverage area
+    # or a wider view for a nationwide/worldwide activation.
+    ("nets: aprs_default_lat column",
+     "ALTER TABLE nets ADD COLUMN IF NOT EXISTS aprs_default_lat DOUBLE PRECISION"),
+    ("nets: aprs_default_lon column",
+     "ALTER TABLE nets ADD COLUMN IF NOT EXISTS aprs_default_lon DOUBLE PRECISION"),
+    ("nets: aprs_default_zoom column",
+     "ALTER TABLE nets ADD COLUMN IF NOT EXISTS aprs_default_zoom INTEGER"),
+
     # ── Welcome first-time check-ins ──
     ("checkins: is_first_checkin flag",
      "ALTER TABLE checkins ADD COLUMN IF NOT EXISTS is_first_checkin BOOLEAN NOT NULL DEFAULT FALSE"),

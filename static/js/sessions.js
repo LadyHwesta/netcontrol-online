@@ -275,7 +275,7 @@ function renderSessions(sessions) {
     return `<tr>
       <td>
         <a href="#" onclick="loadSessionLive(${s.id}); return false;" style="color:var(--accent-hover);text-decoration:none">${label}</a>
-        <button class="btn btn-ghost btn-sm" style="margin-left:6px;font-size:11px;padding:1px 7px" onclick="promptRenameSession(${s.id}, ${JSON.stringify(s.name || '')})">✏️</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:6px;font-size:11px;padding:1px 7px" onclick="promptRenameSession(${s.id}, '${esc(s.name || '')}')">✏️</button>
       </td>
       <td>${fmt(s.started_at)}</td>
       <td class="col-sess-ended">${fmt(s.ended_at)}</td>

@@ -539,7 +539,7 @@ function renderCheckins(checkins) {
     const hasPos = c.lat != null && c.lon != null;
     const posBadge = ` <span class="checkin-pos-badge" title="${hasPos ? t('Position reported — click to edit') : t('Set GPS position')}"
       style="cursor:pointer;opacity:${hasPos ? 1 : 0.3}"
-      onclick="openCheckinPositionModal(${c.id}, ${JSON.stringify(c.callsign)}, ${hasPos ? c.lat : 'null'}, ${hasPos ? c.lon : 'null'})">📍</span>`;
+      onclick="openCheckinPositionModal(${c.id}, '${esc(c.callsign)}', ${hasPos ? c.lat : 'null'}, ${hasPos ? c.lon : 'null'})">📍</span>`;
 
     // ARES/ACES activation session (issue #21): Tactical / Callsign / First
     // Name, no traffic toggle. A station with no tactical assignment shows

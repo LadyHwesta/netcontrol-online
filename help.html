@@ -69,6 +69,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — APRS Map Default View; Two Silent Click Bugs Fixed (v2.21.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>A net's <strong>APRS Map</strong> section now has a configurable <strong>default view</strong> — where the map opens before any station has reported a position, so a regional net opens zoomed to its usual coverage area instead of a generic continental-US default, and a nationwide/worldwide activation can open zoomed out to match. Once real positions start coming in, the map still auto-fits to them as before — the default only covers the empty/early state.</li>
+              <li>Set it two ways: type latitude/longitude/zoom directly in the net edit form, or — easier — pan and zoom the live map to where you want during a session and click its new <strong>📍 Set as Default View</strong> button, which just saves whatever the map is currently showing.</li>
+              <li><strong>Fixed:</strong> the 📍 position badge on a check-in row (for manually reporting a station's GPS position) silently did nothing when clicked. Same root cause, found in two places (the other was the ✏️ rename-session button) — a callsign or session name got embedded into an HTML <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">onclick="..."</code> attribute via <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">JSON.stringify()</code>, which produces double-quoted output that collided with the attribute's own double quotes and silently broke the click handler for every single row, not just callsigns with unusual characters.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Account, Report &amp; Help Navigation (v2.20.9)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Extends UI translation to <strong>Account</strong> (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">tokens.html</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">tokens.js</code> — GMRS callsign, API token creation/list/revoke) and <strong>Report / Request</strong> (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">report.html</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">report.js</code>) in full.</li>

@@ -60,6 +60,9 @@ class NetOut(BaseModel):
     broadcast_label: Optional[str] = None
     public_listed: bool = False
     aprs_map_enabled: bool = False
+    aprs_default_lat: Optional[float] = None
+    aprs_default_lon: Optional[float] = None
+    aprs_default_zoom: Optional[int] = None
     reminder_enabled: bool = False
     reminder_minutes_before: Optional[int] = None
     band: Optional[str] = None

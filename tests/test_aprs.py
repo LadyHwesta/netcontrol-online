@@ -104,6 +104,77 @@ class TestAprsConfigCrud:
         assert resp.status_code == 200
 
 
+class TestAprsDefaultView:
+    """PUT /nets/{id}/aprs/default-view -- the map's default starting
+    viewport (issue follow-up), independent of AprsConfig's existence (see
+    the endpoint's own docstring: works for a manual-position-only net with
+    no automated APRS source configured at all)."""
+
+    def test_set_and_read_back_via_net(self, client, admin_headers, net):
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 47.6062, "lon": -122.3321, "zoom": 9,
+        }, headers=admin_headers)
+        assert resp.status_code == 204, resp.text
+
+        got = client.get(f"/nets/{net['id']}", headers=admin_headers).json()
+        assert got["aprs_default_lat"] == 47.6062
+        assert got["aprs_default_lon"] == -122.3321
+        assert got["aprs_default_zoom"] == 9
+
+    def test_works_with_no_aprs_config_at_all(self, client, admin_headers, net):
+        """Confirms this doesn't require AprsConfig to exist -- a net using
+        only manually-reported check-in positions should still be able to
+        set a default view."""
+        assert client.get(f"/nets/{net['id']}/aprs/config", headers=admin_headers).json() is None
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 0, "lon": 0, "zoom": 2,
+        }, headers=admin_headers)
+        assert resp.status_code == 204, resp.text
+        assert client.get(f"/nets/{net['id']}", headers=admin_headers).json()["aprs_default_zoom"] == 2
+
+    def test_clearing_sets_all_three_null(self, client, admin_headers, net):
+        client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 47.6, "lon": -122.3, "zoom": 9,
+        }, headers=admin_headers)
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={}, headers=admin_headers)
+        assert resp.status_code == 204
+        got = client.get(f"/nets/{net['id']}", headers=admin_headers).json()
+        assert got["aprs_default_lat"] is None
+        assert got["aprs_default_lon"] is None
+        assert got["aprs_default_zoom"] is None
+
+    def test_lat_out_of_range_rejected(self, client, admin_headers, net):
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 91, "lon": 0, "zoom": 5,
+        }, headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_lon_out_of_range_rejected(self, client, admin_headers, net):
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 0, "lon": -181, "zoom": 5,
+        }, headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_zoom_out_of_range_rejected(self, client, admin_headers, net):
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 0, "lon": 0, "zoom": 25,
+        }, headers=admin_headers)
+        assert resp.status_code == 422
+
+    def test_requires_edit_access(self, client, admin_headers, user_headers, net):
+        resp = client.put(f"/nets/{net['id']}/aprs/default-view", json={
+            "lat": 47.6, "lon": -122.3, "zoom": 9,
+        }, headers=user_headers)
+        assert resp.status_code == 403
+
+    def test_gmrs_net_blocked(self, client, admin_headers):
+        n = make_gmrs_net(client, admin_headers)
+        resp = client.put(f"/nets/{n['id']}/aprs/default-view", json={
+            "lat": 47.6, "lon": -122.3, "zoom": 9,
+        }, headers=admin_headers)
+        assert resp.status_code == 400
+
+
 class TestOrgAprsKey:
     """aprs.fi's API key is org-level (issue follow-up), not per-net --
     one key shared by every net in the org that uses aprs_fi as its

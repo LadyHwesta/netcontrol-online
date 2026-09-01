@@ -17,7 +17,7 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,40 @@ class AprsConfigOut(BaseModel):
     filter_callsign: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class AprsDefaultViewUpdate(BaseModel):
+    """The map's default viewport (issue follow-up) -- lives on Net, not
+    AprsConfig, since the station map (and this button) is available on
+    every ham net regardless of whether real-time APRS is configured at
+    all (manually-reported positions work with zero APRS setup). All three
+    fields together or none -- omitting/nulling any of them clears the
+    default entirely, falling back to static/js/aprs-map.js's hardcoded
+    continental-US-ish view again."""
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    zoom: Optional[int] = None
+
+    @field_validator("lat")
+    @classmethod
+    def valid_lat(cls, v):
+        if v is not None and not (-90 <= v <= 90):
+            raise ValueError("lat must be between -90 and 90")
+        return v
+
+    @field_validator("lon")
+    @classmethod
+    def valid_lon(cls, v):
+        if v is not None and not (-180 <= v <= 180):
+            raise ValueError("lon must be between -180 and 180")
+        return v
+
+    @field_validator("zoom")
+    @classmethod
+    def valid_zoom(cls, v):
+        if v is not None and not (0 <= v <= 19):  # Leaflet's usable range for the OSM tile set in use
+            raise ValueError("zoom must be between 0 and 19")
+        return v
 
 
 class AprsPositionEntry(BaseModel):
@@ -303,6 +337,21 @@ async def save_aprs_config(net_id: int, data: AprsConfigCreate, current_user: Us
     await db.commit()
     await db.refresh(cfg)
     return cfg
+
+
+@router.put("/nets/{net_id}/aprs/default-view", status_code=204)
+async def set_aprs_default_view(net_id: int, data: AprsDefaultViewUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Sets (or clears, if lat/lon/zoom are all omitted) the map's default
+    viewport -- used both by the net edit form's manual lat/lon/zoom fields
+    and the live map panel's "Set as Default View" button, which just PUTs
+    whatever the map's current center/zoom happens to be. No AprsConfig row
+    required (see AprsDefaultViewUpdate's docstring)."""
+    net = await _get_editable_net(net_id, current_user, db)
+    _assert_ham_net(net)
+    net.aprs_default_lat = data.lat
+    net.aprs_default_lon = data.lon
+    net.aprs_default_zoom = data.zoom
+    await db.commit()
 
 
 @router.delete("/nets/{net_id}/aprs/config", status_code=204)

@@ -148,6 +148,9 @@ async def public_session_detail(session_id: int, db: AsyncSession = Depends(get_
         "aprs_map_enabled": net.aprs_map_enabled if net else False,
         "aprs_positions": aprs_positions,
         "aprs_source": aprs_source,   # "aprs_fi" | "relay" | None -- required aprs.fi credit on the map
+        "aprs_default_lat": net.aprs_default_lat if net else None,
+        "aprs_default_lon": net.aprs_default_lon if net else None,
+        "aprs_default_zoom": net.aprs_default_zoom if net else None,
         **duty,
     }
 

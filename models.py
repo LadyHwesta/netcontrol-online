@@ -153,6 +153,17 @@ class Net(Base):
     reminder_minutes_before = Column(Integer, nullable=True)  # lead time in minutes, e.g. 30
     public_listed = Column(Boolean, default=False, nullable=False)  # shown in the public /directory (no login)
     aprs_map_enabled = Column(Boolean, default=False, nullable=False)  # shows an APRS station map on the public live page (issue #22)
+    # Default APRS map viewport (issue follow-up) — where the station map opens
+    # before any position has been reported yet, replacing the hardcoded
+    # continental-US-ish fallback in static/js/aprs-map.js. Set either by typing
+    # coordinates in the net edit form, or by panning/zooming the live map to the
+    # desired view and clicking "Set as Default View" there. All three are set
+    # together or not at all; only aprs_default_zoom is ever checked for
+    # "is a default configured" since 0/0 are valid coordinates (null island)
+    # but never a meaningful zoom level.
+    aprs_default_lat = Column(Float, nullable=True)
+    aprs_default_lon = Column(Float, nullable=True)
+    aprs_default_zoom = Column(Integer, nullable=True)
     # Optional metadata — not used locally, only forwarded to Net Repository
     # (net_repository.py) to make the public directory listing more useful/searchable.
     band = Column(String(10), nullable=True)         # e.g. "2m", "70cm"

@@ -37,13 +37,60 @@ async function saveAprsConfigIfVisible(netId) {
   if (src === 'none') {
     if (currentAprsConfig) await apiFetch(`/nets/${netId}/aprs/config`, { method: 'DELETE' });
     currentAprsConfig = null;
-    return;
+  } else {
+    const payload = {
+      source_type: src,
+      filter_callsign: document.getElementById('aprs-filter').value.trim().toUpperCase() || null,
+    };
+    currentAprsConfig = await apiFetch(`/nets/${netId}/aprs/config`, { method: 'PUT', body: JSON.stringify(payload) });
   }
-  const payload = {
-    source_type: src,
-    filter_callsign: document.getElementById('aprs-filter').value.trim().toUpperCase() || null,
-  };
-  currentAprsConfig = await apiFetch(`/nets/${netId}/aprs/config`, { method: 'PUT', body: JSON.stringify(payload) });
+
+  // Default map view (issue follow-up) -- independent of source_type above;
+  // works even with APRS fully disabled since manually-reported check-in
+  // positions still use the same map.
+  await saveAprsDefaultViewFields(netId);
+}
+
+// Reads whatever's currently in the three fields and PUTs it as part of the
+// net form's own Save button flow above -- clears the default instead if
+// any of the three is blank (the Clear button below just empties the
+// fields; this is what actually persists that, next time Save is clicked).
+async function saveAprsDefaultViewFields(netId) {
+  const lat = parseFloat(document.getElementById('aprs-default-lat').value);
+  const lon = parseFloat(document.getElementById('aprs-default-lon').value);
+  const zoom = parseInt(document.getElementById('aprs-default-zoom').value);
+  const complete = !isNaN(lat) && !isNaN(lon) && !isNaN(zoom);
+  await apiFetch(`/nets/${netId}/aprs/default-view`, {
+    method: 'PUT',
+    body: JSON.stringify(complete ? { lat, lon, zoom } : { lat: null, lon: null, zoom: null }),
+  });
+}
+
+function clearAprsDefaultViewFields() {
+  document.getElementById('aprs-default-lat').value = '';
+  document.getElementById('aprs-default-lon').value = '';
+  document.getElementById('aprs-default-zoom').value = '';
+}
+
+// Live map panel's own button -- captures whatever the map is currently
+// panned/zoomed to (no need to know or type coordinates) and saves it as
+// this net's default view immediately, independent of the net edit form.
+async function setAprsDefaultView() {
+  const map = _aprsMaps['aprs-map-container'];
+  if (!map) { toast(t('Open the map panel first.'), 'error'); return; }
+  const center = map.getCenter();
+  const zoom = map.getZoom();
+  try {
+    await apiFetch(`/nets/${currentNetId}/aprs/default-view`, {
+      method: 'PUT',
+      body: JSON.stringify({ lat: center.lat, lon: center.lng, zoom }),
+    });
+    // Keep the already-loaded net list in sync, so reopening the edit form
+    // (which reads straight from `nets`, not a fresh fetch) shows the new value.
+    const net = nets.find(n => n.id === currentNetId);
+    if (net) { net.aprs_default_lat = center.lat; net.aprs_default_lon = center.lng; net.aprs_default_zoom = zoom; }
+    toast(t('Default map view saved'), 'success');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 function downloadAprsRelayScript() {
@@ -59,6 +106,15 @@ let aprsMapPanelOpen = false;
 let aprsMapInterval = null;
 let lastAprsPositions = [];
 let currentAprsSourceType = null;   // "aprs_fi" | "relay" | null -- drives the aprs.fi attribution on the map
+
+// The net's configured default map view (issue follow-up), read from the
+// already-loaded `nets` list rather than a separate fetch -- NetOut already
+// carries these three fields. Returns null if the net has none set.
+function _currentAprsDefaultView(netId) {
+  const net = nets.find(n => n.id === netId);
+  if (!net || net.aprs_default_zoom == null) return null;
+  return { lat: net.aprs_default_lat, lon: net.aprs_default_lon, zoom: net.aprs_default_zoom };
+}
 
 async function initAprsForSession(netId) {
   // GMRS nets 400 on GET /aprs/config (no APRS allocation) -- caught here
@@ -104,7 +160,7 @@ async function refreshAprsMap(netIdArg) {
     return;
   }
   if (aprsMapPanelOpen) {
-    initAprsMap('aprs-map-container', lastAprsPositions, currentAprsSourceType);
+    initAprsMap('aprs-map-container', lastAprsPositions, currentAprsSourceType, _currentAprsDefaultView(netId));
     invalidateAprsMapSize('aprs-map-container');
   }
   const now = new Date().toLocaleTimeString();
@@ -122,7 +178,7 @@ function toggleAprsMapPanel() {
     // Lazily init the map only once the panel is actually visible --
     // Leaflet needs a non-zero-size, visible container to measure
     // correctly, which a display:none body doesn't provide.
-    initAprsMap('aprs-map-container', lastAprsPositions, currentAprsSourceType);
+    initAprsMap('aprs-map-container', lastAprsPositions, currentAprsSourceType, _currentAprsDefaultView(currentNetId));
     setTimeout(() => invalidateAprsMapSize('aprs-map-container'), 0);
   }
 }

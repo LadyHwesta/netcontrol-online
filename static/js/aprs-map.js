@@ -26,10 +26,14 @@ const APRS_FI_ATTRIBUTION = () => `${_t('Position data via')} <a href="https://a
 // track/trail rendering (documented follow-up in the issue #22 plan).
 // sourceType: the net's configured APRS source ("aprs_fi" | "relay" | null/
 // undefined for manual-only) -- only "aprs_fi" owes the credit above.
-function initAprsMap(containerId, positions, sourceType) {
+// defaultView: {lat, lon, zoom} or null -- the net's configured starting
+// view (issue follow-up), used only while there are zero reported
+// positions to fit bounds to; once any station reports in, auto-fit takes
+// over exactly as before regardless of this.
+function initAprsMap(containerId, positions, sourceType, defaultView) {
   if (typeof L === 'undefined') return null;  // Leaflet failed to load
   if (_aprsMaps[containerId]) {
-    updateAprsMap(containerId, positions, sourceType);
+    updateAprsMap(containerId, positions, sourceType, defaultView);
     return _aprsMaps[containerId];
   }
 
@@ -41,11 +45,11 @@ function initAprsMap(containerId, positions, sourceType) {
 
   _aprsMaps[containerId] = map;
   _aprsMarkerLayers[containerId] = L.layerGroup().addTo(map);
-  updateAprsMap(containerId, positions, sourceType);
+  updateAprsMap(containerId, positions, sourceType, defaultView);
   return map;
 }
 
-function updateAprsMap(containerId, positions, sourceType) {
+function updateAprsMap(containerId, positions, sourceType, defaultView) {
   const map = _aprsMaps[containerId];
   if (!map) return;
 
@@ -63,7 +67,15 @@ function updateAprsMap(containerId, positions, sourceType) {
 
   const valid = (positions || []).filter(p => typeof p.lat === 'number' && typeof p.lon === 'number');
   if (valid.length === 0) {
-    map.setView([39.8283, -98.5795], 3);  // no positions yet -- default continental-US-ish view
+    // No positions yet -- the net's own configured default view (issue
+    // follow-up) if it has one, else the same continental-US-ish fallback
+    // as always. zoom is the only field checked for "is a default set" --
+    // see Net.aprs_default_zoom's own doc comment in models.py.
+    if (defaultView && defaultView.zoom != null) {
+      map.setView([defaultView.lat, defaultView.lon], defaultView.zoom);
+    } else {
+      map.setView([39.8283, -98.5795], 3);
+    }
     return;
   }
 

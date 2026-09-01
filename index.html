@@ -477,6 +477,25 @@
               <input class="form-control mono" id="aprs-filter" placeholder="Your NCS callsign" style="font-size:13px;text-transform:uppercase" data-i18n-placeholder="Your NCS callsign" />
               <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Defaults to the net owner's callsign if left blank.">Defaults to the net owner's callsign if left blank.</div>
             </div>
+            <div class="form-group">
+              <label style="font-size:12px" data-i18n="Default Map View">Default Map View</label>
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px"><span data-i18n="Where the map opens before any station has reported a position — a regional net's usual coverage area, or a wider view for a nationwide/worldwide activation. Once positions start coming in, the map auto-fits to them as usual. Type coordinates here, or open the live map during a session and use its own">Where the map opens before any station has reported a position — a regional net's usual coverage area, or a wider view for a nationwide/worldwide activation. Once positions start coming in, the map auto-fits to them as usual. Type coordinates here, or open the live map during a session and use its own</span> <strong data-i18n="📍 Set as Default View">📍 Set as Default View</strong> <span data-i18n="button instead.">button instead.</span></div>
+              <div class="form-row">
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Latitude">Latitude</label>
+                  <input class="form-control mono" id="aprs-default-lat" type="number" step="any" min="-90" max="90" placeholder="47.6062" style="font-size:13px" />
+                </div>
+                <div class="form-group mb-0">
+                  <label style="font-size:11px" data-i18n="Longitude">Longitude</label>
+                  <input class="form-control mono" id="aprs-default-lon" type="number" step="any" min="-180" max="180" placeholder="-122.3321" style="font-size:13px" />
+                </div>
+                <div class="form-group mb-0" style="max-width:90px">
+                  <label style="font-size:11px" data-i18n="Zoom">Zoom</label>
+                  <input class="form-control mono" id="aprs-default-zoom" type="number" step="1" min="0" max="19" placeholder="9" style="font-size:13px" />
+                </div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="clearAprsDefaultViewFields()" data-i18n="Clear">Clear</button>
+            </div>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;margin-top:10px">
               <input type="checkbox" id="net-aprs-map-enabled" style="accent-color:var(--lc-blue);width:16px;height:16px" />
               <span data-i18n="Show map on public live page">Show map on public live page</span>
@@ -989,6 +1008,7 @@
                 <div style="padding:8px 12px;display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-muted)">
                   <span id="aprs-map-last-refresh">Not yet refreshed</span>
                   <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:1px 8px" onclick="refreshAprsMap()" data-i18n="↻ Refresh">↻ Refresh</button>
+                  <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:1px 8px" onclick="setAprsDefaultView()" title="Save the map's current pan/zoom as this net's default starting view" data-i18n-title="Save the map's current pan/zoom as this net's default starting view" data-i18n="📍 Set as Default View">📍 Set as Default View</button>
                 </div>
                 <div id="aprs-map-container" style="height:320px"></div>
               </div>
@@ -1315,17 +1335,17 @@
   <script src="/static/js/views.js?v=19"></script>
   <script src="/static/js/branding.js?v=24"></script>
   <script src="/static/js/report.js?v=21"></script>
-  <script src="/static/js/nets.js?v=29"></script>
-  <script src="/static/js/sessions.js?v=30"></script>
-  <script src="/static/js/checkins.js?v=38"></script>
+  <script src="/static/js/nets.js?v=30"></script>
+  <script src="/static/js/sessions.js?v=31"></script>
+  <script src="/static/js/checkins.js?v=39"></script>
   <script src="/static/js/history.js?v=22"></script>
   <script src="/static/js/admin.js?v=40"></script>
   <script src="/static/js/schedules.js?v=23"></script>
   <script src="/static/js/tokens.js?v=23"></script>
   <script src="/static/js/dmr.js?v=21"></script>
-  <script src="/static/js/aprs.js?v=39"></script>
+  <script src="/static/js/aprs.js?v=40"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
-  <script src="/static/js/aprs-map.js?v=40"></script>
+  <script src="/static/js/aprs-map.js?v=41"></script>
   <script src="/static/js/app.js?v=26"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 </body>

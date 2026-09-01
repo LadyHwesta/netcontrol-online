@@ -86,6 +86,9 @@ function showNetForm() {
   document.getElementById('net-dmr-section').style.display = 'none';
   document.getElementById('net-aprs-section').style.display = 'none';
   document.getElementById('net-aprs-map-enabled').checked = false;
+  document.getElementById('aprs-default-lat').value = '';
+  document.getElementById('aprs-default-lon').value = '';
+  document.getElementById('aprs-default-zoom').value = '';
   document.getElementById('net-form-card').style.display = '';
   onNetTypeChange();
   switchNetFormTab('details');
@@ -278,6 +281,9 @@ async function editNet(id) {
   document.getElementById('net-state').value = n.state || '';
   document.getElementById('net-website').value = n.website || '';
   document.getElementById('net-aprs-map-enabled').checked = !!n.aprs_map_enabled;
+  document.getElementById('aprs-default-lat').value = n.aprs_default_lat ?? '';
+  document.getElementById('aprs-default-lon').value = n.aprs_default_lon ?? '';
+  document.getElementById('aprs-default-zoom').value = n.aprs_default_zoom ?? '';
   onPublicListedToggle();
   const netType = n.net_type || 'ham';
   const typeRadio = document.querySelector(`input[name="net-type"][value="${netType}"]`);
