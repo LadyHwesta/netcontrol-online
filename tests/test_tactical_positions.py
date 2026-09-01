@@ -572,26 +572,71 @@ class TestNetControlShifts:
         assert resp.status_code == 403
 
 
-class TestActivationRosterPlanning:
-    """Pre-activation planning (issue follow-up) — tactical positions and the
-    Net Control rotation queued up for a net's *next* activation session
-    before that session exists, via /nets/{id}/planned-*. A one-time queue:
-    every row here has session_id NULL until start_session() attaches it to
-    whichever activation is started next, at which point it behaves exactly
-    like one created live and the queue is empty again."""
+def _schedule(client, headers, net_id, name="Full Activation"):
+    resp = client.post(f"/nets/{net_id}/activation-schedules", json={"name": name}, headers=headers)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
 
-    def test_create_planned_position_requires_ares_net(self, client, admin_headers, net):
-        resp = client.post(
-            f"/nets/{net['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
-            headers=admin_headers,
-        )
+
+class TestActivationSchedules:
+    """Named, reusable Activation Schedule presets (issue follow-up) — a net
+    can save several side by side, each with its own tactical positions / NC
+    rotation, managed via /nets/{id}/activation-schedules and
+    /activation-schedules/{id}/*. Starting an activation session picks one (or
+    none) from a dropdown; applying one COPIES its rows into the new session,
+    leaving the schedule itself untouched and reusable for next time -- this
+    replaced the earlier single one-time-consumed queue."""
+
+    def test_create_schedule_requires_ares_net(self, client, admin_headers, net):
+        resp = client.post(f"/nets/{net['id']}/activation-schedules", json={"name": "Full Activation"}, headers=admin_headers)
         assert resp.status_code == 400
 
-    def test_create_planned_position_ok(self, client, admin_headers):
+    def test_create_schedule_ok(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"], "Weather Watch")
+        assert schedule["name"] == "Weather Watch"
+        assert schedule["net_id"] == anet["id"]
+        assert schedule["tactical_position_count"] == 0
+        assert schedule["net_control_shift_count"] == 0
+
+    def test_list_schedules_for_net(self, client, admin_headers):
+        anet = _ares_net(client, admin_headers)
+        _schedule(client, admin_headers, anet["id"], "Full Activation")
+        _schedule(client, admin_headers, anet["id"], "Weather Watch")
+        resp = client.get(f"/nets/{anet['id']}/activation-schedules", headers=admin_headers)
+        assert resp.status_code == 200
+        assert sorted(s["name"] for s in resp.json()) == ["Full Activation", "Weather Watch"]
+
+    def test_rename_schedule(self, client, admin_headers):
+        anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"], "Draft")
+        resp = client.patch(f"/activation-schedules/{schedule['id']}", json={"name": "Full Activation"}, headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "Full Activation"
+
+    def test_delete_schedule_cascades_its_positions_and_shifts(self, client, admin_headers):
+        anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
+        position = client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
+        ).json()
+        resp = client.delete(f"/activation-schedules/{schedule['id']}", headers=admin_headers)
+        assert resp.status_code == 204
+        assert client.get(f"/nets/{anet['id']}/activation-schedules", headers=admin_headers).json() == []
+        # Cascaded, not just orphaned -- direct lookup 404s.
+        assert client.patch(f"/tactical-positions/{position['id']}", json={}, headers=admin_headers).status_code == 404
+
+    def test_non_member_cannot_create_schedule(self, client, admin_headers, user_headers):
+        anet = _ares_net(client, admin_headers)
+        resp = client.post(f"/nets/{anet['id']}/activation-schedules", json={"name": "Full Activation"}, headers=user_headers)
+        assert resp.status_code == 403
+
+    def test_create_schedule_position_ok(self, client, admin_headers):
+        anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
         resp = client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
             json={"tactical_callsign": "shelter 1", "location": "123 Main St", "assigned_callsign": "w1abc"},
             headers=admin_headers,
         )
@@ -600,95 +645,145 @@ class TestActivationRosterPlanning:
         assert position["tactical_callsign"] == "SHELTER 1"
         assert position["net_id"] == anet["id"]
         assert position["session_id"] is None
+        assert position["activation_schedule_id"] == schedule["id"]
         assert position["current_callsign"] is None
 
-    def test_planned_positions_listed_separately_from_live_ones(self, client, admin_headers):
-        # SHELTER 1 is queued *after* an activation is already live -- it's
-        # attachment happens only at session START time, so it stays in the
-        # planning list (queued for the *next* activation) rather than
-        # retroactively joining the one already running.
+    def test_schedule_positions_listed_separately_from_live_ones(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
+        client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
+        )
         activation = _activation_session(client, admin_headers, anet["id"])
         client.post(
             f"/sessions/{activation['id']}/tactical-positions",
-            json={"tactical_callsign": "SHELTER 2"},
-            headers=admin_headers,
+            json={"tactical_callsign": "SHELTER 2"}, headers=admin_headers,
         )
-        client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
-            headers=admin_headers,
-        )
-        planned = client.get(f"/nets/{anet['id']}/planned-tactical-positions", headers=admin_headers).json()
-        assert [p["tactical_callsign"] for p in planned] == ["SHELTER 1"]
+        scheduled = client.get(f"/activation-schedules/{schedule['id']}/tactical-positions", headers=admin_headers).json()
+        assert [p["tactical_callsign"] for p in scheduled] == ["SHELTER 1"]
         live = client.get(f"/sessions/{activation['id']}/tactical-positions", headers=admin_headers).json()
         assert "SHELTER 2" in [p["tactical_callsign"] for p in live]
         assert "SHELTER 1" not in [p["tactical_callsign"] for p in live]
 
-    def test_planned_position_attaches_when_activation_session_starts(self, client, admin_headers):
+    def test_chosen_schedule_copied_into_new_activation_session(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
-        planned = client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1", "assigned_callsign": "W1ABC"},
-            headers=admin_headers,
+        schedule = _schedule(client, admin_headers, anet["id"])
+        template_position = client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1", "assigned_callsign": "W1ABC"}, headers=admin_headers,
         ).json()
-        activation = _activation_session(client, admin_headers, anet["id"])
+        template_shift = client.post(
+            f"/activation-schedules/{schedule['id']}/net-control-shifts",
+            json={"callsign": "W2NEXT", "scheduled_start": "2026-09-01T14:00:00Z"}, headers=admin_headers,
+        ).json()
 
-        # Drained from the planning queue...
-        assert client.get(f"/nets/{anet['id']}/planned-tactical-positions", headers=admin_headers).json() == []
-        # ...and now live on the session that just started, unchanged otherwise.
-        live = client.get(f"/sessions/{activation['id']}/tactical-positions", headers=admin_headers).json()
-        shelter = next(p for p in live if p["tactical_callsign"] == "SHELTER 1")
-        assert shelter["id"] == planned["id"]
-        assert shelter["session_id"] == activation["id"]
-        assert shelter["assigned_callsign"] == "W1ABC"
-
-    def test_planned_position_not_attached_by_a_routine_session(self, client, admin_headers):
-        anet = _ares_net(client, admin_headers)
-        client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
+        resp = client.post(
+            f"/nets/{anet['id']}/sessions",
+            json={"is_activation": True, "activation_schedule_id": schedule["id"]},
             headers=admin_headers,
         )
-        _routine_session(client, admin_headers, anet["id"])
-        # Still queued -- only an activation session drains the plan.
-        planned = client.get(f"/nets/{anet['id']}/planned-tactical-positions", headers=admin_headers).json()
-        assert [p["tactical_callsign"] for p in planned] == ["SHELTER 1"]
+        assert resp.status_code == 201, resp.text
+        session = resp.json()
+
+        live_positions = client.get(f"/sessions/{session['id']}/tactical-positions", headers=admin_headers).json()
+        shelter = next(p for p in live_positions if p["tactical_callsign"] == "SHELTER 1")
+        assert shelter["session_id"] == session["id"]
+        assert shelter["activation_schedule_id"] is None
+        assert shelter["assigned_callsign"] == "W1ABC"
+        # A genuinely new row, not the template one reattached.
+        assert shelter["id"] != template_position["id"]
+
+        live_shifts = client.get(f"/sessions/{session['id']}/net-control-shifts", headers=admin_headers).json()
+        assert [s["callsign"] for s in live_shifts] == ["W2NEXT"]
+        assert live_shifts[0]["id"] != template_shift["id"]
+
+    def test_schedule_stays_reusable_after_being_applied(self, client, admin_headers):
+        """The key behavior change from the old one-time queue: applying a
+        schedule copies, it doesn't consume -- the schedule is still there,
+        unchanged, ready for the net's next activation."""
+        anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
+        client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
+        )
+        client.post(
+            f"/nets/{anet['id']}/sessions",
+            json={"is_activation": True, "activation_schedule_id": schedule["id"]},
+            headers=admin_headers,
+        )
+        still_there = client.get(f"/activation-schedules/{schedule['id']}/tactical-positions", headers=admin_headers).json()
+        assert [p["tactical_callsign"] for p in still_there] == ["SHELTER 1"]
+
+        # Applying it again to a second activation works exactly the same way.
+        resp2 = client.post(
+            f"/nets/{anet['id']}/sessions",
+            json={"is_activation": True, "activation_schedule_id": schedule["id"]},
+            headers=admin_headers,
+        )
+        session2 = resp2.json()
+        live2 = client.get(f"/sessions/{session2['id']}/tactical-positions", headers=admin_headers).json()
+        assert "SHELTER 1" in [p["tactical_callsign"] for p in live2]
+
+    def test_no_schedule_chosen_starts_empty(self, client, admin_headers):
+        anet = _ares_net(client, admin_headers)
+        _schedule(client, admin_headers, anet["id"])  # exists, but not chosen
+        resp = client.post(f"/nets/{anet['id']}/sessions", json={"is_activation": True}, headers=admin_headers)
+        session = resp.json()
+        live = client.get(f"/sessions/{session['id']}/tactical-positions", headers=admin_headers).json()
+        # Only the auto-created NET CONTROL position -- nothing pre-populated.
+        assert [p["tactical_callsign"] for p in live] == ["NET CONTROL"]
+
+    def test_activation_schedule_from_another_net_rejected(self, client, admin_headers):
+        anet1 = _ares_net(client, admin_headers, name="Net One")
+        anet2 = _ares_net(client, admin_headers, name="Net Two")
+        schedule = _schedule(client, admin_headers, anet2["id"])
+        resp = client.post(
+            f"/nets/{anet1['id']}/sessions",
+            json={"is_activation": True, "activation_schedule_id": schedule["id"]},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 404
+
+    def test_schedule_ignored_when_not_an_activation(self, client, admin_headers):
+        anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
+        client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
+        )
+        resp = client.post(
+            f"/nets/{anet['id']}/sessions",
+            json={"is_activation": False, "activation_schedule_id": schedule["id"]},
+            headers=admin_headers,
+        )
+        session = resp.json()
+        assert session["is_activation"] is False
 
     def test_sign_on_blocked_until_attached_to_a_session(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
-        planned = client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
-            headers=admin_headers,
+        schedule = _schedule(client, admin_headers, anet["id"])
+        template = client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
         ).json()
         resp = client.post(
-            f"/tactical-positions/{planned['id']}/sign-on",
+            f"/tactical-positions/{template['id']}/sign-on",
             json={"callsign": "W1ABC"},
             headers=admin_headers,
         )
         assert resp.status_code == 400
 
-    def test_delete_planned_position(self, client, admin_headers):
+    def test_edit_schedule_position(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
-        planned = client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
-            headers=admin_headers,
-        ).json()
-        resp = client.delete(f"/tactical-positions/{planned['id']}", headers=admin_headers)
-        assert resp.status_code == 204
-        assert client.get(f"/nets/{anet['id']}/planned-tactical-positions", headers=admin_headers).json() == []
-
-    def test_edit_planned_position(self, client, admin_headers):
-        anet = _ares_net(client, admin_headers)
-        planned = client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
-            headers=admin_headers,
+        schedule = _schedule(client, admin_headers, anet["id"])
+        template = client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
         ).json()
         resp = client.patch(
-            f"/tactical-positions/{planned['id']}",
+            f"/tactical-positions/{template['id']}",
             json={"location": "123 Main St", "assigned_callsign": "w1abc"},
             headers=admin_headers,
         )
@@ -696,27 +791,31 @@ class TestActivationRosterPlanning:
         assert resp.json()["location"] == "123 Main St"
         assert resp.json()["assigned_callsign"] == "W1ABC"
 
-    def test_non_member_cannot_create_planned_position(self, client, admin_headers, user_headers):
+    def test_delete_schedule_position(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
+        template = client.post(
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=admin_headers,
+        ).json()
+        resp = client.delete(f"/tactical-positions/{template['id']}", headers=admin_headers)
+        assert resp.status_code == 204
+        assert client.get(f"/activation-schedules/{schedule['id']}/tactical-positions", headers=admin_headers).json() == []
+
+    def test_non_member_cannot_create_schedule_position(self, client, admin_headers, user_headers):
+        anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
         resp = client.post(
-            f"/nets/{anet['id']}/planned-tactical-positions",
-            json={"tactical_callsign": "SHELTER 1"},
-            headers=user_headers,
+            f"/activation-schedules/{schedule['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"}, headers=user_headers,
         )
         assert resp.status_code == 403
 
-    def test_create_planned_shift_requires_ares_net(self, client, admin_headers, net):
-        resp = client.post(
-            f"/nets/{net['id']}/planned-net-control-shifts",
-            json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"},
-            headers=admin_headers,
-        )
-        assert resp.status_code == 400
-
-    def test_create_planned_shift_ok(self, client, admin_headers):
+    def test_create_schedule_shift_ok(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
         resp = client.post(
-            f"/nets/{anet['id']}/planned-net-control-shifts",
+            f"/activation-schedules/{schedule['id']}/net-control-shifts",
             json={"callsign": "w1abc", "scheduled_start": "2026-09-01T14:00:00Z"},
             headers=admin_headers,
         )
@@ -725,37 +824,24 @@ class TestActivationRosterPlanning:
         assert shift["callsign"] == "W1ABC"
         assert shift["net_id"] == anet["id"]
         assert shift["session_id"] is None
+        assert shift["activation_schedule_id"] == schedule["id"]
 
-    def test_planned_shift_attaches_when_activation_session_starts(self, client, admin_headers):
+    def test_delete_schedule_shift(self, client, admin_headers):
         anet = _ares_net(client, admin_headers)
-        planned = client.post(
-            f"/nets/{anet['id']}/planned-net-control-shifts",
-            json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"},
-            headers=admin_headers,
+        schedule = _schedule(client, admin_headers, anet["id"])
+        template = client.post(
+            f"/activation-schedules/{schedule['id']}/net-control-shifts",
+            json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"}, headers=admin_headers,
         ).json()
-        activation = _activation_session(client, admin_headers, anet["id"])
-
-        assert client.get(f"/nets/{anet['id']}/planned-net-control-shifts", headers=admin_headers).json() == []
-        live = client.get(f"/sessions/{activation['id']}/net-control-shifts", headers=admin_headers).json()
-        assert [s["id"] for s in live] == [planned["id"]]
-        assert live[0]["session_id"] == activation["id"]
-
-    def test_delete_planned_shift(self, client, admin_headers):
-        anet = _ares_net(client, admin_headers)
-        planned = client.post(
-            f"/nets/{anet['id']}/planned-net-control-shifts",
-            json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"},
-            headers=admin_headers,
-        ).json()
-        resp = client.delete(f"/net-control-shifts/{planned['id']}", headers=admin_headers)
+        resp = client.delete(f"/net-control-shifts/{template['id']}", headers=admin_headers)
         assert resp.status_code == 204
-        assert client.get(f"/nets/{anet['id']}/planned-net-control-shifts", headers=admin_headers).json() == []
+        assert client.get(f"/activation-schedules/{schedule['id']}/net-control-shifts", headers=admin_headers).json() == []
 
-    def test_non_member_cannot_create_planned_shift(self, client, admin_headers, user_headers):
+    def test_non_member_cannot_create_schedule_shift(self, client, admin_headers, user_headers):
         anet = _ares_net(client, admin_headers)
+        schedule = _schedule(client, admin_headers, anet["id"])
         resp = client.post(
-            f"/nets/{anet['id']}/planned-net-control-shifts",
-            json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"},
-            headers=user_headers,
+            f"/activation-schedules/{schedule['id']}/net-control-shifts",
+            json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"}, headers=user_headers,
         )
         assert resp.status_code == 403

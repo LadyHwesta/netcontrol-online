@@ -2,23 +2,24 @@
 Tactical Positions — ARES/ACES activation mode (issue #21), plus the Net
 Control rotation schedule (issue #21 follow-up).
 
-Not a reusable net-level template: different activations commonly need an
-entirely different tactical roster. A live position/shift only ever acts on
-a session explicitly started as an activation (NetSession.is_activation) —
-a routine session on an ARES net is rejected the same as a non-ARES net, so
-"is_ares" alone never turns this on.
+A live position/shift only ever acts on a session explicitly started as an
+activation (NetSession.is_activation) — a routine session on an ARES net is
+rejected the same as a non-ARES net, so "is_ares" alone never turns this on.
 
-Pre-activation planning (issue follow-up): a position/shift can also be
-created ahead of time, before any session exists, via the /nets/{id}/planned-*
-endpoints below — these just set net_id with session_id left NULL. The
-moment the net's next activation session is started, start_session() (in
-routers/sessions.py) attaches every such row to it by filling in session_id,
-at which point it's indistinguishable from one created live. Every endpoint
-below that takes a position_id/shift_id (get/update/delete/sign-on/off)
-works the same whether the row is planned or already attached to a session
-— only the two list/create endpoints are split by which state they act on,
-since "list this net's still-unattached plan" and "list this session's live
-roster" are genuinely different queries.
+Named Activation Schedules (issue follow-up): a net can save several
+reusable presets (models.ActivationSchedule — "Full Activation", "Weather
+Watch", etc.), each with its own tactical positions and NC rotation shifts,
+managed via the /activation-schedules/* endpoints below. Starting an
+activation session optionally picks one from a dropdown (SessionCreate.
+activation_schedule_id in routers/sessions.py); start_session() then COPIES
+that schedule's rows into new live rows for the session, leaving the
+schedule itself untouched and reusable for the net's next activation — "no
+schedule chosen" starts empty (aside from the always-auto-created Net
+Control position) same as before this existed. Every endpoint below that
+takes a position_id/shift_id (get/update/delete/sign-on/off) works the same
+whether the row is live (session_id set) or a template member of a schedule
+(activation_schedule_id set) — see TacticalPosition's docstring in models.py
+for the exact split.
 
 Signing on creates a brand-new Checkin row every time rather than reusing
 add_checkin() — that endpoint blocks a second checkin for the same
@@ -32,11 +33,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import Checkin, Net, NetControlShift, NetSession, TacticalPosition, User, utcnow
+from models import ActivationSchedule, Checkin, Net, NetControlShift, NetSession, TacticalPosition, User, utcnow
 from routers.deps import get_current_user
 from routers.helpers import _get_net_for_user, _get_session_for_user
 from routers.schemas import CheckinOut
@@ -63,7 +64,8 @@ class TacticalPositionCreate(BaseModel):
 class TacticalPositionOut(BaseModel):
     id: int
     net_id: int
-    session_id: Optional[int] = None   # None = planned, not yet attached to a session
+    session_id: Optional[int] = None             # set = live, on a real session
+    activation_schedule_id: Optional[int] = None  # set = template member of a named schedule
     tactical_callsign: str
     location: Optional[str]
     assigned_callsign: Optional[str]
@@ -124,11 +126,37 @@ class NetControlShiftCreate(BaseModel):
 class NetControlShiftOut(BaseModel):
     id: int
     net_id: int
-    session_id: Optional[int] = None   # None = planned, not yet attached to a session
+    session_id: Optional[int] = None             # set = live, on a real session
+    activation_schedule_id: Optional[int] = None  # set = template member of a named schedule
     callsign: str
     name: Optional[str]
     scheduled_start: datetime
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ActivationScheduleCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def name_required(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("name is required")
+        return v
+
+
+class ActivationScheduleOut(BaseModel):
+    id: int
+    net_id: int
+    name: str
+    created_at: datetime
+    # Counts for the schedule picker/list -- lets the UI show "3 positions, 1
+    # shift" without a separate round trip per schedule.
+    tactical_position_count: int = 0
+    net_control_shift_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -145,16 +173,35 @@ async def _get_activation_session(session_id: int, user: User, db: AsyncSession)
 
 
 async def _get_activation_net(net_id: int, user: User, db: AsyncSession) -> Net:
-    """Fetch a net for pre-activation planning (issue follow-up) — the tactical
-    roster / NC rotation queued up before the next activation session exists.
-    Same access level as live tactical-position management above (plain net
-    access, not edit-rights specifically — planning ahead is as much a normal
-    operator task as filling positions in once the net is live), just without
-    requiring a session to already exist."""
+    """Fetch a net for Activation Schedule management (issue follow-up) —
+    named, reusable presets of tactical positions / NC rotation, managed
+    ahead of any activation session existing. Same access level as live
+    tactical-position management above (plain net access, not edit-rights
+    specifically — planning ahead is as much a normal operator task as
+    filling positions in once the net is live)."""
     net = await _get_net_for_user(net_id, user, db)
     if not net.is_ares:
-        raise HTTPException(400, "Tactical positions require an ARES/ACES net")
+        raise HTTPException(400, "Activation schedules require an ARES/ACES net")
     return net
+
+
+async def _get_schedule_for_user(schedule_id: int, user: User, db: AsyncSession) -> ActivationSchedule:
+    schedule = (await db.execute(select(ActivationSchedule).filter(ActivationSchedule.id == schedule_id))).scalar_one_or_none()
+    if not schedule:
+        raise HTTPException(404, "Activation schedule not found")
+    await _get_net_for_user(schedule.net_id, user, db)  # raises 403/404 if no access
+    return schedule
+
+
+async def _schedule_to_out(schedule: ActivationSchedule, db: AsyncSession) -> ActivationScheduleOut:
+    out = ActivationScheduleOut.model_validate(schedule)
+    out.tactical_position_count = (await db.execute(
+        select(func.count(TacticalPosition.id)).filter(TacticalPosition.activation_schedule_id == schedule.id)
+    )).scalar()
+    out.net_control_shift_count = (await db.execute(
+        select(func.count(NetControlShift.id)).filter(NetControlShift.activation_schedule_id == schedule.id)
+    )).scalar()
+    return out
 
 
 async def _get_position_for_user(position_id: int, user: User, db: AsyncSession) -> TacticalPosition:
@@ -225,25 +272,59 @@ async def create_tactical_position(session_id: int, data: TacticalPositionCreate
     return await _position_to_out(position, db)
 
 
-@router.get("/nets/{net_id}/planned-tactical-positions", response_model=list[TacticalPositionOut])
-async def list_planned_tactical_positions(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """The tactical roster queued up for this net's *next* activation session —
-    not attached to any session yet (issue follow-up)."""
+@router.get("/nets/{net_id}/activation-schedules", response_model=list[ActivationScheduleOut])
+async def list_activation_schedules(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     net = await _get_activation_net(net_id, current_user, db)
+    schedules = (
+        (await db.execute(select(ActivationSchedule).filter(ActivationSchedule.net_id == net.id).order_by(ActivationSchedule.name))).scalars().all()
+    )
+    return [await _schedule_to_out(s, db) for s in schedules]
+
+
+@router.post("/nets/{net_id}/activation-schedules", response_model=ActivationScheduleOut, status_code=201)
+async def create_activation_schedule(net_id: int, data: ActivationScheduleCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    net = await _get_activation_net(net_id, current_user, db)
+    schedule = ActivationSchedule(net_id=net.id, name=data.name)
+    db.add(schedule)
+    await db.commit()
+    await db.refresh(schedule)
+    return await _schedule_to_out(schedule, db)
+
+
+@router.patch("/activation-schedules/{schedule_id}", response_model=ActivationScheduleOut)
+async def rename_activation_schedule(schedule_id: int, data: ActivationScheduleCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    schedule = await _get_schedule_for_user(schedule_id, current_user, db)
+    schedule.name = data.name
+    await db.commit()
+    await db.refresh(schedule)
+    return await _schedule_to_out(schedule, db)
+
+
+@router.delete("/activation-schedules/{schedule_id}", status_code=204)
+async def delete_activation_schedule(schedule_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    schedule = await _get_schedule_for_user(schedule_id, current_user, db)
+    await db.delete(schedule)  # cascades its tactical_positions/net_control_shifts rows
+    await db.commit()
+
+
+@router.get("/activation-schedules/{schedule_id}/tactical-positions", response_model=list[TacticalPositionOut])
+async def list_schedule_tactical_positions(schedule_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    schedule = await _get_schedule_for_user(schedule_id, current_user, db)
     positions = (
         (await db.execute(select(TacticalPosition).filter(
-            TacticalPosition.net_id == net.id, TacticalPosition.session_id.is_(None),
+            TacticalPosition.activation_schedule_id == schedule.id,
         ).order_by(TacticalPosition.created_at))).scalars().all()
     )
     return [await _position_to_out(p, db) for p in positions]
 
 
-@router.post("/nets/{net_id}/planned-tactical-positions", response_model=TacticalPositionOut, status_code=201)
-async def create_planned_tactical_position(net_id: int, data: TacticalPositionCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    net = await _get_activation_net(net_id, current_user, db)
+@router.post("/activation-schedules/{schedule_id}/tactical-positions", response_model=TacticalPositionOut, status_code=201)
+async def create_schedule_tactical_position(schedule_id: int, data: TacticalPositionCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    schedule = await _get_schedule_for_user(schedule_id, current_user, db)
     position = TacticalPosition(
-        net_id=net.id,
+        net_id=schedule.net_id,
         session_id=None,
+        activation_schedule_id=schedule.id,
         tactical_callsign=data.tactical_callsign,
         location=(data.location or "").strip() or None,
         assigned_callsign=(data.assigned_callsign or "").strip().upper() or None,
@@ -371,25 +452,24 @@ async def create_net_control_shift(session_id: int, data: NetControlShiftCreate,
     return NetControlShiftOut.model_validate(shift)
 
 
-@router.get("/nets/{net_id}/planned-net-control-shifts", response_model=list[NetControlShiftOut])
-async def list_planned_net_control_shifts(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """The Net Control rotation queued up for this net's *next* activation
-    session — not attached to any session yet (issue follow-up)."""
-    net = await _get_activation_net(net_id, current_user, db)
+@router.get("/activation-schedules/{schedule_id}/net-control-shifts", response_model=list[NetControlShiftOut])
+async def list_schedule_net_control_shifts(schedule_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    schedule = await _get_schedule_for_user(schedule_id, current_user, db)
     shifts = (
         (await db.execute(select(NetControlShift).filter(
-            NetControlShift.net_id == net.id, NetControlShift.session_id.is_(None),
+            NetControlShift.activation_schedule_id == schedule.id,
         ).order_by(NetControlShift.scheduled_start))).scalars().all()
     )
     return [NetControlShiftOut.model_validate(s) for s in shifts]
 
 
-@router.post("/nets/{net_id}/planned-net-control-shifts", response_model=NetControlShiftOut, status_code=201)
-async def create_planned_net_control_shift(net_id: int, data: NetControlShiftCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    net = await _get_activation_net(net_id, current_user, db)
+@router.post("/activation-schedules/{schedule_id}/net-control-shifts", response_model=NetControlShiftOut, status_code=201)
+async def create_schedule_net_control_shift(schedule_id: int, data: NetControlShiftCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    schedule = await _get_schedule_for_user(schedule_id, current_user, db)
     shift = NetControlShift(
-        net_id=net.id,
+        net_id=schedule.net_id,
         session_id=None,
+        activation_schedule_id=schedule.id,
         callsign=data.callsign,
         name=(data.name or "").strip() or None,
         scheduled_start=data.scheduled_start,

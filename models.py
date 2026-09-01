@@ -247,37 +247,71 @@ class NetSession(Base):
         return f"<NetSession id={self.id} net={self.net_id}>"
 
 
+class ActivationSchedule(Base):
+    """A named, reusable preset of tactical positions + Net Control rotation for
+    an ARES/ACES net's activations (issue follow-up) — e.g. "Full Activation",
+    "Weather Watch", "Shelter Ops Only". A net can have several side by side;
+    starting an activation session picks one (or none) from a dropdown.
+    Applying one COPIES its TacticalPosition/NetControlShift rows into new live
+    rows for that session (see start_session()) — the schedule itself is left
+    untouched and stays available for the net's next activation, unlike the
+    single one-time queue this replaced."""
+    __tablename__ = "activation_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    # ORM-level cascade (not just the DB's ON DELETE CASCADE on the FK columns
+    # below) so deleting a schedule reliably deletes its template rows on
+    # every backend this app runs on, including SQLite in tests, which doesn't
+    # enforce FK-level cascades by default -- same reasoning as every other
+    # parent/children pair in this file (e.g. NetSession.tactical_positions).
+    tactical_positions = relationship("TacticalPosition", cascade="all, delete-orphan")
+    net_control_shifts = relationship("NetControlShift", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<ActivationSchedule {self.name!r} net={self.net_id}>"
+
+
 class TacticalPosition(Base):
     """A tactical assignment slot for one ARES/ACES activation session (issue #21)
-    — e.g. "SHELTER 1". Re-created fresh each activation, not a reusable net-level
-    template: different activations commonly need entirely different tactical
-    rosters. Who currently holds it, and its shift history, are derived from
-    Checkin rows (tactical_position_id + signed_off_at), not stored here.
+    — e.g. "SHELTER 1". Who currently holds it, and its shift history, are
+    derived from Checkin rows (tactical_position_id + signed_off_at), not
+    stored here.
 
-    session_id is nullable (issue follow-up) so a position can be pre-planned
-    before the activation it's for has actually been started — net.is_ares alone
-    gates that, same as everything else here. A "planned" row has session_id NULL
-    and only net_id set; when the net's next activation session is started,
-    start_session() attaches every such row by setting its session_id, at which
-    point it behaves exactly like one created live. This is a one-time queue, not
-    a persistent template: once attached it belongs to that session like anything
-    else added during it, and planning starts fresh for the next activation."""
+    A row is exactly one of two things, distinguished by which of session_id /
+    activation_schedule_id is set (issue follow-up):
+      - LIVE: session_id set, activation_schedule_id NULL — a real position on
+        a running/ended activation session, same as always.
+      - TEMPLATE MEMBER: session_id NULL, activation_schedule_id set — belongs
+        to a named, reusable ActivationSchedule (see its docstring). Starting
+        an activation session with a schedule chosen COPIES each of its
+        template-member rows into new live rows (net_id/tactical_callsign/
+        location/assigned_callsign/assigned_name/scheduled_start carried over,
+        activation_schedule_id left NULL on the copy) — the template rows
+        themselves are untouched and reusable next time.
+    net_id is set on every row either way, so access control never needs to
+    join through session or schedule to find the owning net.
+
+    Auto-created (one per activation session) to track Net Control itself through the
+    same sign-on/off/shift-history mechanism as any other position — NCS commonly hands
+    off mid-activation, unlike the single day-level schedule sign-up routine sessions use.
+    Not user-creatable and not deletable; enforced in main.py, not here. Never a template
+    member (see above) -- its initial occupant already comes from the existing day-level
+    Net Control Signup schedule, which is plannable pre-net-start."""
     __tablename__ = "tactical_positions"
 
     id = Column(Integer, primary_key=True, index=True)
     net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False)
     session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="CASCADE"), nullable=True)
+    activation_schedule_id = Column(Integer, ForeignKey("activation_schedules.id", ondelete="CASCADE"), nullable=True)
     tactical_callsign = Column(String(50), nullable=False)   # e.g. "SHELTER 1"
     location = Column(String(200), nullable=True)
     assigned_callsign = Column(String(12), nullable=True)    # planned/expected operator
     assigned_name = Column(String(100), nullable=True)
     scheduled_start = Column(UTCDateTime, nullable=True)   # planned shift sign-on time
-    # Auto-created (one per activation session) to track Net Control itself through the
-    # same sign-on/off/shift-history mechanism as any other position — NCS commonly hands
-    # off mid-activation, unlike the single day-level schedule sign-up routine sessions use.
-    # Not user-creatable and not deletable; enforced in main.py, not here. Never planned
-    # ahead of time (see class docstring) -- its initial occupant already comes from the
-    # existing day-level Net Control Signup schedule, which is plannable pre-net-start.
     is_net_control = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
@@ -298,15 +332,14 @@ class NetControlShift(Base):
     table is a forward-looking queue, not a permanent log; the actual handoff, and
     its history, lives on the TacticalPosition/Checkin side as always.
 
-    session_id is nullable for the same pre-planning reason as
-    TacticalPosition.session_id above (issue follow-up) -- a "planned" shift has
-    session_id NULL and only net_id set, and gets attached (session_id filled in)
-    by start_session() the moment the net's next activation session begins."""
+    session_id / activation_schedule_id follow the exact same LIVE-vs-TEMPLATE-MEMBER
+    split as TacticalPosition above -- see its docstring."""
     __tablename__ = "net_control_shifts"
 
     id = Column(Integer, primary_key=True, index=True)
     net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False)
     session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="CASCADE"), nullable=True)
+    activation_schedule_id = Column(Integer, ForeignKey("activation_schedules.id", ondelete="CASCADE"), nullable=True)
     callsign = Column(String(12), nullable=False)
     name = Column(String(100), nullable=True)
     scheduled_start = Column(UTCDateTime, nullable=False)

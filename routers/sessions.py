@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import get_db
-from models import Checkin, Net, NetControlShift, NetSession, TacticalPosition, TrafficMessage, User
+from models import ActivationSchedule, Checkin, Net, NetControlShift, NetSession, TacticalPosition, TrafficMessage, User
 from routers.deps import get_current_user
 from routers.helpers import _get_net_for_user, _get_session_for_user, _preferred_names_for_net, _tactical_callsigns_for_session
 from routers.schedules import _duty_labels_for_session
@@ -33,6 +33,12 @@ class SessionCreate(BaseModel):
     # is is_ares. Set once at start; enables tactical positions and the
     # simplified roster for this session only, not every session on the net.
     is_activation: bool = False
+    # Named Activation Schedule to pre-populate this session's tactical roster
+    # from (issue follow-up), or None for an activation that doesn't fit a
+    # saved preset. Ignored unless is_activation is also true. See
+    # models.ActivationSchedule's docstring -- this COPIES the schedule's rows
+    # into new live ones, leaving the schedule itself reusable next time.
+    activation_schedule_id: Optional[int] = None
     # Offline net entry (issue #20) — backfilling a net that already happened
     # with no access to the web tool. occurred_at is required when is_offline
     # is set; it becomes both started_at and ended_at (no live view, matches
@@ -110,6 +116,13 @@ async def start_session(net_id: int, data: SessionCreate, current_user: User = D
     net = await _get_net_for_user(net_id, current_user, db)
     if data.is_offline and not data.occurred_at:
         raise HTTPException(400, "occurred_at is required for an offline net entry")
+    chosen_schedule = None
+    if data.is_activation and net.is_ares and data.activation_schedule_id:
+        chosen_schedule = (await db.execute(select(ActivationSchedule).filter(
+            ActivationSchedule.id == data.activation_schedule_id, ActivationSchedule.net_id == net_id,
+        ))).scalar_one_or_none()
+        if not chosen_schedule:
+            raise HTTPException(404, "Activation schedule not found for this net")
     session = NetSession(
         net_id=net_id, operator_id=current_user.id, name=data.name, notes=data.notes,
         broadcaster_override_callsign=(data.broadcaster_override_callsign or "").strip().upper() or None,
@@ -162,23 +175,31 @@ async def start_session(net_id: int, data: SessionCreate, current_user: User = D
             ))
             await db.commit()
 
-        # Attach any tactical positions / NC rotation shifts pre-planned for this
-        # net before the activation started (issue follow-up) -- a one-time queue,
-        # not a persistent template: this drains it into the session that just
-        # started, exactly as if each row had been created live just now, and
-        # planning starts empty again for the net's next activation.
-        planned_positions = (await db.execute(select(TacticalPosition).filter(
-            TacticalPosition.net_id == net_id, TacticalPosition.session_id.is_(None),
-        ))).scalars().all()
-        for p in planned_positions:
-            p.session_id = session.id
-        planned_shifts = (await db.execute(select(NetControlShift).filter(
-            NetControlShift.net_id == net_id, NetControlShift.session_id.is_(None),
-        ))).scalars().all()
-        for s in planned_shifts:
-            s.session_id = session.id
-        if planned_positions or planned_shifts:
-            await db.commit()
+        # Populate from the chosen Activation Schedule, if any (issue follow-up)
+        # -- COPY each of its tactical positions / NC rotation shifts into new
+        # live rows for this session; the schedule itself is left untouched so
+        # it's still there, unchanged, for the net's next activation.
+        if chosen_schedule:
+            template_positions = (await db.execute(select(TacticalPosition).filter(
+                TacticalPosition.activation_schedule_id == chosen_schedule.id,
+            ))).scalars().all()
+            for p in template_positions:
+                db.add(TacticalPosition(
+                    net_id=net_id, session_id=session.id,
+                    tactical_callsign=p.tactical_callsign, location=p.location,
+                    assigned_callsign=p.assigned_callsign, assigned_name=p.assigned_name,
+                    scheduled_start=p.scheduled_start,
+                ))
+            template_shifts = (await db.execute(select(NetControlShift).filter(
+                NetControlShift.activation_schedule_id == chosen_schedule.id,
+            ))).scalars().all()
+            for s in template_shifts:
+                db.add(NetControlShift(
+                    net_id=net_id, session_id=session.id,
+                    callsign=s.callsign, name=s.name, scheduled_start=s.scheduled_start,
+                ))
+            if template_positions or template_shifts:
+                await db.commit()
 
     out = SessionOut.model_validate(session)
     out.checkin_count = 0

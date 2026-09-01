@@ -286,7 +286,7 @@ function renderSessions(sessions) {
   }).join('') + '</tbody></table>';
 }
 
-function toggleStartSessionForm() {
+async function toggleStartSessionForm() {
   const f = document.getElementById('start-session-form');
   f.style.display = f.style.display === 'none' ? '' : 'none';
   if (f.style.display !== 'none') {
@@ -302,7 +302,31 @@ function toggleStartSessionForm() {
     // ARES/ACES activation checkbox — only offered for ARES-enabled nets (issue #21)
     document.getElementById('start-session-activation-group').style.display = (net && net.is_ares) ? '' : 'none';
     document.getElementById('new-session-is-activation').checked = false;
+    document.getElementById('new-session-schedule-group').style.display = 'none';
+    if (net && net.is_ares) await populateNewSessionScheduleSelect(currentNetId);
   }
+}
+
+// Reveals the Activation Schedule dropdown once "🚨 ARES/ACES Activation" is
+// checked (issue follow-up) -- populated once when the form opens above, just
+// shown/hidden here rather than re-fetched on every checkbox toggle.
+function onNewSessionActivationToggle() {
+  document.getElementById('new-session-schedule-group').style.display =
+    document.getElementById('new-session-is-activation').checked ? '' : 'none';
+}
+
+async function populateNewSessionScheduleSelect(netId) {
+  const sel = document.getElementById('new-session-activation-schedule');
+  sel.innerHTML = `<option value="">${t('— None —')}</option>`;
+  try {
+    const schedules = await apiFetch(`/nets/${netId}/activation-schedules`);
+    schedules.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      sel.appendChild(opt);
+    });
+  } catch {}
 }
 
 async function startSession() {
@@ -310,10 +334,13 @@ async function startSession() {
   const broadcaster_override_callsign = document.getElementById('new-session-broadcaster-callsign').value.trim().toUpperCase() || null;
   const broadcaster_override_name = document.getElementById('new-session-broadcaster-name').value.trim() || null;
   const is_activation = document.getElementById('new-session-is-activation').checked;
+  const activation_schedule_id = is_activation
+    ? (parseInt(document.getElementById('new-session-activation-schedule').value, 10) || null)
+    : null;
   try {
     const s = await apiFetch(`/nets/${currentNetId}/sessions`, {
       method: 'POST',
-      body: JSON.stringify({ name, broadcaster_override_callsign, broadcaster_override_name, is_activation }),
+      body: JSON.stringify({ name, broadcaster_override_callsign, broadcaster_override_name, is_activation, activation_schedule_id }),
     });
     document.getElementById('new-session-name').value = '';
     document.getElementById('new-session-broadcaster-callsign').value = '';

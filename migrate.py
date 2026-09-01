@@ -543,6 +543,40 @@ MIGRATIONS = [
      "ALTER TABLE net_control_shifts ALTER COLUMN net_id SET NOT NULL"),
     ("net_control_shifts: session_id becomes optional (planned rows)",
      "ALTER TABLE net_control_shifts ALTER COLUMN session_id DROP NOT NULL"),
+
+    # ── Named, reusable Activation Schedules (issue follow-up) — replaces the
+    # single implicit one-time planning queue above with multiple named
+    # presets a net admin picks from when starting an activation. Any row
+    # already queued under the old model (session_id NULL, no schedule) is
+    # backfilled into an auto-created "Migrated Plan" schedule per net rather
+    # than silently orphaned/lost.
+    ("table: activation_schedules",
+     """CREATE TABLE IF NOT EXISTS activation_schedules (
+         id SERIAL PRIMARY KEY,
+         net_id INTEGER NOT NULL REFERENCES nets(id) ON DELETE CASCADE,
+         name VARCHAR(100) NOT NULL,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""),
+    ("tactical_positions: activation_schedule_id column",
+     "ALTER TABLE tactical_positions ADD COLUMN IF NOT EXISTS activation_schedule_id INTEGER REFERENCES activation_schedules(id) ON DELETE CASCADE"),
+    ("net_control_shifts: activation_schedule_id column",
+     "ALTER TABLE net_control_shifts ADD COLUMN IF NOT EXISTS activation_schedule_id INTEGER REFERENCES activation_schedules(id) ON DELETE CASCADE"),
+    ("activation_schedules: create 'Migrated Plan' for nets with orphaned planned rows",
+     """INSERT INTO activation_schedules (net_id, name, created_at)
+        SELECT DISTINCT net_id, 'Migrated Plan', NOW() FROM (
+            SELECT net_id FROM tactical_positions WHERE session_id IS NULL AND activation_schedule_id IS NULL
+            UNION
+            SELECT net_id FROM net_control_shifts WHERE session_id IS NULL AND activation_schedule_id IS NULL
+        ) orphaned"""),
+    ("tactical_positions: attach orphaned planned rows to 'Migrated Plan'",
+     """UPDATE tactical_positions p SET activation_schedule_id = sch.id
+        FROM activation_schedules sch
+        WHERE p.session_id IS NULL AND p.activation_schedule_id IS NULL
+          AND sch.net_id = p.net_id AND sch.name = 'Migrated Plan'"""),
+    ("net_control_shifts: attach orphaned planned rows to 'Migrated Plan'",
+     """UPDATE net_control_shifts h SET activation_schedule_id = sch.id
+        FROM activation_schedules sch
+        WHERE h.session_id IS NULL AND h.activation_schedule_id IS NULL
+          AND sch.net_id = h.net_id AND sch.name = 'Migrated Plan'"""),
 ]
 
 # ---------------------------------------------------------------------------

@@ -320,7 +320,7 @@ async function editNet(id) {
   // not edit-rights specifically), but only worth showing at all for an
   // ARES/ACES net.
   document.getElementById('net-form-tab-tactical-btn').style.display = n.is_ares ? '' : 'none';
-  if (n.is_ares) await loadActivationRoster(id);
+  if (n.is_ares) await loadActivationSchedules(id);
 }
 
 async function saveNet() {
@@ -493,24 +493,100 @@ onEnter(['net-name', 'net-freq', 'net-dmr-tg', 'net-broadcast-label', 'net-remin
          'aprs-fi-key', 'aprs-filter'], saveNet);
 
 // ============================================================
-// ACTIVATION ROSTER PLANNING (issue follow-up) — pre-activation tactical
-// positions / Net Control rotation, queued up for an ARES/ACES net before its
-// next activation session exists. Mirrors the live versions of these lists
-// (checkins.js's Station Schedule tab) but reads/writes the net-scoped
-// /nets/{id}/planned-* endpoints instead of the session-scoped ones — the
-// backend attaches every row here to whichever activation session is started
-// next, at which point it's just a normal live position/shift (see
-// routers/tactical.py and routers/sessions.py's start_session()).
+// ACTIVATION SCHEDULES (issue follow-up) — named, reusable presets of
+// tactical positions / Net Control rotation for an ARES/ACES net, managed
+// ahead of any activation session existing. Starting an activation session
+// later picks one from a dropdown (static/js/sessions.js) or none; the
+// backend COPIES the chosen schedule's rows into new live ones for that
+// session (routers/sessions.py's start_session()) -- the schedule itself is
+// left untouched and reusable next time (routers/tactical.py). The
+// position/shift mini-forms below mirror the live versions of these lists
+// (checkins.js's Station Schedule tab), just scoped to whichever schedule
+// is currently selected instead of a live session.
 // ============================================================
 
-async function loadActivationRoster(netId) {
+let currentActivationScheduleId = null;
+
+async function loadActivationSchedules(netId) {
+  currentActivationScheduleId = null;
+  document.getElementById('activation-schedule-detail').style.display = 'none';
+  const sel = document.getElementById('activation-schedule-select');
+  let schedules = [];
+  try { schedules = await apiFetch(`/nets/${netId}/activation-schedules`); } catch {}
+  sel.innerHTML = `<option value="">${t('— Select a schedule —')}</option>` + schedules.map(s =>
+    `<option value="${s.id}" data-name="${esc(s.name)}">${esc(s.name)} (${s.tactical_position_count + s.net_control_shift_count})</option>`
+  ).join('');
+  document.getElementById('activation-schedule-empty').style.display = schedules.length ? 'none' : '';
+}
+
+function onActivationScheduleSelectChange() {
+  const sel = document.getElementById('activation-schedule-select');
+  const id = sel.value;
+  currentActivationScheduleId = id ? parseInt(id, 10) : null;
+  if (!currentActivationScheduleId) {
+    document.getElementById('activation-schedule-detail').style.display = 'none';
+    return;
+  }
+  document.getElementById('activation-schedule-name-label').textContent = sel.options[sel.selectedIndex].dataset.name;
+  document.getElementById('activation-schedule-detail').style.display = '';
+  loadScheduleRoster(currentActivationScheduleId);
+}
+
+async function createActivationSchedule() {
+  if (!editNetId) return;
+  const name = prompt(t('Name this schedule (e.g. "Full Activation", "Weather Watch"):'));
+  if (name === null) return;
+  if (!name.trim()) return toast(t('Name required'), 'error');
+  try {
+    const schedule = await apiFetch(`/nets/${editNetId}/activation-schedules`, {
+      method: 'POST', body: JSON.stringify({ name: name.trim() }),
+    });
+    await loadActivationSchedules(editNetId);
+    document.getElementById('activation-schedule-select').value = schedule.id;
+    onActivationScheduleSelectChange();
+    toast(t('Schedule created'), 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function renameActivationSchedule() {
+  if (!currentActivationScheduleId) return;
+  const current = document.getElementById('activation-schedule-name-label').textContent;
+  const name = prompt(t('Rename this schedule:'), current);
+  if (name === null) return;
+  if (!name.trim()) return toast(t('Name required'), 'error');
+  try {
+    await apiFetch(`/activation-schedules/${currentActivationScheduleId}`, {
+      method: 'PATCH', body: JSON.stringify({ name: name.trim() }),
+    });
+    const id = currentActivationScheduleId;
+    await loadActivationSchedules(editNetId);
+    document.getElementById('activation-schedule-select').value = id;
+    onActivationScheduleSelectChange();
+    toast(t('Schedule renamed'), 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteActivationSchedule() {
+  if (!currentActivationScheduleId) return;
+  if (!confirm(t('Delete this schedule and everything queued in it? This cannot be undone.'))) return;
+  try {
+    await apiFetch(`/activation-schedules/${currentActivationScheduleId}`, { method: 'DELETE' });
+    toast(t('Schedule deleted'), 'success');
+    await loadActivationSchedules(editNetId);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadScheduleRoster(scheduleId) {
   let positions = [], shifts = [];
-  try { positions = await apiFetch(`/nets/${netId}/planned-tactical-positions`); } catch {}
-  try { shifts = await apiFetch(`/nets/${netId}/planned-net-control-shifts`); } catch {}
+  try { positions = await apiFetch(`/activation-schedules/${scheduleId}/tactical-positions`); } catch {}
+  try { shifts = await apiFetch(`/activation-schedules/${scheduleId}/net-control-shifts`); } catch {}
   renderPlannedTacticalPositions(positions);
   renderPlannedNetControlShifts(shifts);
   setDefaultMonthDay('plan-tac-month', 'plan-tac-day');
   setDefaultMonthDay('plan-nc-month', 'plan-nc-day');
+  // Keep the dropdown's "(N)" item count in sync without a full reload/reselect.
+  const opt = document.querySelector(`#activation-schedule-select option[value="${scheduleId}"]`);
+  if (opt) opt.textContent = `${opt.dataset.name} (${positions.length + shifts.length})`;
 }
 
 function renderPlannedTacticalPositions(positions) {
@@ -550,7 +626,7 @@ function renderPlannedNetControlShifts(shifts) {
 }
 
 async function addPlannedTacticalPosition() {
-  if (!editNetId) return;
+  if (!currentActivationScheduleId) return;
   const tactical_callsign = document.getElementById('plan-tac-callsign').value.trim().toUpperCase();
   const location = document.getElementById('plan-tac-location').value.trim() || null;
   const assigned_callsign = document.getElementById('plan-tac-assigned-callsign').value.trim().toUpperCase() || null;
@@ -567,7 +643,7 @@ async function addPlannedTacticalPosition() {
   }
   if (!tactical_callsign) return toast(t('Tactical callsign required'), 'error');
   try {
-    await apiFetch(`/nets/${editNetId}/planned-tactical-positions`, {
+    await apiFetch(`/activation-schedules/${currentActivationScheduleId}/tactical-positions`, {
       method: 'POST',
       body: JSON.stringify({ tactical_callsign, location, assigned_callsign, assigned_name, scheduled_start }),
     });
@@ -578,7 +654,7 @@ async function addPlannedTacticalPosition() {
     document.getElementById('plan-tac-time').value = '';
     setDefaultMonthDay('plan-tac-month', 'plan-tac-day');
     toast(t('Position queued'), 'success');
-    await loadActivationRoster(editNetId);
+    await loadScheduleRoster(currentActivationScheduleId);
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -587,12 +663,12 @@ async function removePlannedTacticalPosition(id) {
   try {
     await apiFetch(`/tactical-positions/${id}`, { method: 'DELETE' });
     toast(t('Position removed'), 'success');
-    await loadActivationRoster(editNetId);
+    await loadScheduleRoster(currentActivationScheduleId);
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function addPlannedNetControlShift() {
-  if (!editNetId) return;
+  if (!currentActivationScheduleId) return;
   const callsign = document.getElementById('plan-nc-callsign').value.trim().toUpperCase();
   const name = document.getElementById('plan-nc-name').value.trim() || null;
   const month = document.getElementById('plan-nc-month').value;
@@ -603,7 +679,7 @@ async function addPlannedNetControlShift() {
   const year = new Date().getFullYear();
   const scheduled_start = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${time || '00:00'}`).toISOString();
   try {
-    await apiFetch(`/nets/${editNetId}/planned-net-control-shifts`, {
+    await apiFetch(`/activation-schedules/${currentActivationScheduleId}/net-control-shifts`, {
       method: 'POST',
       body: JSON.stringify({ callsign, name, scheduled_start }),
     });
@@ -612,7 +688,7 @@ async function addPlannedNetControlShift() {
     document.getElementById('plan-nc-time').value = '';
     setDefaultMonthDay('plan-nc-month', 'plan-nc-day');
     toast(t('Shift queued'), 'success');
-    await loadActivationRoster(editNetId);
+    await loadScheduleRoster(currentActivationScheduleId);
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -620,7 +696,7 @@ async function removePlannedNetControlShift(id) {
   try {
     await apiFetch(`/net-control-shifts/${id}`, { method: 'DELETE' });
     toast(t('Shift removed'), 'success');
-    await loadActivationRoster(editNetId);
+    await loadScheduleRoster(currentActivationScheduleId);
   } catch (e) { toast(e.message, 'error'); }
 }
 
