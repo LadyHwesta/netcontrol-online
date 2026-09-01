@@ -186,7 +186,7 @@ Type=simple
 User=netcontrol
 WorkingDirectory=/opt/netcontrol
 EnvironmentFile=/opt/netcontrol/.env
-ExecStart=/opt/netcontrol/venv/bin/uvicorn main:app --host 127.0.0.1 --port ${PORT}
+ExecStart=/opt/netcontrol/venv/bin/uvicorn main:app --host 127.0.0.1 --port ${PORT} --workers ${WORKERS}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -197,7 +197,7 @@ SyslogIdentifier=nettracker
 WantedBy=multi-user.target
 ```
 
-`${PORT}` is substituted by systemd from `PORT` in `.env` (see `.env.example`) — the unit file itself doesn't need to change per instance.
+`${PORT}`/`${WORKERS}` are substituted by systemd from `.env` (see `.env.example`) — the unit file itself doesn't need to change per instance. `WORKERS` has no implicit default the way a shell script's `${VAR:-1}` would give it (systemd's own `$VAR` substitution is plain literal replacement, nothing bash-like), so `.env.example` always sets it explicitly — `WORKERS=1` is today's single-process behavior; see "Running with multiple workers" below before raising it.
 
 `ExecStart` deliberately points at the checkout's own `venv/bin/uvicorn`, not a system-wide one — a bare `uvicorn` (or `/usr/bin/uvicorn`) runs under whatever Python environment it happens to be installed in, which won't have this app's dependencies (`fastapi`, `sqlalchemy`, `asyncpg`, ...) unless that happens to be the same venv. `deploy.sh` follows the same rule for the same reason (prefers `venv/bin/python3` over a bare `python3`) — see its own comments.
 
@@ -216,6 +216,22 @@ The template above, plus `PORT`, `SYSTEMD_SERVICE`, and `GIT_BRANCH` in `.env`, 
 3. Copy the unit file template above to `/etc/systemd/system/<SYSTEMD_SERVICE>.service` for each instance — the file contents are identical except the description/working directory; only `.env` needs to differ.
 4. Add a matching sudoers `NOPASSWD` line for each `SYSTEMD_SERVICE` value (see the prerequisite comment at the top of `deploy.sh`) — `deploy.sh` reads `SYSTEMD_SERVICE` and `GIT_BRANCH` from the `.env` in its own checkout, checks out and pulls exactly that branch, and restarts exactly that unit.
 5. Point each Apache vhost's reverse proxy at the matching `PORT`.
+
+#### Running with multiple workers
+
+`WORKERS` in `.env` (default `1`, see `.env.example`) sets how many uvicorn worker processes this one instance runs, via `--workers ${WORKERS}` in the systemd unit's `ExecStart`. Raising it lets one instance use more than one CPU core — but two pieces of this app hold their own state in an in-memory Python dict, private to whichever single process happens to be running: the rate limiter (`slowapi`, `routers/deps.py`) and the DMR/APRS relay-push caches (`routers/digital_voice.py`/`routers/aprs.py`). With `WORKERS=1` (today's default) that's harmless — there's only ever one process. The moment `WORKERS` goes above 1, both break in different ways:
+
+- **The rate limiter** becomes per-worker, which quietly multiplies every configured limit by the worker count — `5/minute` on `/auth/register` becomes ~15–20/minute spread across 3–4 invisible counters. This is a real correctness gap, not just a performance nit.
+- **The relay-push caches** become per-worker too — a push landing on worker 1 isn't visible to a request served by worker 2 until it falls back to the slower database-backed copy.
+
+Setting `REDIS_URL` in `.env` fixes both: the rate limiter uses `slowapi`/`limits`' built-in Redis storage backend instead of its in-memory default, and the relay-push caches use Redis as a shared tier consulted first (see `routers/helpers.py`'s Redis cache section) instead of relying on each worker's own private copy. **Don't set `WORKERS` above `1` without also setting `REDIS_URL`** — nothing stops you from doing so (no startup check refuses it; a uvicorn worker has no reliable way to know how many siblings it has), so this is on the operator to get right.
+
+Redis is otherwise unused by this app — it's not a general cache, a session store, or anything else, just the shared backing for these two specific pieces of per-worker state. Leave `REDIS_URL` unset for a single-worker instance; there's nothing to gain from running Redis alongside it. The `redis` Python package is already in `requirements.txt` (see its own comment there) — no separate `pip install` step; a Redis *server* is the only thing you need to stand up yourself, then point `.env` at it:
+
+```
+WORKERS=4
+REDIS_URL=redis://localhost:6379/0
+```
 
 #### Branching model
 

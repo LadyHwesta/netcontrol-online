@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Optional Redis Support for Running with Multiple Workers (v2.26.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Deploy/ops change, not an in-app feature: an instance can now safely run more than one <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">uvicorn</code> worker process (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">WORKERS</code> in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code>, default <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">1</code>, unchanged). Previously the rate limiter and the DMR/APRS relay-push caches each held their own state in memory, private to whichever single worker happened to handle a given request — harmless with one worker, but with more than one the rate limiter silently multiplied every configured limit by the worker count, and the relay caches could serve stale data to whichever worker didn't get the latest push.</li>
+              <li>Setting <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">REDIS_URL</code> gives both a shared backing store instead, correct across every worker. Entirely optional and additive — unset (the default), nothing changes. See "Running with multiple workers" in README.md.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — demo_reset.py Cron Guidance Clarified (v2.25.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>No behavior change — yesterday's typed-confirmation guard already skips itself automatically for a real cron job (no controlling terminal, so nothing to prompt). Documented that explicitly in both the script and README, and updated the example cron line to redirect stdin from <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">/dev/null</code> so that stays true even if the same line is ever copied into something that keeps a terminal attached (a misconfigured systemd timer, a manual <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">nohup ... &amp;</code>) — belt-and-suspenders rather than relying on cron's default behavior specifically.</li>

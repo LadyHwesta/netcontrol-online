@@ -26,7 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models import DmrConfig, User
 from routers.deps import get_current_user
-from routers.helpers import _assert_ham_net, _email_log, _get_editable_net, _get_net_for_user, _get_setting, _set_setting
+from routers.helpers import (
+    _assert_ham_net, _email_log, _get_editable_net, _get_net_for_user, _get_setting,
+    _redis_cache_read, _redis_cache_write, _set_setting,
+)
 
 router = APIRouter()
 
@@ -75,15 +78,30 @@ def _dmr_cache_key(net_id: int) -> str:
 
 
 async def _dmr_cache_write(net_id: int, entries: list, db: AsyncSession) -> None:
-    """Write relay entries to both the in-memory dict and SystemSetting (survives restarts)."""
+    """Write relay entries to the in-memory dict, SystemSetting (survives
+    restarts), and Redis if configured (shared across workers -- see
+    routers/helpers.py's Redis cache section)."""
     now = _time.time()
+    payload = json.dumps({"entries": entries, "pushed_at": now})
     _dmr_push_cache[net_id] = {"entries": entries, "pushed_at": now}
-    await _set_setting(_dmr_cache_key(net_id), json.dumps({"entries": entries, "pushed_at": now}), db)
+    await _set_setting(_dmr_cache_key(net_id), payload, db)
     await db.commit()
+    await _redis_cache_write(_dmr_cache_key(net_id), payload, _DMR_CACHE_TTL)
 
 
 async def _dmr_cache_read(net_id: int, db: AsyncSession) -> Optional[dict]:
-    """Return the relay cache for net_id, restoring from DB if the in-memory dict was wiped."""
+    """Return the relay cache for net_id. Redis first when configured --
+    the only tier that's actually correct across multiple workers; the
+    in-memory dict below is just this worker's own last-seen copy, and the
+    DB fallback after that is the original single-worker-only path this
+    cache has always had (e.g. after a restart, or when Redis isn't set up
+    at all)."""
+    raw = await _redis_cache_read(_dmr_cache_key(net_id))
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
     cached = _dmr_push_cache.get(net_id)
     if cached:
         return cached

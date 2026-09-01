@@ -25,7 +25,19 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 # ---------------------------------------------------------------------------
 # Rate limiter
 # ---------------------------------------------------------------------------
-limiter = Limiter(key_func=get_remote_address)
+# storage_uri=None (REDIS_URL unset, the default) makes slowapi/`limits` use
+# its built-in in-memory storage -- exactly today's behavior, correct only
+# for a single uvicorn worker process. Set REDIS_URL (and WORKERS > 1 in
+# .env) to share rate-limit counters across workers instead -- without this,
+# every configured limit is silently multiplied by the worker count, since
+# each worker would otherwise count requests against its own private
+# in-memory counter (see TECH_DEBT.md, resolved). `limits`'s Redis storage
+# backend is synchronous (blocks the event loop for the round-trip) -- a
+# pre-existing constraint of slowapi/`limits` itself, not something this app
+# can avoid short of swapping rate-limiting libraries; negligible in
+# practice against a local/same-network Redis for an app this size.
+REDIS_URL = os.getenv("REDIS_URL")
+limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL)
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:

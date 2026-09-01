@@ -267,6 +267,74 @@ async def _set_setting(key: str, value: Optional[str], db: AsyncSession):
 
 
 # ---------------------------------------------------------------------------
+# Optional Redis-backed cache (multi-worker DMR/APRS relay-push caches --
+# TECH_DEBT.md, resolved)
+# ---------------------------------------------------------------------------
+# Shared by routers/digital_voice.py and routers/aprs.py's push caches, which
+# are each already a two-tier in-memory-dict + SystemSetting fallback (see
+# their own module comments) -- that pair is correct for a single uvicorn
+# worker, but each worker's in-memory dict is private to that process, so a
+# push landing on worker 1 isn't visible to a request served by worker 2
+# until the SystemSetting fallback catches it, which only happens on that
+# worker's own next cache miss. Redis, when configured, becomes a third tier
+# consulted FIRST on read and always written on write -- the one tier that's
+# actually shared and correctly fresh across every worker. Entirely additive:
+# with REDIS_URL unset (the default), _get_redis_client() returns None
+# immediately and every call here is a no-op, so behavior for a single
+# worker is unchanged -- this is why the existing in-memory-dict + DB
+# fallback stays in place underneath rather than being replaced.
+REDIS_URL = os.getenv("REDIS_URL")
+_redis_client = None  # created lazily on first actual use, not at import time
+
+
+def _get_redis_client():
+    """Returns the shared async Redis client, or None if REDIS_URL isn't
+    set. `redis` is only ever imported here, lazily, matching this app's
+    usual optional-dependency pattern (e.g. _verify_altcha above) -- a
+    deployment that never sets REDIS_URL never needs the package installed
+    at all."""
+    global _redis_client
+    if not REDIS_URL:
+        return None
+    if _redis_client is None:
+        try:
+            import redis.asyncio as redis
+        except ImportError:
+            logging.getLogger("netcontrol.redis").error(
+                "REDIS_URL is set but the redis package isn't installed — pip install redis"
+            )
+            return None
+        _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    return _redis_client
+
+
+async def _redis_cache_write(key: str, value: str, ttl_seconds: int) -> None:
+    """Best-effort -- never raises. Redis here is purely a freshness
+    optimization on top of the SystemSetting fallback that's already the
+    real source of truth, so a Redis outage should degrade quietly back to
+    single-worker-correct behavior, not break the request that triggered
+    the write."""
+    client = _get_redis_client()
+    if client is None:
+        return
+    try:
+        await client.set(key, value, ex=ttl_seconds)
+    except Exception as exc:
+        logging.getLogger("netcontrol.redis").warning("Redis cache write failed for %s: %s", key, exc)
+
+
+async def _redis_cache_read(key: str) -> Optional[str]:
+    client = _get_redis_client()
+    if client is None:
+        return None
+    try:
+        return await client.get(key)
+    except Exception as exc:
+        logging.getLogger("netcontrol.redis").warning("Redis cache read failed for %s: %s", key, exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Organization bootstrap (issue #1 — multi-tenancy)
 # ---------------------------------------------------------------------------
 

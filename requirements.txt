@@ -23,3 +23,11 @@ altcha==2.1.0
 # file -- see README's "UI Translation" section before enabling on a small
 # or resource-constrained server.
 argostranslate==1.11.0
+
+# Only needed if you set REDIS_URL (running uvicorn with WORKERS > 1) --
+# safe to remove otherwise; the rate limiter and DMR/APRS relay-push caches
+# fall back to in-memory storage (correct only for a single worker process,
+# today's default) when REDIS_URL is unset, and this is only ever imported
+# lazily, when that env var is actually set. See README's "Running with
+# multiple workers" section.
+redis==5.2.1
