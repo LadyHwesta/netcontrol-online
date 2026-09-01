@@ -6,8 +6,14 @@ Applies all schema changes that SQLAlchemy's create_all() cannot handle
 (i.e. adding columns to existing tables).  Safe to re-run at any time;
 every statement uses IF NOT EXISTS or is otherwise idempotent.
 
-New tables are created automatically by the app on startup (via
-Base.metadata.create_all).  This script only manages ALTER TABLE work.
+New tables are normally created automatically by the app on startup (via
+Base.metadata.create_all) -- this script's own MIGRATIONS list below only
+manages ALTER TABLE work on top of that. But since deploy.sh runs this
+script *before* restarting the app, run() also calls that same
+create_all() itself first (via database.init_db()), so this script is
+self-sufficient against a genuinely empty database too (a fresh install,
+or an instance whose schema was just wiped, e.g. the public demo's
+periodic reset) rather than depending on run order.
 
 Usage
 -----
@@ -469,17 +475,33 @@ MIGRATIONS = [
     # column, so not starting here either. ──
     ("organizations: aprs_fi_api_key column",
      "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS aprs_fi_api_key VARCHAR(100)"),
+    # Guarded in a DO block, not a plain UPDATE (issue follow-up) -- the old
+    # per-net aprs_configs.aprs_fi_api_key column this reads from was already
+    # removed from models.py by the time this migration was written, so it
+    # only ever exists on an instance upgrading from before that change. A
+    # fresh install's aprs_configs table (create_all(), now always run first
+    # -- see run() above) never has it at all, and Postgres validates a plain
+    # UPDATE's column references even when no rows match, which would fail
+    # migrate.py with "column ac.aprs_fi_api_key does not exist" on every
+    # fresh install/demo reset. PL/pgSQL only validates a branch's SQL when
+    # that branch actually executes, so this IF EXISTS skips it cleanly.
     ("organizations: copy up any existing per-net aprs.fi keys",
-     """UPDATE organizations o
-        SET aprs_fi_api_key = sub.key
-        FROM (
-            SELECT DISTINCT ON (n.org_id) n.org_id, ac.aprs_fi_api_key AS key
-            FROM aprs_configs ac
-            JOIN nets n ON n.id = ac.net_id
-            WHERE ac.aprs_fi_api_key IS NOT NULL
-            ORDER BY n.org_id, ac.id
-        ) sub
-        WHERE o.id = sub.org_id AND o.aprs_fi_api_key IS NULL"""),
+     """DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'aprs_configs' AND column_name = 'aprs_fi_api_key') THEN
+                UPDATE organizations o
+                SET aprs_fi_api_key = sub.key
+                FROM (
+                    SELECT DISTINCT ON (n.org_id) n.org_id, ac.aprs_fi_api_key AS key
+                    FROM aprs_configs ac
+                    JOIN nets n ON n.id = ac.net_id
+                    WHERE ac.aprs_fi_api_key IS NOT NULL
+                    ORDER BY n.org_id, ac.id
+                ) sub
+                WHERE o.id = sub.org_id AND o.aprs_fi_api_key IS NULL;
+            END IF;
+        END $$"""),
 
     # UI translation via argos-translate (opt-in, TRANSLATION_ENABLED). ──
     ("users: language column",
@@ -584,6 +606,27 @@ MIGRATIONS = [
 # ---------------------------------------------------------------------------
 
 def run():
+    # Base tables are normally already there from a previous app startup
+    # (main.py's lifespan calls this same init_db() via database.py) --
+    # every migration below assumes that and only does ALTER TABLE /
+    # CREATE TABLE IF NOT EXISTS work on top of it. That assumption breaks
+    # for a genuinely empty database: deploy.sh runs this script *before*
+    # restarting the app (see deploy.sh), so a fresh install, or an
+    # instance whose schema was just wiped (e.g. the public demo's
+    # demo_reset.py, which drops and recreates the whole public schema on
+    # a cron), can hit migrate.py with zero tables yet -- every statement
+    # below would then fail with "relation ... does not exist" (issue
+    # follow-up: this is exactly what surfaced on the demo instance).
+    # Calling init_db() here first makes this script self-sufficient
+    # regardless of run order -- a no-op when tables already exist.
+    print("Ensuring base schema exists…")
+    try:
+        import asyncio
+        from database import init_db
+        asyncio.run(init_db())
+    except Exception as e:
+        sys.exit(f"Could not create base tables: {e}")
+
     print(f"Connecting to database…")
     try:
         conn = psycopg2.connect(DATABASE_URL)
