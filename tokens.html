@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/app.css?v=24">
+  <link rel="stylesheet" href="/static/vendor/cropperjs/cropper.min.css?v=1">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
@@ -91,13 +92,33 @@
             <div style="min-width:140px">
               <label style="display:block;margin-bottom:6px"><span data-i18n="Photo">Photo</span> <span class="text-muted" style="font-size:11px" data-i18n="(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster)">(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster)</span></label>
               <img id="profile-photo-preview" style="display:none;width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:8px;border:1px solid var(--border)"
-                onerror="this.style.display='none';document.getElementById('profile-photo-delete-btn').style.display='none'"
-                onload="this.style.display='';document.getElementById('profile-photo-delete-btn').style.display=''" />
+                onerror="this.style.display='none';document.getElementById('profile-photo-delete-btn').style.display='none';document.getElementById('profile-photo-recrop-btn').style.display='none'"
+                onload="this.style.display='';document.getElementById('profile-photo-delete-btn').style.display='';document.getElementById('profile-photo-recrop-btn').style.display=''" />
               <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
                 <input type="file" id="profile-photo-file" accept="image/png,image/jpeg,image/gif,image/webp"
                   style="font-size:12px;color:var(--text);max-width:140px" onchange="previewProfilePhoto(this)" />
+                <button class="btn btn-ghost btn-sm" id="profile-photo-recrop-btn" onclick="recropProfilePhoto()" style="display:none" data-i18n="✂️ Recrop">✂️ Recrop</button>
                 <button class="btn btn-danger btn-sm" id="profile-photo-delete-btn" onclick="deleteProfilePhoto()" style="display:none" data-i18n="Remove Photo">Remove Photo</button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Photo crop/reposition modal (issue follow-up) -- opened by
+             previewProfilePhoto() on a fresh file pick, or recropProfilePhoto()
+             to adjust the already-uploaded (or already-cropped-this-session)
+             photo. Cropper.js is locked to a 1:1 square crop, matching how
+             the photo is displayed everywhere (a circular avatar). -->
+        <div id="photo-crop-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center">
+          <div class="card" style="width:460px;max-width:92vw;margin:0">
+            <div class="card-header"><h2 data-i18n="Crop Photo">Crop Photo</h2></div>
+            <div style="height:50vh;background:#000;margin-bottom:12px">
+              <img id="photo-crop-image" style="display:block;max-width:100%" alt="" />
+            </div>
+            <p class="text-muted" style="font-size:12px;margin-bottom:14px" data-i18n="Drag to reposition, drag a corner to resize — this is how your photo will be framed everywhere it's shown.">Drag to reposition, drag a corner to resize — this is how your photo will be framed everywhere it's shown.</p>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn btn-ghost" onclick="cancelPhotoCrop()" data-i18n="Cancel">Cancel</button>
+              <button class="btn btn-primary" onclick="confirmPhotoCrop()" data-i18n="Save Crop">Save Crop</button>
             </div>
           </div>
         </div>
@@ -160,7 +181,8 @@
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
-  <script src="/static/js/tokens.js?v=24"></script>
+  <script src="/static/vendor/cropperjs/cropper.min.js?v=1"></script>
+  <script src="/static/js/tokens.js?v=25"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {

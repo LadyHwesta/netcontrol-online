@@ -22,19 +22,21 @@ async function saveProfile() {
     const csShort = document.getElementById('header-callsign-short');
     if (csShort) csShort.textContent = currentUser.callsign;
 
-    // Upload the photo file, if one was chosen, as a second step -- same
-    // two-step shape as branding.js's saveBranding() (text fields via one
-    // call, logo/photo via a separate multipart POST).
-    const fileInput = document.getElementById('profile-photo-file');
-    if (fileInput.files[0]) {
+    // Upload the cropped photo, if one was confirmed in the crop modal, as
+    // a second step -- same two-step shape as branding.js's saveBranding()
+    // (text fields via one call, logo/photo via a separate multipart POST).
+    // _pendingPhotoBlob (not the raw <input type=file>) is always what a
+    // confirmed crop produces -- see confirmPhotoCrop() below.
+    if (_pendingPhotoBlob) {
       const fd = new FormData();
-      fd.append('file', fileInput.files[0]);
+      fd.append('file', _pendingPhotoBlob, 'profile-photo.jpg');
       await fetch('/auth/photo', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
         body: fd,
       }).then(r => { if (!r.ok) throw new Error(t('Photo upload failed')); });
-      fileInput.value = '';
+      _pendingPhotoBlob = null;
+      document.getElementById('profile-photo-file').value = '';
       document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
     }
 
@@ -46,16 +48,72 @@ async function saveProfile() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+// ---- Photo crop/reposition (issue follow-up) --------------------------
+// Every photo, whether freshly picked or an existing one being adjusted,
+// goes through the same square Cropper.js modal before it's ever staged
+// for upload -- _pendingPhotoBlob is the one thing saveProfile() actually
+// sends, never the raw <input type=file> contents directly.
+let _cropper = null;
+let _pendingPhotoBlob = null;
+
 function previewProfilePhoto(input) {
   const file = input.files[0];
   if (!file) return;
-  document.getElementById('profile-photo-preview').src = URL.createObjectURL(file);
+  openPhotoCropper(URL.createObjectURL(file));
+}
+
+// Re-open the cropper on whatever's currently shown in the preview --
+// either the already-saved photo (a same-origin /users/{id}/photo URL, so
+// no canvas-tainting CORS issue) or a not-yet-saved crop from earlier in
+// this same editing session. Recovers to the crop *result*, not the
+// original uncropped file, in the latter case -- picking the file again
+// via "choose file" starts over from the original if that matters.
+function recropProfilePhoto() {
+  openPhotoCropper(document.getElementById('profile-photo-preview').src);
+}
+
+function openPhotoCropper(imageSrc) {
+  const modal = document.getElementById('photo-crop-modal');
+  const img = document.getElementById('photo-crop-image');
+  if (_cropper) { _cropper.destroy(); _cropper = null; }
+  img.onload = () => {
+    _cropper = new Cropper(img, {
+      aspectRatio: 1,       // square -- matches the circular avatar treatment everywhere it's shown
+      viewMode: 1,
+      dragMode: 'move',
+      autoCropArea: 1,
+      background: false,
+      guides: true,
+      center: false,
+    });
+  };
+  img.src = imageSrc;
+  modal.style.display = 'flex';
+}
+
+function cancelPhotoCrop() {
+  document.getElementById('photo-crop-modal').style.display = 'none';
+  if (_cropper) { _cropper.destroy(); _cropper = null; }
+  document.getElementById('profile-photo-file').value = '';
+}
+
+function confirmPhotoCrop() {
+  if (!_cropper) return;
+  const canvas = _cropper.getCroppedCanvas({ width: 500, height: 500, imageSmoothingQuality: 'high' });
+  canvas.toBlob(blob => {
+    _pendingPhotoBlob = blob;
+    document.getElementById('profile-photo-preview').src = URL.createObjectURL(blob);
+    document.getElementById('photo-crop-modal').style.display = 'none';
+    _cropper.destroy();
+    _cropper = null;
+  }, 'image/jpeg', 0.92);
 }
 
 async function deleteProfilePhoto() {
   if (!confirm(t('Remove your profile photo?'))) return;
   try {
     await apiFetch('/auth/photo', { method: 'DELETE' });
+    _pendingPhotoBlob = null;
     toast(t('Photo removed'));
     document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
   } catch (e) { toast(e.message, 'error'); }
