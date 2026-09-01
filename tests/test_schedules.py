@@ -121,6 +121,37 @@ class TestSignupRoles:
         assert roles == {"net_control", "broadcaster"}
 
 
+class TestSignupPhone:
+    """SignupOut.phone (issue follow-up) -- live-looked-up from the signed-up
+    user's own account, not a snapshot like callsign/name/email, so whoever's
+    coordinating an activation can call their *current* number."""
+
+    def test_phone_appears_in_upcoming_and_signups(self, client, admin_headers, net):
+        client.patch("/auth/profile", json={
+            "name": "Admin User", "email": "admin@example.com", "callsign": "W1ADMIN", "phone": "555-1234",
+        }, headers=admin_headers)
+        sched, today = _schedule_for_today(client, admin_headers, net["id"])
+        client.post(f"/nets/{net['id']}/signups", json={
+            "schedule_id": sched["id"], "slot_date": str(today), "callsign": "W1AW",
+        }, headers=admin_headers)
+
+        upcoming = client.get(f"/nets/{net['id']}/upcoming?weeks=1", headers=admin_headers).json()
+        slot = next(s for s in upcoming if s["slot_date"] == str(today))
+        assert slot["signups"][0]["phone"] == "555-1234"
+
+        signups = client.get(f"/nets/{net['id']}/signups", headers=admin_headers).json()
+        assert signups[0]["phone"] == "555-1234"
+
+    def test_phone_absent_when_signed_up_user_has_none_set(self, client, admin_headers, net):
+        sched, today = _schedule_for_today(client, admin_headers, net["id"])
+        client.post(f"/nets/{net['id']}/signups", json={
+            "schedule_id": sched["id"], "slot_date": str(today), "callsign": "W1AW",
+        }, headers=admin_headers)
+
+        signups = client.get(f"/nets/{net['id']}/signups", headers=admin_headers).json()
+        assert signups[0]["phone"] is None
+
+
 class TestDutyDisplay:
     def test_session_shows_scheduled_net_control(self, client, admin_headers, net):
         sched, today = _schedule_for_today(client, admin_headers, net["id"])
@@ -137,6 +168,51 @@ class TestDutyDisplay:
         resp = client.get(f"/sessions/{session['id']}", headers=admin_headers)
         assert resp.status_code == 200
         assert resp.json()["ncs_callsign"] == "W1ADMIN"
+
+    def test_ncs_user_id_resolves_for_photo_lookup(self, client, admin_headers, session):
+        """ncs_user_id/broadcaster_user_id (issue follow-up) -- the frontend
+        builds /users/{id}/photo from these; no separate has_photo flag."""
+        me = client.get("/auth/me", headers=admin_headers).json()
+        resp = client.get(f"/sessions/{session['id']}", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["ncs_user_id"] == me["id"]
+
+    def test_ncs_user_id_resolves_from_schedule_signup(self, client, admin_headers, net):
+        sched, today = _schedule_for_today(client, admin_headers, net["id"])
+        client.post(f"/nets/{net['id']}/signups", json={
+            "schedule_id": sched["id"], "slot_date": str(today), "callsign": "W1AW",
+        }, headers=admin_headers)
+        me = client.get("/auth/me", headers=admin_headers).json()
+        s = client.post(f"/nets/{net['id']}/sessions", json={"name": "Test"}, headers=admin_headers).json()
+        resp = client.get(f"/sessions/{s['id']}", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["ncs_user_id"] == me["id"]
+
+    def test_broadcaster_user_id_resolves_from_signup(self, client, admin_headers):
+        bnet = _broadcast_net(client, admin_headers)
+        sched, today = _schedule_for_today(client, admin_headers, bnet["id"])
+        client.post(f"/nets/{bnet['id']}/signups", json={
+            "schedule_id": sched["id"], "slot_date": str(today), "role": "broadcaster", "callsign": "K2ABC",
+        }, headers=admin_headers)
+        me = client.get("/auth/me", headers=admin_headers).json()
+        s = client.post(f"/nets/{bnet['id']}/sessions", json={}, headers=admin_headers).json()
+        resp = client.get(f"/sessions/{s['id']}", headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["broadcaster_user_id"] == me["id"]
+
+    def test_manual_override_leaves_user_id_none(self, client, admin_headers):
+        """A manual text override (issue #17/#20) has no account behind it --
+        no photo to show, so *_user_id must stay None even though a callsign
+        is displayed."""
+        bnet = _broadcast_net(client, admin_headers)
+        s = client.post(f"/nets/{bnet['id']}/sessions", json={
+            "broadcaster_override_callsign": "K3XYZ", "broadcaster_override_name": "Carol",
+        }, headers=admin_headers).json()
+        resp = client.get(f"/sessions/{s['id']}", headers=admin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["broadcaster_callsign"] == "K3XYZ"
+        assert data["broadcaster_user_id"] is None
 
     def test_gmrs_net_fallback_uses_gmrs_callsign_when_set(self, client, admin_headers):
         """issue #23: on a GMRS net, the "whoever started the session" fallback

@@ -97,6 +97,10 @@ class SignupOut(BaseModel):
     callsign: str
     name: Optional[str]
     email: Optional[str]
+    phone: Optional[str] = None   # live-looked-up from the signed-up user's own
+        # account (issue follow-up), not a snapshot like callsign/name/email --
+        # the point is calling their *current* number, so staleness would work
+        # against the feature. None once their account is gone (user_id -> NULL).
     notes: Optional[str]
     signed_up_at: datetime
     is_mine: bool = False   # True if current user owns this signup
@@ -123,11 +127,14 @@ def _next_occurrences(day_of_week: int, weeks: int = 8) -> list[date]:
     return [first + timedelta(weeks=i) for i in range(weeks)]
 
 
-def _signup_to_out(s: NetControlSignup, current_user: User) -> SignupOut:
+async def _signup_to_out(s: NetControlSignup, current_user: User, db: AsyncSession) -> SignupOut:
+    phone = None
+    if s.user_id:
+        phone = (await db.execute(select(User.phone).filter(User.id == s.user_id))).scalar()
     return SignupOut(
         id=s.id, schedule_id=s.schedule_id, net_id=s.net_id,
         slot_date=s.slot_date, role=s.role, callsign=s.callsign, name=s.name,
-        email=s.email, notes=s.notes, signed_up_at=s.signed_up_at,
+        email=s.email, phone=phone, notes=s.notes, signed_up_at=s.signed_up_at,
         is_mine=(s.user_id == current_user.id),
     )
 
@@ -171,11 +178,20 @@ async def _duty_labels_for_session(net: Net, session: NetSession, db: AsyncSessi
     ncs_name = session.ncs_override_name or (nc.name if nc else (operator.name if operator else None))
     broadcaster_callsign = session.broadcaster_override_callsign or (bc.callsign if bc else None)
     broadcaster_name = session.broadcaster_override_name or (bc.name if bc else None)
+    # Profile photo (issue follow-up) -- the frontend just builds
+    # <img src="/users/{id}/photo">, so all that's needed here is the user id
+    # behind whoever's actually shown above. None whenever a manual text
+    # override is in play (session.*_override_callsign) -- there's no
+    # account behind free-typed override text to have a photo at all.
+    ncs_user_id = None if session.ncs_override_callsign else (nc.user_id if nc else (operator.id if operator else None))
+    broadcaster_user_id = None if session.broadcaster_override_callsign else (bc.user_id if bc else None)
     return {
         "ncs_callsign": ncs_callsign,
         "ncs_name": ncs_name,
+        "ncs_user_id": ncs_user_id,
         "broadcaster_callsign": broadcaster_callsign,
         "broadcaster_name": broadcaster_name,
+        "broadcaster_user_id": broadcaster_user_id,
         "broadcast_label": net.broadcast_label if (net.has_broadcast and broadcaster_callsign) else None,
         "next_ncs_callsign": next_nc.callsign if next_nc else None,
         "next_ncs_name": next_nc.name if next_nc else None,
@@ -320,7 +336,7 @@ async def upcoming_slots(
                 slot_date=slot_date,
                 day_name=DAYS[sched.day_of_week],
                 schedule_id=sched.id,
-                signups=[_signup_to_out(s, current_user) for s in signup_rows],
+                signups=[await _signup_to_out(s, current_user, db) for s in signup_rows],
             ))
 
     # Sort chronologically
@@ -458,7 +474,7 @@ async def create_signup(net_id: int, data: SignupCreate, current_user: User = De
         except Exception as exc:
             helpers._email_log.warning("Failed to send signup confirmation to %s: %s", signup_email, exc)
 
-    return _signup_to_out(signup, current_user)
+    return await _signup_to_out(signup, current_user, db)
 
 
 @router.delete("/signups/{signup_id}", status_code=204)
@@ -480,4 +496,4 @@ async def list_signups(net_id: int, current_user: User = Depends(get_current_use
     signups = (
         (await db.execute(select(NetControlSignup).filter(NetControlSignup.net_id == net_id).order_by(NetControlSignup.slot_date))).scalars().all()
     )
-    return [_signup_to_out(s, current_user) for s in signups]
+    return [await _signup_to_out(s, current_user, db) for s in signups]

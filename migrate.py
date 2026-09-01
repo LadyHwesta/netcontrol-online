@@ -604,6 +604,10 @@ MIGRATIONS = [
         FROM activation_schedules sch
         WHERE h.session_id IS NULL AND h.activation_schedule_id IS NULL
           AND sch.net_id = h.net_id AND sch.name = 'Migrated Plan'"""),
+
+    # ── Self-service account fields (issue follow-up) ──
+    ("users: phone column",
+     "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)"),
 ]
 
 # ---------------------------------------------------------------------------

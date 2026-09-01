@@ -66,6 +66,44 @@
 
         <div class="card" style="max-width:600px;margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="PROFILE">PROFILE</h3>
+          <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1;min-width:260px">
+              <div class="form-row">
+                <div class="form-group">
+                  <label data-i18n="Name">Name</label>
+                  <input class="form-control" id="profile-name" maxlength="100" />
+                </div>
+                <div class="form-group">
+                  <label data-i18n="Callsign">Callsign</label>
+                  <input class="form-control mono" id="profile-callsign" style="text-transform:uppercase" maxlength="12" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n="Email">Email</label>
+                <input class="form-control" id="profile-email" type="email" />
+              </div>
+              <div class="form-group">
+                <label><span data-i18n="Phone">Phone</span> <span class="text-muted" style="font-size:11px" data-i18n="(shown to whoever's coordinating a net's schedule sign-ups, so they can call you if you haven't shown up for your shift — never shown publicly)">(shown to whoever's coordinating a net's schedule sign-ups, so they can call you if you haven't shown up for your shift — never shown publicly)</span></label>
+                <input class="form-control" id="profile-phone" type="tel" placeholder="555-123-4567" />
+              </div>
+              <button class="btn btn-primary" onclick="saveProfile()" data-i18n="Save Profile">Save Profile</button>
+            </div>
+            <div style="min-width:140px">
+              <label style="display:block;margin-bottom:6px"><span data-i18n="Photo">Photo</span> <span class="text-muted" style="font-size:11px" data-i18n="(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster)">(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster)</span></label>
+              <img id="profile-photo-preview" style="display:none;width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:8px;border:1px solid var(--border)"
+                onerror="this.style.display='none';document.getElementById('profile-photo-delete-btn').style.display='none'"
+                onload="this.style.display='';document.getElementById('profile-photo-delete-btn').style.display=''" />
+              <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+                <input type="file" id="profile-photo-file" accept="image/png,image/jpeg,image/gif,image/webp"
+                  style="font-size:12px;color:var(--text);max-width:140px" onchange="previewProfilePhoto(this)" />
+                <button class="btn btn-danger btn-sm" id="profile-photo-delete-btn" onclick="deleteProfilePhoto()" style="display:none" data-i18n="Remove Photo">Remove Photo</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="max-width:600px;margin-bottom:16px">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="GMRS CALLSIGN">GMRS CALLSIGN</h3>
           <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)" data-i18n="If you hold a separate GMRS license, set that callsign here — Net Control on a GMRS net shows this instead of your amateur callsign (in the duty bar, net script, and public live page). Leave blank to always use your amateur callsign.">
             If you hold a separate GMRS license, set that callsign here — Net Control on a GMRS net shows this
             instead of your amateur callsign (in the duty bar, net script, and public live page). Leave blank to
@@ -122,7 +160,7 @@
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
-  <script src="/static/js/tokens.js?v=23"></script>
+  <script src="/static/js/tokens.js?v=24"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {
@@ -140,6 +178,11 @@
       await loadBranding();
       loadOrgBanner();   // fire-and-forget; non-blocking
       syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
+      document.getElementById('profile-name').value = currentUser.name || '';
+      document.getElementById('profile-email').value = currentUser.email || '';
+      document.getElementById('profile-callsign').value = currentUser.callsign || '';
+      document.getElementById('profile-phone').value = currentUser.phone || '';
+      document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
       document.getElementById('profile-gmrs-callsign').value = currentUser.gmrs_callsign || '';
       loadApiTokens();
     }

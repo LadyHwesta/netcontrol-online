@@ -56,7 +56,7 @@
 // silently ungated by app-shell caching and unavailable offline. Bumping a
 // shared file's version anywhere means bumping it in this list AND in every
 // one of the five precached pages' own tags, all to the same number.
-const CACHE_NAME = 'netcontrol-online-shell-v74';
+const CACHE_NAME = 'netcontrol-online-shell-v75';
 
 const PRECACHE_URLS = [
   '/',
@@ -76,12 +76,12 @@ const PRECACHE_URLS = [
   '/static/js/branding.js?v=25',
   '/static/js/report.js?v=21',
   '/static/js/nets.js?v=33',
-  '/static/js/sessions.js?v=32',
+  '/static/js/sessions.js?v=33',
   '/static/js/checkins.js?v=41',
   '/static/js/history.js?v=22',
   '/static/js/admin.js?v=43',
-  '/static/js/schedules.js?v=23',
-  '/static/js/tokens.js?v=23',
+  '/static/js/schedules.js?v=24',
+  '/static/js/tokens.js?v=24',
   '/static/js/dmr.js?v=21',
   '/static/js/aprs.js?v=40',
   '/static/js/aprs-map.js?v=41',

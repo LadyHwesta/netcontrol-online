@@ -7,13 +7,14 @@ import html
 import logging
 import logging.handlers
 import os
+import pathlib
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 
 import bcrypt as _bcrypt
 import jwt
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, field_validator
@@ -33,6 +34,23 @@ router = APIRouter()
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))  # 8 hours
 VERIFICATION_TOKEN_TTL_DAYS = 7
 PASSWORD_SET_TOKEN_TTL_DAYS = 14   # admin-created accounts' invite link (issue #1 follow-up) — longer than email verification since an operator may not check email daily
+
+# Self-service profile photo (issue follow-up) -- same "glob the uploads dir
+# by extension" shape as routers/orgs.py's _org_logo_file/_LOGO_EXTS, just
+# namespaced per user ("user_{id}_photo.{ext}") and kept local to this file
+# rather than routers/helpers.py since nothing outside auth.py resolves an
+# actual file -- schedules.py/sessions.py only ever hand the frontend a raw
+# user_id, which builds the <img src="/users/{id}/photo"> URL itself.
+_PHOTO_EXTS = ("png", "jpg", "jpeg", "gif", "webp")  # no svg -- a real photo, not a logo/icon
+
+
+def _user_photo_file(user_id: int) -> Optional[pathlib.Path]:
+    for ext in _PHOTO_EXTS:
+        p = helpers.UPLOADS_DIR / f"user_{user_id}_photo.{ext}"
+        if p.exists():
+            return p
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Auth failure logger (for fail2ban)
@@ -87,6 +105,23 @@ class LanguageUpdate(BaseModel):
 
 class GmrsCallsignUpdate(BaseModel):
     gmrs_callsign: Optional[str] = None
+
+
+class ProfileUpdate(BaseModel):
+    """Self-service name/email/callsign/phone (issue follow-up) -- one
+    combined endpoint (PATCH /auth/profile) rather than a field each,
+    matching how PATCH /orgs/{id} saves name+website+banner+tagline
+    together from one form, since that's how the Account page's own
+    Profile card presents these too."""
+    name: str
+    email: EmailStr
+    callsign: str
+    phone: Optional[str] = None
+
+    @field_validator("callsign")
+    @classmethod
+    def callsign_upper(cls, v):
+        return v.upper().strip()
 
 
 class Token(BaseModel):
@@ -464,6 +499,115 @@ async def update_gmrs_callsign(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.patch("/auth/profile", response_model=UserOut)
+async def update_profile(
+    data: ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Self-service: name/email/callsign/phone (issue follow-up) -- previously
+    these were fixed at registration with no way to fix a typo or update
+    contact info. No current-password confirmation required, matching every
+    other self-service field this app already has (GMRS callsign, theme,
+    language). Callsign/email changes never invalidate an existing session
+    -- the JWT is keyed by user.id, not either of them (see login())."""
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(400, "Name is required")
+
+    if (await db.execute(select(User).filter(User.callsign == data.callsign, User.id != current_user.id))).scalar_one_or_none():
+        raise HTTPException(400, "Callsign already registered")
+    if (await db.execute(select(User).filter(User.email == data.email, User.id != current_user.id))).scalar_one_or_none():
+        raise HTTPException(400, "Email already registered")
+
+    email_changed = data.email != current_user.email
+    current_user.name = name
+    current_user.callsign = data.callsign
+    current_user.email = data.email
+    current_user.phone = (data.phone or "").strip() or None
+
+    # Email change re-verification (issue follow-up) -- same gating and
+    # token/email shape as registration's own needs_verification path;
+    # GET /auth/verify-email is reused completely unchanged, since it just
+    # resolves user-by-token-hash and flips email_verified=True with no
+    # check on which email is current. login() already rejects an
+    # unverified account, so re-using that is the only enforcement needed
+    # -- this session's own JWT (keyed by user.id) still works until it
+    # expires, only a *future* login is blocked until confirmed.
+    reverify_sent = False
+    if email_changed and helpers._smtp_configured():
+        current_user.email_verified = False
+        verification_token = secrets.token_urlsafe(32)
+        current_user.verification_token = hashlib.sha256(verification_token.encode()).hexdigest()
+        current_user.verification_sent_at = datetime.now(timezone.utc)
+        reverify_sent = True
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    if reverify_sent:
+        verify_link = helpers._app_url(f"/auth/verify-email?token={verification_token}")
+        helpers.send_email(
+            to=[current_user.email],
+            subject="[NetControl Online] Verify Your New Email Address",
+            body_html=f"""<div style="font-family:sans-serif;max-width:520px">
+  <h2 style="color:#FF9900">Verify Your New Email</h2>
+  <p>Hello <strong>{html.escape(current_user.name)}</strong> ({current_user.callsign}),</p>
+  <p>You (or someone with access to your account) changed the email address on your NetControl Online account to this one. Please confirm it's really yours before you can log in again.</p>
+  {f'<p style="margin-top:16px"><a href="{verify_link}" style="background:#FF9900;color:#000;padding:10px 20px;text-decoration:none;border-radius:20px;font-weight:bold;display:inline-block">Verify Email</a></p>' if verify_link else '<p>Contact your administrator to have your account verified.</p>'}
+  <p style="color:#888;font-size:12px">If you didn't make this change, contact your administrator right away.</p>
+</div>""",
+            body_text=(
+                f"Hello {current_user.name} ({current_user.callsign}),\n\n"
+                f"Your NetControl Online account's email was changed to this address. Please confirm it's really yours before you can log in again.\n\n"
+                + (f"Verify here: {verify_link}\n\n" if verify_link else "Contact your administrator to have your account verified.\n\n")
+                + "If you didn't make this change, contact your administrator right away."
+            ),
+        )
+
+    return current_user
+
+
+@router.post("/auth/photo", status_code=204)
+async def upload_profile_photo(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    """Self-service profile photo (issue follow-up) -- shown on the public
+    live page next to whoever's running the net (Net Control) and/or the
+    assigned broadcaster (see routers/schedules.py's _duty_labels_for_session).
+    Same validate/replace-existing-file shape as routers/orgs.py's
+    upload_org_logo, keyed by the caller's own id instead of an org_id."""
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in _PHOTO_EXTS:
+        raise HTTPException(400, "Unsupported file type — use PNG, JPG, GIF, or WebP")
+    for old in helpers.UPLOADS_DIR.glob(f"user_{current_user.id}_photo.*"):
+        old.unlink(missing_ok=True)
+    dest = helpers.UPLOADS_DIR / f"user_{current_user.id}_photo.{ext}"
+    dest.write_bytes(await file.read())
+
+
+@router.delete("/auth/photo", status_code=204)
+def delete_profile_photo(current_user: User = Depends(get_current_user)):
+    """Self-service — remove the caller's own profile photo."""
+    for old in helpers.UPLOADS_DIR.glob(f"user_{current_user.id}_photo.*"):
+        old.unlink(missing_ok=True)
+
+
+@router.get("/users/{user_id}/photo")
+def get_user_photo(user_id: int):
+    """Public endpoint — serves a user's uploaded profile photo. No auth:
+    loaded directly in <img src> on the public live page and the
+    authenticated duty bar alike, same trust level as the instance/org
+    logo endpoints (GET /logo, GET /orgs/{id}/logo)."""
+    p = _user_photo_file(user_id)
+    if not p:
+        raise HTTPException(404, "No photo uploaded for this user")
+    ext = p.suffix.lstrip(".")
+    mime = {
+        "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "gif": "image/gif", "webp": "image/webp",
+    }.get(ext, "application/octet-stream")
+    return Response(content=p.read_bytes(), media_type=mime)
 
 
 @router.post("/auth/tokens", response_model=ApiTokenCreated, status_code=201)

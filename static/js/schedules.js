@@ -166,6 +166,7 @@ async function loadUpcoming() {
           <span class="callsign">${esc(signup.callsign)}</span>
           ${signup.name ? `<span class="text-muted"> — ${esc(signup.name)}</span>` : ''}
           ${signup.role === 'both' ? `<span class="text-muted"> (${t('both roles')})</span>` : ''}
+          ${signup.phone ? `<a href="tel:${esc(signup.phone)}" class="text-muted" style="text-decoration:none" title="${esc(t('Call'))} ${esc(signup.callsign)}"> 📞 ${esc(signup.phone)}</a>` : ''}
         </span>
         ${canRemove ? `<button class="btn btn-ghost btn-sm" onclick="removeSignup(${signup.id})">✕</button>` : ''}
       </div>`;

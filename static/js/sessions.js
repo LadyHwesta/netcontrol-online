@@ -179,23 +179,34 @@ function effectiveSession(s) {
   if (!currentSessionIsActivation) return s;
   const ncPosition = tacticalPositions.find(p => p.is_net_control);
   if (!ncPosition) return s;
-  return { ...s, ncs_callsign: ncPosition.current_callsign || null, ncs_name: ncPosition.current_name || null };
+  // ncs_user_id (issue follow-up -- profile photo) is nulled out here too:
+  // it only ever reflects the day's schedule sign-up/session operator, with
+  // no way to know who currently holds a handed-off tactical position (a
+  // checkin's callsign isn't necessarily tied to any User account at all),
+  // so showing it here would risk a stale or simply wrong photo.
+  return { ...s, ncs_callsign: ncPosition.current_callsign || null, ncs_name: ncPosition.current_name || null, ncs_user_id: null };
 }
 
 function renderDutyBar(s) {
   const bar = document.getElementById('duty-bar');
   const ncEl = document.getElementById('duty-nc');
   const bcEl = document.getElementById('duty-bc');
+  const ncAvatar = document.getElementById('duty-nc-avatar');
+  const bcAvatar = document.getElementById('duty-bc-avatar');
   if (s.ncs_callsign) {
     ncEl.querySelector('strong').textContent = s.ncs_name ? `${s.ncs_callsign} — ${s.ncs_name}` : s.ncs_callsign;
-    ncEl.style.display = '';
+    if (s.ncs_user_id) { ncAvatar.src = `/users/${s.ncs_user_id}/photo`; ncAvatar.style.display = ''; }
+    else { ncAvatar.style.display = 'none'; }
+    ncEl.style.display = 'inline-flex';
   } else {
     ncEl.style.display = 'none';
   }
   if (s.broadcaster_callsign) {
     bcEl.querySelector('.duty-bc-label').textContent = s.broadcast_label || t('Broadcaster');
     bcEl.querySelector('strong').textContent = s.broadcaster_name ? `${s.broadcaster_callsign} — ${s.broadcaster_name}` : s.broadcaster_callsign;
-    bcEl.style.display = '';
+    if (s.broadcaster_user_id) { bcAvatar.src = `/users/${s.broadcaster_user_id}/photo`; bcAvatar.style.display = ''; }
+    else { bcAvatar.style.display = 'none'; }
+    bcEl.style.display = 'inline-flex';
   } else {
     bcEl.style.display = 'none';
   }

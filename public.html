@@ -217,7 +217,8 @@
     }
     .detail-stat { min-width: 120px; }
     .detail-stat .label { font-size: 11px; color: var(--lc-orange); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 3px; }
-    .detail-stat .value { font-size: 15px; font-weight: 700; }
+    .detail-stat .value { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .detail-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
 
     /* ── Footer ──────────────────────────────────────── */
     footer {
@@ -474,8 +475,8 @@
 
     document.getElementById('detail-header').innerHTML = `
       ${s.frequency ? `<div class="detail-stat"><div class="label">${t('Frequency')}</div><div class="value">📡 ${esc(s.frequency)}</div></div>` : ''}
-      ${s.ncs_callsign ? `<div class="detail-stat"><div class="label">${t('Net Control')}</div><div class="value">🎙 ${esc(s.ncs_callsign)}${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</div></div>` : ''}
-      ${s.broadcaster_callsign ? `<div class="detail-stat"><div class="label">${esc(s.broadcast_label || t('Broadcaster'))}</div><div class="value">📻 ${esc(s.broadcaster_callsign)}${s.broadcaster_name ? ' — ' + esc(s.broadcaster_name) : ''}</div></div>` : ''}
+      ${s.ncs_callsign ? `<div class="detail-stat"><div class="label">${t('Net Control')}</div><div class="value">${s.ncs_user_id ? `<img class="detail-avatar" src="/users/${s.ncs_user_id}/photo" onerror="this.style.display='none'" alt="" />` : ''}🎙 ${esc(s.ncs_callsign)}${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</div></div>` : ''}
+      ${s.broadcaster_callsign ? `<div class="detail-stat"><div class="label">${esc(s.broadcast_label || t('Broadcaster'))}</div><div class="value">${s.broadcaster_user_id ? `<img class="detail-avatar" src="/users/${s.broadcaster_user_id}/photo" onerror="this.style.display='none'" alt="" />` : ''}📻 ${esc(s.broadcaster_callsign)}${s.broadcaster_name ? ' — ' + esc(s.broadcaster_name) : ''}</div></div>` : ''}
       <div class="detail-stat"><div class="label">${t('Started')}</div><div class="value">${formatTime(s.started_at)}</div></div>
       <div class="detail-stat"><div class="label">${t('On Air')}</div><div class="value">⏱ ${elapsed(s.started_at)}</div></div>
       <div class="detail-stat"><div class="label">${t('Check-Ins')}</div><div class="value"><span class="badge badge-count" style="font-size:14px;padding:3px 12px">${s.checkins.length}</span></div></div>

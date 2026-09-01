@@ -17,6 +17,7 @@ class UserOut(BaseModel):
     gmrs_callsign: Optional[str] = None
     name: str
     email: str
+    phone: Optional[str] = None
     is_active: bool
     is_admin: bool
     notify_new_registrations: bool

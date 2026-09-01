@@ -74,6 +74,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Account Self-Service: Edit Your Profile, Phone Number, Photo (v2.32.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>⚙️ Account → <strong>Profile</strong> now lets you edit your own <strong>Name</strong>, <strong>Email</strong>, and <strong>Callsign</strong> — previously fixed at registration with no way to fix a typo or update contact info. Changing your callsign or email never logs you out of your current session. If email verification is enabled on this instance, changing your email requires confirming the new address (a link is sent to it) before you can log in again — your current session keeps working in the meantime.</li>
+              <li>New <strong>Phone</strong> field — shown to whoever's coordinating a net's Schedule sign-ups (as a tap-to-call link) so they can reach you if you haven't shown up for your shift. Never shown publicly or anywhere else.</li>
+              <li>New profile <strong>Photo</strong> upload — shown next to your callsign on the public Live page when you're Net Control or the assigned broadcaster, and in the app's own duty bar while a routine (non-activation) session is live.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Public Directory/Live Pages Are Now Translatable (v2.31.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The public <strong>Net Directory</strong> and <strong>Live Nets</strong> pages — previously the only pages in the app with no language switcher at all — now have the same 🌐 language selector as everywhere else, in the top-right corner. Every label, empty-state message, and piece of dynamically-loaded content (net cards, schedules, the live check-in roster) is translatable, using whatever languages an org's admin has already enabled.</li>

@@ -97,22 +97,24 @@ async def setup_database():
 @pytest.fixture(autouse=True)
 async def clean_tables():
     """Wipe all rows after each test to guarantee isolation. Also removes any
-    per-org logo file a test uploaded (`org_{id}_logo.*` -- issue follow-up)
-    -- unlike the DB rows above, files on disk aren't reset by anything else,
-    and org ids get reused across tests (rows are wiped, not the
-    autoincrement sequence), so a leftover file from one test's org id=1
-    would otherwise leak into the next test that happens to get the same id.
-    Deliberately scoped to ONLY the org_*_logo.* pattern this feature's own
-    tests create, never the bare instance-wide logo.* -- this repo's own
-    uploads/ dir can hold a real, git-tracked logo file that a blind cleanup
-    would wrongly delete (hit exactly this while developing this fixture)."""
+    per-org logo (`org_{id}_logo.*`) or per-user profile photo
+    (`user_{id}_photo.*`, issue follow-up) file a test uploaded -- unlike the
+    DB rows above, files on disk aren't reset by anything else, and org/user
+    ids get reused across tests (rows are wiped, not the autoincrement
+    sequence), so a leftover file from one test's id=1 would otherwise leak
+    into the next test that happens to get the same id. Deliberately scoped
+    to ONLY these two specific patterns, never the bare instance-wide
+    logo.* -- this repo's own uploads/ dir can hold a real, git-tracked logo
+    file that a blind cleanup would wrongly delete (hit exactly this while
+    developing this fixture)."""
     yield
     async with SessionLocal() as db:
         for table in reversed(Base.metadata.sorted_tables):
             await db.execute(table.delete())
         await db.commit()
-    for f in UPLOADS_DIR.glob("org_*_logo.*"):
-        f.unlink(missing_ok=True)
+    for pattern in ("org_*_logo.*", "user_*_photo.*"):
+        for f in UPLOADS_DIR.glob(pattern):
+            f.unlink(missing_ok=True)
 
 
 # ── Test client ──────────────────────────────────────────────────────────────

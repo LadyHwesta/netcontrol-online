@@ -42,6 +42,11 @@ class User(Base):
     gmrs_callsign = Column(String(12), nullable=True)  # separate GMRS family license, if held (issue #23)
     name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
+    # Self-service (issue follow-up); shown in the Schedule sign-up roster
+    # (net_control_signups) to whoever has edit access to that net, so a
+    # missing NCS/broadcaster can be called directly. Free text, no format
+    # validation -- operators span many countries/formats.
+    phone = Column(String(30), nullable=True)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=False, nullable=False)  # False until admin approves
     is_admin = Column(Boolean, default=False, nullable=False)

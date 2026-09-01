@@ -1,6 +1,66 @@
 // ============================================================
-// PROFILE — GMRS callsign (issue #23)
+// PROFILE — name/email/callsign/phone, photo (issue follow-up)
 // ============================================================
+async function saveProfile() {
+  const name = document.getElementById('profile-name').value.trim();
+  if (!name) return toast(t('Name is required'), 'error');
+  const email = document.getElementById('profile-email').value.trim();
+  const callsign = document.getElementById('profile-callsign').value.trim().toUpperCase();
+  const phone = document.getElementById('profile-phone').value.trim() || null;
+  const emailChanged = email !== currentUser.email;
+  try {
+    currentUser = await apiFetch('/auth/profile', {
+      method: 'PATCH', body: JSON.stringify({ name, email, callsign, phone }),
+    });
+    document.getElementById('profile-name').value = currentUser.name || '';
+    document.getElementById('profile-email').value = currentUser.email || '';
+    document.getElementById('profile-callsign').value = currentUser.callsign || '';
+    document.getElementById('profile-phone').value = currentUser.phone || '';
+    // Callsign/name changed -- header shows them immediately, no reload needed.
+    const cs = document.getElementById('header-callsign');
+    if (cs) cs.textContent = currentUser.callsign;
+    const csShort = document.getElementById('header-callsign-short');
+    if (csShort) csShort.textContent = currentUser.callsign;
+
+    // Upload the photo file, if one was chosen, as a second step -- same
+    // two-step shape as branding.js's saveBranding() (text fields via one
+    // call, logo/photo via a separate multipart POST).
+    const fileInput = document.getElementById('profile-photo-file');
+    if (fileInput.files[0]) {
+      const fd = new FormData();
+      fd.append('file', fileInput.files[0]);
+      await fetch('/auth/photo', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd,
+      }).then(r => { if (!r.ok) throw new Error(t('Photo upload failed')); });
+      fileInput.value = '';
+      document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
+    }
+
+    if (emailChanged && !currentUser.email_verified) {
+      toast(t("Profile saved — check your new email to verify it. You'll need to confirm it before logging in again."));
+    } else {
+      toast(t('Profile saved'));
+    }
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function previewProfilePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('profile-photo-preview').src = URL.createObjectURL(file);
+}
+
+async function deleteProfilePhoto() {
+  if (!confirm(t('Remove your profile photo?'))) return;
+  try {
+    await apiFetch('/auth/photo', { method: 'DELETE' });
+    toast(t('Photo removed'));
+    document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function saveGmrsCallsign() {
   const gmrs_callsign = document.getElementById('profile-gmrs-callsign').value.trim().toUpperCase() || null;
   try {
@@ -220,4 +280,5 @@ while True:
 
 onEnter(['new-token-name'], createApiToken);
 onEnter(['profile-gmrs-callsign'], saveGmrsCallsign);
+onEnter(['profile-name', 'profile-email', 'profile-callsign', 'profile-phone'], saveProfile);
 

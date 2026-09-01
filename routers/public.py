@@ -131,8 +131,8 @@ async def public_session_detail(session_id: int, db: AsyncSession = Depends(get_
         (await db.execute(select(Checkin).filter(Checkin.session_id == session_id).order_by(Checkin.checked_in_at))).scalars().all()
     )
     duty = await _duty_labels_for_session(net, s, db) if net else {
-        "ncs_callsign": None, "ncs_name": None,
-        "broadcaster_callsign": None, "broadcaster_name": None, "broadcast_label": None,
+        "ncs_callsign": None, "ncs_name": None, "ncs_user_id": None,
+        "broadcaster_callsign": None, "broadcaster_name": None, "broadcaster_user_id": None, "broadcast_label": None,
         "next_ncs_callsign": None, "next_ncs_name": None,
         "next_broadcaster_callsign": None, "next_broadcaster_name": None,
     }

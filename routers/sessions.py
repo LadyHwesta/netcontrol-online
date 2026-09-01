@@ -70,8 +70,10 @@ class SessionOut(BaseModel):
     # (net control falls back to whoever started the session when no sign-up matches)
     ncs_callsign: Optional[str] = None
     ncs_name: Optional[str] = None
+    ncs_user_id: Optional[int] = None       # profile photo (issue follow-up) -- frontend builds /users/{id}/photo
     broadcaster_callsign: Optional[str] = None
     broadcaster_name: Optional[str] = None
+    broadcaster_user_id: Optional[int] = None
     broadcast_label: Optional[str] = None
     # Same, but for the schedule sign-up one week after this session's date (no fallback --
     # there's no operator yet for a session that hasn't started).
