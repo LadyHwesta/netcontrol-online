@@ -4,6 +4,10 @@
 # Uploaded files (logos etc.) — instance-specific, not part of the repo
 uploads/
 
+# Pre-deploy database backups (deploy.sh, main instances only) — instance-
+# specific, and can get large; never belongs in the repo
+backups/
+
 # Python
 __pycache__/
 *.py[cod]

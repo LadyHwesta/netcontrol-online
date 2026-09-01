@@ -223,6 +223,18 @@ The template above, plus `PORT`, `SYSTEMD_SERVICE`, and `GIT_BRANCH` in `.env`, 
 
 `deploy.sh` only runs the test suite automatically when `GIT_BRANCH` is `testing` — a `main` instance skips it, since a change should already have passed on testing before being merged. Run `./deploy.sh --force-tests` to run the suite anyway on a `main` instance (e.g. right after a hotfix committed straight to `main`).
 
+#### Pre-deploy database backups
+
+Every `deploy.sh` run on a `main` instance (`GIT_BRANCH=main`) backs its own database up into `<checkout>/backups/` before touching anything — a `pg_dump | gzip` for Postgres, a plain file copy for SQLite — keeping the 14 most recent. `testing`/other instances skip this: their data is expected to be disposable (see "Branching model" above), so there's nothing there worth spending backup time/storage on.
+
+This isn't a substitute for a real off-server backup strategy (it lives on the same disk as the database it's backing up, and 14 deploys' worth of history is only ever as deep as your deploy cadence), but it's cheap insurance against the two most common ways to lose data outright: a migration gone wrong, or a maintenance script (`demo_reset.py`, which drops and recreates the entire schema) run against the wrong instance's `.env` by mistake. `backups/` is gitignored — never committed, and safe to prune or move to real off-server storage by hand at any time.
+
+To restore a Postgres backup:
+```bash
+gunzip -c backups/<service>-<timestamp>.sql.gz | psql "$DATABASE_URL"
+```
+(onto an empty database — this doesn't clear existing tables first).
+
 #### Troubleshooting a failed deploy
 
 First, always check the service logs — `deploy.sh` finishing without error only means the *deploy steps* succeeded (git pull, pip install, migrate.py, systemd restart); it doesn't mean the app actually started:

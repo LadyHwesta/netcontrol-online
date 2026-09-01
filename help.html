@@ -74,6 +74,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Automatic Pre-Deploy Database Backups (v2.25.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Deploy/ops change, not an in-app feature: every <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">deploy.sh</code> run on a <strong>main</strong> instance now backs its own database up into <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">backups/</code> before touching anything — <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">pg_dump | gzip</code> for Postgres, a plain file copy for SQLite — keeping the 14 most recent. A failed backup aborts the deploy rather than continuing on one that couldn't be trusted.</li>
+              <li><strong>testing</strong> instances skip this on purpose — their data is expected to be disposable. See "Pre-deploy database backups" in README.md, including how to restore one.</li>
+              <li>Cheap insurance against the two most common ways to lose a database outright: a migration gone wrong, or a maintenance script run against the wrong instance's <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> by hand.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — demo_reset.py's Phantom passlib Dependency Removed (v2.24.3)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li><strong>Fixed:</strong> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">demo_reset.py</code> (the public demo's periodic reset script) hashed its demo account's password via <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">passlib</code> — a dependency the rest of the app has never actually used (<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">routers/auth.py</code> hashes passwords with plain <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">bcrypt</code> directly) and that was never listed in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">requirements.txt</code>, so nothing had ever installed it. Every reset failed with "passlib not found — activate the virtualenv first," regardless of virtualenv.</li>
