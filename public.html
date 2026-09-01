@@ -229,9 +229,25 @@
       margin-top: 40px;
     }
     footer a { color: var(--lc-blue); text-decoration: none; }
+    .lang-select {
+      background: var(--lc-surface); border: 1px solid var(--lc-border); color: var(--lc-text);
+      border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: inherit;
+    }
   </style>
 </head>
 <body>
+
+<!-- Language switcher (issue follow-up) -- this page has no #app header to
+     live in yet, same "fixed corner" convention index.html's pre-login
+     screen uses for the same reason. Hidden until at least one language is
+     enabled (see i18n.js's _updateLangUi). -->
+<div id="lang-corner" style="position:fixed;top:14px;right:14px;z-index:20;display:flex;align-items:center;gap:8px">
+  <a class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+    style="display:none;font-size:10px;color:var(--lc-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
+  <select class="lang-select" onchange="saveLang(this.value)" title="Language" style="display:none">
+    <option value="en">English</option>
+  </select>
+</div>
 
 <header>
   <img id="header-logo" src="/logo" alt="" style="max-height:40px;max-width:140px;display:none;border-radius:4px;object-fit:contain"
@@ -242,7 +258,7 @@
     <div id="header-tagline" style="display:none;font-size:11px;color:rgba(0,0,0,0.6);font-weight:600;letter-spacing:.04em;margin-top:-2px"></div>
   </div>
   <div class="header-sub">
-    Public view &bull; Auto-updates every 30 seconds<br>
+    <span data-i18n="Public view">Public view</span> &bull; <span data-i18n="Auto-updates every 30 seconds">Auto-updates every 30 seconds</span><br>
     <span id="clock" style="font-family:monospace"></span>
   </div>
 </header>
@@ -250,21 +266,21 @@
 <main>
   <!-- List view -->
   <div id="view-list">
-    <div class="section-title" id="section-title">Active Nets</div>
+    <div class="section-title" id="section-title" data-i18n="Active Nets">Active Nets</div>
     <div class="refresh-bar" id="refresh-bar">
       <div class="refresh-dot"></div>
-      <span id="refresh-status">Loading…</span>
+      <span id="refresh-status" data-i18n="Loading…">Loading…</span>
     </div>
     <div id="nets-container"></div>
   </div>
 
   <!-- Detail view -->
   <div id="view-detail" style="display:none">
-    <button class="btn-back" onclick="showList()">← All Active Nets</button>
+    <button class="btn-back" onclick="showList()" data-i18n="← All Active Nets">← All Active Nets</button>
     <div class="section-title" id="detail-net-name"></div>
     <div class="refresh-bar">
       <div class="refresh-dot"></div>
-      <span id="detail-refresh-status">Loading…</span>
+      <span id="detail-refresh-status" data-i18n="Loading…">Loading…</span>
     </div>
     <div class="card">
       <div class="detail-header" id="detail-header"></div>
@@ -272,13 +288,13 @@
         <thead>
           <tr>
             <th>#</th>
-            <th>Callsign</th>
-            <th>Name</th>
+            <th data-i18n="Callsign">Callsign</th>
+            <th data-i18n="Name">Name</th>
           </tr>
         </thead>
         <tbody id="detail-checkins"></tbody>
       </table>
-      <div id="detail-empty" style="display:none;padding:20px 0;text-align:center;color:var(--lc-muted);font-size:13px">
+      <div id="detail-empty" style="display:none;padding:20px 0;text-align:center;color:var(--lc-muted);font-size:13px" data-i18n="No check-ins yet.">
         No check-ins yet.
       </div>
     </div>
@@ -287,22 +303,24 @@
          show; the toggle is a deliberate, separate decision from whether
          APRS is configured at all (field-team positions can be sensitive). -->
     <div id="detail-aprs-map-card" class="card" style="display:none;margin-top:14px">
-      <div class="section-title" style="margin-bottom:10px">🗺️ APRS Station Map</div>
+      <div class="section-title" style="margin-bottom:10px" data-i18n="🗺️ APRS Station Map">🗺️ APRS Station Map</div>
       <div id="detail-aprs-map-container" style="height:320px;border-radius:8px;overflow:hidden"></div>
     </div>
   </div>
 </main>
 
 <footer>
-  <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a> &bull; <a href="/">Operator Login</a><br>
-  &copy; <span id="footer-year"></span> NetControl Online &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener">Open Source (GPLv3)</a>
+  <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a> &bull; <a href="/" data-i18n="Operator Login">Operator Login</a><br>
+  &copy; <span id="footer-year"></span> NetControl Online &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="Open Source (GPLv3)">Open Source (GPLv3)</a>
 </footer>
 <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
 
+<script src="/static/js/state.js?v=24"></script>
+<script src="/static/js/utils.js?v=21"></script>
+<script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
 <script src="/static/js/aprs-map.js?v=41"></script>
 <script>
-  const API = '';
   let listInterval = null;
   let detailInterval = null;
   let activeSessionId = null;
@@ -352,14 +370,14 @@
       const sessions = await fetch(API + '/public/active?org=' + encodeURIComponent(slug)).then(r => r.json());
       renderList(sessions);
       const now = new Date().toLocaleTimeString();
-      document.getElementById('refresh-status').textContent = `Last updated ${now} — refreshes every 30s`;
+      document.getElementById('refresh-status').textContent = t('Last updated {time} — refreshes every 30s').replace('{time}', now);
     } catch {
-      document.getElementById('refresh-status').textContent = 'Error loading — retrying…';
+      document.getElementById('refresh-status').textContent = t('Error loading — retrying…');
     }
   }
 
   async function loadOrgPicker() {
-    document.getElementById('section-title').textContent = 'Choose an Organization';
+    document.getElementById('section-title').textContent = t('Choose an Organization');
     document.getElementById('refresh-bar').style.display = 'none';
     const el = document.getElementById('nets-container');
     try {
@@ -368,7 +386,7 @@
         el.innerHTML = `
           <div class="empty">
             <div class="icon">📡</div>
-            <p>No organizations have any nets listed in the public directory yet.</p>
+            <p>${t('No organizations have any nets listed in the public directory yet.')}</p>
           </div>`;
         return;
       }
@@ -377,7 +395,7 @@
           <div class="net-name">${esc(o.name)}</div>
         </a>`).join('');
     } catch {
-      el.innerHTML = `<div class="empty"><p>Couldn't load organizations — try refreshing.</p></div>`;
+      el.innerHTML = `<div class="empty"><p>${t("Couldn't load organizations — try refreshing.")}</p></div>`;
     }
   }
 
@@ -387,7 +405,7 @@
       el.innerHTML = `
         <div class="empty">
           <div class="icon">📡</div>
-          <p>No nets are currently active.<br>Check back later or visit again when a net is scheduled.</p>
+          <p>${t('No nets are currently active.')}<br>${t('Check back later or visit again when a net is scheduled.')}</p>
         </div>`;
       return;
     }
@@ -397,18 +415,18 @@
           <div style="flex:1;min-width:200px">
             <div class="net-name">
               ${esc(s.net_name)}
-              <span class="badge badge-live" style="margin-left:6px">LIVE</span>
+              <span class="badge badge-live" style="margin-left:6px">${t('LIVE')}</span>
             </div>
             <div class="net-meta" style="margin-top:8px">
               ${s.frequency ? `<span>📡 <strong>${esc(s.frequency)}</strong></span>` : ''}
-              <span>⏱ On air <strong>${elapsed(s.started_at)}</strong> (started ${formatTime(s.started_at)})</span>
-              ${s.ncs_callsign ? `<span>🎙 NCS: <strong>${esc(s.ncs_callsign)}</strong>${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</span>` : ''}
-              ${s.broadcaster_callsign ? `<span>📻 ${esc(s.broadcast_label || 'Broadcaster')}: <strong>${esc(s.broadcaster_callsign)}</strong>${s.broadcaster_name ? ' — ' + esc(s.broadcaster_name) : ''}</span>` : ''}
+              <span>⏱ ${t('On air')} <strong>${elapsed(s.started_at)}</strong> (${t('started')} ${formatTime(s.started_at)})</span>
+              ${s.ncs_callsign ? `<span>🎙 ${t('NCS')}: <strong>${esc(s.ncs_callsign)}</strong>${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</span>` : ''}
+              ${s.broadcaster_callsign ? `<span>📻 ${esc(s.broadcast_label || t('Broadcaster'))}: <strong>${esc(s.broadcaster_callsign)}</strong>${s.broadcaster_name ? ' — ' + esc(s.broadcaster_name) : ''}</span>` : ''}
             </div>
           </div>
           <div style="text-align:center;padding-top:2px">
             <span class="badge badge-count" style="font-size:16px;padding:4px 14px">${s.checkin_count}</span>
-            <div style="font-size:11px;color:var(--lc-muted);margin-top:3px">checked in</div>
+            <div style="font-size:11px;color:var(--lc-muted);margin-top:3px">${t('checked in')}</div>
           </div>
         </div>
       </div>
@@ -431,14 +449,14 @@
       });
       renderDetail(s);
       const now = new Date().toLocaleTimeString();
-      document.getElementById('detail-refresh-status').textContent = `Last updated ${now} — refreshes every 30s`;
+      document.getElementById('detail-refresh-status').textContent = t('Last updated {time} — refreshes every 30s').replace('{time}', now);
     } catch (e) {
       if (e.message === 'gone') {
         // Net ended — return to list
         showList();
         return;
       }
-      document.getElementById('detail-refresh-status').textContent = 'Error loading — retrying…';
+      document.getElementById('detail-refresh-status').textContent = t('Error loading — retrying…');
     }
   }
 
@@ -455,12 +473,12 @@
     }
 
     document.getElementById('detail-header').innerHTML = `
-      ${s.frequency ? `<div class="detail-stat"><div class="label">Frequency</div><div class="value">📡 ${esc(s.frequency)}</div></div>` : ''}
-      ${s.ncs_callsign ? `<div class="detail-stat"><div class="label">Net Control</div><div class="value">🎙 ${esc(s.ncs_callsign)}${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</div></div>` : ''}
-      ${s.broadcaster_callsign ? `<div class="detail-stat"><div class="label">${esc(s.broadcast_label || 'Broadcaster')}</div><div class="value">📻 ${esc(s.broadcaster_callsign)}${s.broadcaster_name ? ' — ' + esc(s.broadcaster_name) : ''}</div></div>` : ''}
-      <div class="detail-stat"><div class="label">Started</div><div class="value">${formatTime(s.started_at)}</div></div>
-      <div class="detail-stat"><div class="label">On Air</div><div class="value">⏱ ${elapsed(s.started_at)}</div></div>
-      <div class="detail-stat"><div class="label">Check-Ins</div><div class="value"><span class="badge badge-count" style="font-size:14px;padding:3px 12px">${s.checkins.length}</span></div></div>
+      ${s.frequency ? `<div class="detail-stat"><div class="label">${t('Frequency')}</div><div class="value">📡 ${esc(s.frequency)}</div></div>` : ''}
+      ${s.ncs_callsign ? `<div class="detail-stat"><div class="label">${t('Net Control')}</div><div class="value">🎙 ${esc(s.ncs_callsign)}${s.ncs_name ? ' — ' + esc(s.ncs_name) : ''}</div></div>` : ''}
+      ${s.broadcaster_callsign ? `<div class="detail-stat"><div class="label">${esc(s.broadcast_label || t('Broadcaster'))}</div><div class="value">📻 ${esc(s.broadcaster_callsign)}${s.broadcaster_name ? ' — ' + esc(s.broadcaster_name) : ''}</div></div>` : ''}
+      <div class="detail-stat"><div class="label">${t('Started')}</div><div class="value">${formatTime(s.started_at)}</div></div>
+      <div class="detail-stat"><div class="label">${t('On Air')}</div><div class="value">⏱ ${elapsed(s.started_at)}</div></div>
+      <div class="detail-stat"><div class="label">${t('Check-Ins')}</div><div class="value"><span class="badge badge-count" style="font-size:14px;padding:3px 12px">${s.checkins.length}</span></div></div>
     `;
 
     const tbody = document.getElementById('detail-checkins');
@@ -495,7 +513,7 @@
     document.getElementById('detail-checkins').innerHTML = '';
     document.getElementById('detail-empty').style.display = 'none';
     document.getElementById('detail-aprs-map-card').style.display = 'none';
-    document.getElementById('detail-refresh-status').textContent = 'Loading…';
+    document.getElementById('detail-refresh-status').textContent = t('Loading…');
     startDetailPolling();
   }
 
@@ -513,7 +531,7 @@
       const b = await fetch('/branding').then(r => r.json());
       const titleEl = document.getElementById('header-title');
       if (b.org_name) {
-        titleEl.innerHTML = `<span>${esc(b.org_name)}</span> — Live`;
+        titleEl.innerHTML = `<span>${esc(b.org_name)}</span> — ${t('Live')}`;
         document.title = b.org_name + ' — Live Nets';
       }
       const tagEl = document.getElementById('header-tagline');
@@ -541,7 +559,7 @@
       const org = await fetch('/public/organizations/' + encodeURIComponent(slug)).then(r => r.ok ? r.json() : null);
       if (!org) return;
       const titleEl = document.getElementById('header-title');
-      titleEl.innerHTML = `<span>${esc(org.name)}</span> — Live`;
+      titleEl.innerHTML = `<span>${esc(org.name)}</span> — ${t('Live')}`;
       document.title = org.name + ' — Live Nets';
       if (org.website_url) {
         titleEl.style.cursor = 'pointer';
@@ -563,6 +581,7 @@
   // ── Boot ─────────────────────────────────────────────
   loadBranding();
   startListPolling();
+  syncLangFromUser(null);   // fire-and-forget; non-blocking — auto-detects browser language here too
 </script>
 <script src="/static/js/pwa.js?v=2"></script>
 </body>

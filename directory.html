@@ -180,9 +180,25 @@
       margin-top: 40px;
     }
     footer a { color: var(--lc-blue); text-decoration: none; }
+    .lang-select {
+      background: var(--lc-surface); border: 1px solid var(--lc-border); color: var(--lc-text);
+      border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: inherit;
+    }
   </style>
 </head>
 <body>
+
+<!-- Language switcher (issue follow-up) -- this page has no #app header to
+     live in yet, same "fixed corner" convention index.html's pre-login
+     screen uses for the same reason. Hidden until at least one language is
+     enabled (see i18n.js's _updateLangUi). -->
+<div id="lang-corner" style="position:fixed;top:14px;right:14px;z-index:20;display:flex;align-items:center;gap:8px">
+  <a class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+    style="display:none;font-size:10px;color:var(--lc-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
+  <select class="lang-select" onchange="saveLang(this.value)" title="Language" style="display:none">
+    <option value="en">English</option>
+  </select>
+</div>
 
 <header>
   <img id="header-logo" src="/logo" alt="" style="max-height:40px;max-width:140px;display:none;border-radius:4px;object-fit:contain"
@@ -193,20 +209,20 @@
     <div id="header-tagline" style="display:none;font-size:11px;color:rgba(0,0,0,0.6);font-weight:600;letter-spacing:.04em;margin-top:-2px"></div>
   </div>
   <div class="header-sub" id="header-sub">
-    Public net directory<br>
-    <a href="/live" id="live-link" style="color:var(--lc-blue);text-decoration:none">📡 See what's live now →</a>
+    <span data-i18n="Public net directory">Public net directory</span><br>
+    <a href="/live" id="live-link" style="color:var(--lc-blue);text-decoration:none"><span data-i18n="📡 See what's live now →">📡 See what's live now →</span></a>
   </div>
 </header>
 
 <main>
-  <div class="section-title" id="section-title">Net Directory</div>
+  <div class="section-title" id="section-title" data-i18n="Net Directory">Net Directory</div>
 
   <div class="filter-bar" id="filter-bar">
-    <input type="text" id="search-box" placeholder="Search by name or frequency…" oninput="renderList()" />
+    <input type="text" id="search-box" placeholder="Search by name or frequency…" oninput="renderList()" data-i18n-placeholder="Search by name or frequency…" />
     <select id="type-filter" onchange="renderList()">
-      <option value="">All Types</option>
-      <option value="ham">Ham Radio</option>
-      <option value="gmrs">GMRS</option>
+      <option value="" data-i18n="All Types">All Types</option>
+      <option value="ham" data-i18n="Ham Radio">Ham Radio</option>
+      <option value="gmrs" data-i18n="GMRS">GMRS</option>
     </select>
   </div>
 
@@ -214,13 +230,15 @@
 </main>
 
 <footer>
-  <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a> &bull; <a href="/">Operator Login</a><br>
-  &copy; <span id="footer-year"></span> NetControl Online &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener">Open Source (GPLv3)</a>
+  <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a> &bull; <a href="/" data-i18n="Operator Login">Operator Login</a><br>
+  &copy; <span id="footer-year"></span> NetControl Online &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="Open Source (GPLv3)">Open Source (GPLv3)</a>
 </footer>
 <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
 
+<script src="/static/js/state.js?v=24"></script>
+<script src="/static/js/utils.js?v=21"></script>
+<script src="/static/js/i18n.js?v=4"></script>
 <script>
-  const API = '';
   let allNets = [];
 
   function esc(s) {
@@ -290,14 +308,14 @@
       renderList();
     } catch {
       document.getElementById('nets-container').innerHTML = `
-        <div class="empty"><p>Couldn't load the directory — try refreshing.</p></div>`;
+        <div class="empty"><p>${t("Couldn't load the directory — try refreshing.")}</p></div>`;
     }
   }
 
   async function loadOrgPicker() {
-    document.getElementById('section-title').textContent = 'Choose an Organization';
+    document.getElementById('section-title').textContent = t('Choose an Organization');
     document.getElementById('filter-bar').style.display = 'none';
-    document.getElementById('header-sub').innerHTML = 'Public net directory';
+    document.getElementById('header-sub').innerHTML = t('Public net directory');
     const el = document.getElementById('nets-container');
     try {
       const orgs = await fetch(API + '/public/organizations').then(r => r.json());
@@ -305,7 +323,7 @@
         el.innerHTML = `
           <div class="empty">
             <div class="icon">📖</div>
-            <p>No organizations have any nets listed in the public directory yet.</p>
+            <p>${t('No organizations have any nets listed in the public directory yet.')}</p>
           </div>`;
         return;
       }
@@ -314,7 +332,7 @@
           <div class="net-name">${esc(o.name)}</div>
         </a>`).join('');
     } catch {
-      el.innerHTML = `<div class="empty"><p>Couldn't load organizations — try refreshing.</p></div>`;
+      el.innerHTML = `<div class="empty"><p>${t("Couldn't load organizations — try refreshing.")}</p></div>`;
     }
   }
 
@@ -333,21 +351,21 @@
       el.innerHTML = `
         <div class="empty">
           <div class="icon">📖</div>
-          <p>No nets are listed in the public directory yet.<br>Net owners can opt in from the net's Edit form.</p>
+          <p>${t('No nets are listed in the public directory yet.')}<br>${t("Net owners can opt in from the net's Edit form.")}</p>
         </div>`;
       return;
     }
     if (!filtered.length) {
-      el.innerHTML = `<div class="empty"><p>No nets match your search.</p></div>`;
+      el.innerHTML = `<div class="empty"><p>${t('No nets match your search.')}</p></div>`;
       return;
     }
 
     const dayOrder = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
     el.innerHTML = filtered.map(n => {
-      const gmrsBadge = n.net_type === 'gmrs' ? '<span class="badge badge-gmrs" style="margin-left:6px">GMRS</span>' : '';
+      const gmrsBadge = n.net_type === 'gmrs' ? `<span class="badge badge-gmrs" style="margin-left:6px">${t('GMRS')}</span>` : '';
       const broadcastBadge = n.has_broadcast
-        ? `<span class="badge badge-broadcast" style="margin-left:6px">📻 ${esc(n.broadcast_label || 'Broadcast')}</span>`
+        ? `<span class="badge badge-broadcast" style="margin-left:6px">📻 ${esc(n.broadcast_label || t('Broadcast'))}</span>`
         : '';
       const schedules = (n.schedules || []).slice().sort((a, b) => dayOrder.indexOf(a.day_name) - dayOrder.indexOf(b.day_name));
       const viewerTz = detectedTimezone();
@@ -358,8 +376,8 @@
             const localStr = showLocal ? zonedTimeToLocalStr(nextDateForWeekday(dayOrder.indexOf(s.day_name)), s.start_time, s.timezone) : null;
             return `
             <div class="schedule-row">
-              <span class="day">${esc(s.day_name)}s</span> at ${esc(s.start_time)} ${esc(s.timezone)}
-              ${localStr ? `<span class="schedule-notes"> (${esc(localStr)} your time)</span>` : ''}
+              <span class="day">${esc(t(s.day_name))}</span> ${t('at')} ${esc(s.start_time)} ${esc(s.timezone)}
+              ${localStr ? `<span class="schedule-notes"> (${esc(localStr)} ${t('your time')})</span>` : ''}
               ${s.notes ? `<span class="schedule-notes"> — ${esc(s.notes)}</span>` : ''}
             </div>
           `;
@@ -371,7 +389,7 @@
         <div class="net-name">${esc(n.name)}${gmrsBadge}${broadcastBadge}</div>
         <div class="net-meta">
           ${n.frequency ? `<span>📡 <strong>${esc(n.frequency)}</strong></span>` : ''}
-          ${n.owner_callsign ? `<span>👤 Hosted by <strong>${esc(n.owner_callsign)}</strong>${n.owner_name ? ' — ' + esc(n.owner_name) : ''}</span>` : ''}
+          ${n.owner_callsign ? `<span>👤 ${t('Hosted by')} <strong>${esc(n.owner_callsign)}</strong>${n.owner_name ? ' — ' + esc(n.owner_name) : ''}</span>` : ''}
         </div>
         ${n.description ? `<div class="net-desc">${esc(n.description)}</div>` : ''}
         ${scheduleHtml}
@@ -385,7 +403,7 @@
       const b = await fetch('/branding').then(r => r.json());
       const titleEl = document.getElementById('header-title');
       if (b.org_name) {
-        titleEl.innerHTML = `<span>${esc(b.org_name)}</span> — Directory`;
+        titleEl.innerHTML = `<span>${esc(b.org_name)}</span> — ${t('Directory')}`;
         document.title = b.org_name + ' — Net Directory';
       }
       const tagEl = document.getElementById('header-tagline');
@@ -413,7 +431,7 @@
       const org = await fetch('/public/organizations/' + encodeURIComponent(slug)).then(r => r.ok ? r.json() : null);
       if (!org) return;
       const titleEl = document.getElementById('header-title');
-      titleEl.innerHTML = `<span>${esc(org.name)}</span> — Directory`;
+      titleEl.innerHTML = `<span>${esc(org.name)}</span> — ${t('Directory')}`;
       document.title = org.name + ' — Net Directory';
       if (org.website_url) {
         titleEl.style.cursor = 'pointer';
@@ -435,6 +453,7 @@
   // ── Boot ─────────────────────────────────────────────
   loadBranding();
   loadDirectory();
+  syncLangFromUser(null);   // fire-and-forget; non-blocking — auto-detects browser language here too
 </script>
 <script src="/static/js/pwa.js?v=2"></script>
 </body>
