@@ -209,6 +209,31 @@ class TestOrphanedOrgCleanup:
         orgs_after = client.get("/orgs").json()
         assert not any(o["slug"] == "doomed-org" for o in orgs_after)
 
+    def test_deleting_org_founder_cleans_up_their_orgs_logo_file(self, client):
+        """Per-org branding (issue follow-up): an org's logo is a bare file
+        on disk, not a DB column -- db.delete(org) alone can't clean it up.
+        Without _delete_orphaned_orgs also removing it, an orphaned org's
+        logo would leak on disk forever."""
+        from routers.helpers import UPLOADS_DIR
+
+        super_token = _bootstrap_super_admin(client)
+        token = _org_owner(client, super_token, "W2FOUND", "doomed-org", "Doomed Org")
+        me = client.get("/auth/me", headers=auth(token)).json()
+        user_id, org_id = me["id"], me["current_org_id"]
+
+        upload = client.post(f"/orgs/{org_id}/logo",
+            files={"file": ("logo.png", io.BytesIO(b"fake logo bytes"), "image/png")},
+            headers=auth(token))
+        assert upload.status_code == 204, upload.text
+        logo_path = next(UPLOADS_DIR.glob(f"org_{org_id}_logo.*"))
+        assert logo_path.exists()
+
+        delete = client.delete(f"/admin/users/{user_id}", headers=auth(super_token))
+        assert delete.status_code == 204
+
+        assert not logo_path.exists()
+        assert not list(UPLOADS_DIR.glob(f"org_{org_id}_logo.*"))
+
     def test_rejecting_one_of_two_org_admins_does_not_delete_the_org(self, client):
         """Only actually-orphaned orgs get cleaned up -- one with a second
         approved admin left behind must survive."""

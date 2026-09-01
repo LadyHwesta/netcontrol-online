@@ -443,6 +443,14 @@ async def _delete_orphaned_orgs(org_ids: set[int], db: AsyncSession) -> None:
         if remaining == 0:
             org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
             if org:
+                # Per-org branding logo (issue follow-up) has no DB column --
+                # it's a bare file on disk (_org_logo_file) that db.delete(org)
+                # below has no way to clean up on its own. Without this, a
+                # deleted org's logo would leak on disk forever (org ids are
+                # never reused once actually deleted, unlike a test DB's
+                # row-wipe-between-tests -- see tests/conftest.py).
+                for f in UPLOADS_DIR.glob(f"org_{org_id}_logo.*"):
+                    f.unlink(missing_ok=True)
                 await db.delete(org)
 
 
