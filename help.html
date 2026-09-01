@@ -69,6 +69,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Session List &amp; Schedule Sign-ups (v2.20.6)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Closes the gap the Sessions/Schedule slice left open: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">sessions.js</code>'s own dynamically-rendered session-list table and session-summary modal (Duration / With Traffic / New Stations), and <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">schedules.js</code>'s upcoming-slots grid (Sign Up / Assign buttons, role labels, sign-up/assign confirmation toasts).</li>
+              <li>No backend changes.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Check-In Panel (v2.20.5)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Extends UI translation (see below) to <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">checkins.js</code> — the check-in roster, CSV import, callsign lookup/search, offline queue banner, Expected Stations, the full ARES/ACES Tactical Assignments &amp; Station Schedule workflow (add/edit/sign-on/sign-off/hand-off/history for tactical positions and Net Control shifts), the evacuation zone roster, the traffic message log, and station remarks/preferred-name editors. This was the last and largest slice of the incremental rollout tracked in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">TECH_DEBT.md</code> — flagged early on as the hardest file for its dynamically-rendered, sometimes ternary-composed strings.</li>

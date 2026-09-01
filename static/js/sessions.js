@@ -264,14 +264,14 @@ async function loadSessions() {
 function renderSessions(sessions) {
   const el = document.getElementById('sessions-list-container');
   if (sessions.length === 0) {
-    el.innerHTML = '<div class="empty"><p>No sessions yet. Start one above.</p></div>';
+    el.innerHTML = `<div class="empty"><p>${t('No sessions yet. Start one above.')}</p></div>`;
     return;
   }
   el.innerHTML = `<table class="tbl"><thead><tr>
-    <th>Session</th><th>Started</th><th class="col-sess-ended">Ended</th><th class="col-sess-checkins">Check-ins</th><th>Status</th><th></th>
+    <th>${t('Session')}</th><th>${t('Started')}</th><th class="col-sess-ended">${t('Ended')}</th><th class="col-sess-checkins">${t('Check-ins')}</th><th>${t('Status')}</th><th></th>
   </tr></thead><tbody>` +
   sessions.map(s => {
-    const label = s.name ? esc(s.name) : `Session ${s.id}`;
+    const label = s.name ? esc(s.name) : `${t('Session')} ${s.id}`;
     return `<tr>
       <td>
         <a href="#" onclick="loadSessionLive(${s.id}); return false;" style="color:var(--accent-hover);text-decoration:none">${label}</a>
@@ -280,7 +280,7 @@ function renderSessions(sessions) {
       <td>${fmt(s.started_at)}</td>
       <td class="col-sess-ended">${fmt(s.ended_at)}</td>
       <td class="col-sess-checkins"><span class="badge badge-blue">${s.checkin_count}</span></td>
-      <td>${s.ended_at ? '<span class="badge badge-gray">Ended</span>' : '<span class="badge badge-green">Live</span>'}</td>
+      <td>${s.ended_at ? `<span class="badge badge-gray">${t('Ended')}</span>` : `<span class="badge badge-green">${t('Live')}</span>`}</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteSession(${s.id})">${t('Delete')}</button></td>
     </tr>`;
   }).join('') + '</tbody></table>';
@@ -381,7 +381,7 @@ async function logOfflineNet() {
 }
 
 async function promptRenameSession(id, currentName) {
-  const name = prompt('Session name:', currentName);
+  const name = prompt(t('Session name:'), currentName);
   if (name === null) return; // cancelled
   try {
     await apiFetch(`/sessions/${id}/rename`, { method: 'PATCH', body: JSON.stringify({ name: name.trim() || null }) });
@@ -397,7 +397,7 @@ async function loadSessionLive(sessionId) {
   expectedStations = [];
   lastKnownCheckins = [];
   pendingTrafficCallsigns.clear();
-  document.getElementById('expected-list').innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">Set filter and click Load List to see previously active stations.</p>';
+  document.getElementById('expected-list').innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('Set filter and click Load List to see previously active stations.')}</p>`;
   document.getElementById('expected-panel-body').style.display = 'none';
   document.getElementById('expected-toggle-icon').textContent = '▶';
   document.getElementById('traffic-banner').style.display = 'none';
@@ -607,31 +607,31 @@ function showSessionSummary(summary) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
     <div class="session-summary-card">
-      <h2 style="margin:0 0 4px;color:var(--lc-orange);font-size:18px">Session Complete</h2>
+      <h2 style="margin:0 0 4px;color:var(--lc-orange);font-size:18px">${t('Session Complete')}</h2>
       <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px">${esc(summary.net_name)}</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
         <div style="background:var(--bg);border-radius:8px;padding:12px;text-align:center">
           <div style="font-size:28px;font-weight:700;color:var(--lc-blue)">${summary.total_checkins}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Total Check-Ins</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${t('Total Check-Ins')}</div>
         </div>
         <div style="background:var(--bg);border-radius:8px;padding:12px;text-align:center">
           <div style="font-size:28px;font-weight:700;color:var(--lc-orange)">${dur}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Duration</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${t('Duration')}</div>
         </div>
         <div style="background:var(--bg);border-radius:8px;padding:12px;text-align:center">
           <div style="font-size:28px;font-weight:700;color:var(--lc-red)">${summary.traffic_count}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">With Traffic</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${t('With Traffic')}</div>
         </div>
         <div style="background:var(--bg);border-radius:8px;padding:12px;text-align:center">
           <div style="font-size:28px;font-weight:700;color:var(--success)">${summary.new_stations}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">New Stations</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${t('New Stations')}</div>
         </div>
       </div>
-      ${summary.net_frequency ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 16px">Frequency: ${esc(summary.net_frequency)}</p>` : ''}
+      ${summary.net_frequency ? `<p style="font-size:12px;color:var(--text-muted);margin:0 0 16px">${t('Frequency:')} ${esc(summary.net_frequency)}</p>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="openICS205(${summary.session_id})">📄 ICS-205 / Net Log</button>
-        <button class="btn btn-ghost" onclick="exportSessionById(${summary.session_id})">⬇ CSV Export</button>
-        <button class="btn btn-ghost" onclick="document.getElementById('session-summary-modal').remove()">Close</button>
+        <button class="btn btn-primary" onclick="openICS205(${summary.session_id})">📄 ${t('ICS-205 / Net Log')}</button>
+        <button class="btn btn-ghost" onclick="exportSessionById(${summary.session_id})">⬇ ${t('CSV Export')}</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('session-summary-modal').remove()">${t('Close')}</button>
       </div>
     </div>`;
   document.body.appendChild(modal);

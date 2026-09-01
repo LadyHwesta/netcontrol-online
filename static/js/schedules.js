@@ -154,7 +154,7 @@ async function loadUpcoming() {
   const schedMap = Object.fromEntries(schedules.map(s => [s.id, s]));
   const net = nets.find(n => n.id === currentNetId);
   const hasBroadcast = !!(net && net.has_broadcast);
-  const broadcastLabel = (net && net.broadcast_label) || 'Broadcaster';
+  const broadcastLabel = (net && net.broadcast_label) || t('Broadcaster');
   const isOwner = currentUser && currentNetOwnerId === currentUser.id;
 
   function roleRow(label, signup, role, slot, dateStr, isPast) {
@@ -165,7 +165,7 @@ async function loadUpcoming() {
         <span class="slot-claimed">
           <span class="callsign">${esc(signup.callsign)}</span>
           ${signup.name ? `<span class="text-muted"> — ${esc(signup.name)}</span>` : ''}
-          ${signup.role === 'both' ? '<span class="text-muted"> (both roles)</span>' : ''}
+          ${signup.role === 'both' ? `<span class="text-muted"> (${t('both roles')})</span>` : ''}
         </span>
         ${canRemove ? `<button class="btn btn-ghost btn-sm" onclick="removeSignup(${signup.id})">✕</button>` : ''}
       </div>`;
@@ -173,13 +173,13 @@ async function loadUpcoming() {
     if (isPast) {
       return `<div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:10px;color:var(--text-muted);min-width:70px">${esc(label)}</span>
-        <span class="lookup-notfound">No sign-up</span>
+        <span class="lookup-notfound">${t('No sign-up')}</span>
       </div>`;
     }
     return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:10px;color:var(--text-muted);min-width:70px">${esc(label)}</span>
-      <button class="btn btn-success btn-sm" onclick="openSignupModal(${slot.schedule_id}, '${slot.slot_date}', '${esc(dateStr)}', '${role}')">+ Sign Up</button>
-      ${isOwner ? `<button class="btn btn-ghost btn-sm" onclick="openAssignModal(${slot.schedule_id}, '${slot.slot_date}', '${esc(dateStr)}', '${role}')">👤 Assign</button>` : ''}
+      <button class="btn btn-success btn-sm" onclick="openSignupModal(${slot.schedule_id}, '${slot.slot_date}', '${esc(dateStr)}', '${role}')">+ ${t('Sign Up')}</button>
+      ${isOwner ? `<button class="btn btn-ghost btn-sm" onclick="openAssignModal(${slot.schedule_id}, '${slot.slot_date}', '${esc(dateStr)}', '${role}')">👤 ${t('Assign')}</button>` : ''}
     </div>`;
   }
 
@@ -196,17 +196,17 @@ async function loadUpcoming() {
     const ncSignup = slot.signups.find(s => s.role === 'net_control' || s.role === 'both');
     const bcSignup = slot.signups.find(s => s.role === 'broadcaster' || s.role === 'both');
 
-    let statusHtml = roleRow('Net Control', ncSignup, 'net_control', slot, dateStr, isPast);
+    let statusHtml = roleRow(t('Net Control'), ncSignup, 'net_control', slot, dateStr, isPast);
     if (hasBroadcast) {
       statusHtml += roleRow(broadcastLabel, bcSignup, 'broadcaster', slot, dateStr, isPast);
       if (!ncSignup && !bcSignup && !isPast) {
-        statusHtml += `<div><button class="btn btn-ghost btn-sm" onclick="openSignupModal(${slot.schedule_id}, '${slot.slot_date}', '${esc(dateStr)}', 'both')">+ Cover Both Roles</button></div>`;
+        statusHtml += `<div><button class="btn btn-ghost btn-sm" onclick="openSignupModal(${slot.schedule_id}, '${slot.slot_date}', '${esc(dateStr)}', 'both')">+ ${t('Cover Both Roles')}</button></div>`;
       }
     }
 
     return `<div class="slot-row${isPast ? '" style="opacity:.5' : ''}">
       <span class="slot-date">${dateStr}</span>
-      <span class="slot-time text-muted">${esc(sched.start_time || '')} ${esc(sched.timezone || '')}${localStr ? ` (${esc(localStr)} your time)` : ''}</span>
+      <span class="slot-time text-muted">${esc(sched.start_time || '')} ${esc(sched.timezone || '')}${localStr ? ` (${esc(localStr)} ${t('your time')})` : ''}</span>
       <span class="slot-status" style="display:flex;flex-direction:column;gap:5px">${statusHtml}</span>
     </div>`;
   }).join('');
@@ -257,7 +257,7 @@ async function submitSignup() {
       method: 'POST',
       body: JSON.stringify({ schedule_id, slot_date, role, callsign, name, email, notes }),
     });
-    toast(`${callsign} signed up for ${roleLabelFor(role)}`, 'success');
+    toast(`${callsign} ${t('signed up for')} ${roleLabelFor(role)}`, 'success');
     closeSignupModal();
     await loadUpcoming();
   } catch (e) {
@@ -297,7 +297,7 @@ function openAssignModal(scheduleId, slotDate, dateLabel, role) {
 
   // Populate user dropdown
   const sel = document.getElementById('assign-user-select');
-  sel.innerHTML = '<option value="">— choose a registered operator —</option>' +
+  sel.innerHTML = `<option value="">${t('— choose a registered operator —')}</option>` +
     registeredUsers.map(u =>
       `<option value="${u.id}">${esc(u.callsign)} — ${esc(u.name)}</option>`
     ).join('');
@@ -335,7 +335,7 @@ async function submitAssign() {
       body: JSON.stringify({ schedule_id, slot_date, role, assigned_user_id, notes }),
     });
     const user = registeredUsers.find(u => u.id === assigned_user_id);
-    toast(`${user ? user.callsign : 'Operator'} assigned as ${roleLabelFor(role)}`, 'success');
+    toast(`${user ? user.callsign : t('Operator')} ${t('assigned as')} ${roleLabelFor(role)}`, 'success');
     closeAssignModal();
     await loadUpcoming();
   } catch (e) { toast(e.message, 'error'); }
