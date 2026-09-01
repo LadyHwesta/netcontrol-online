@@ -457,8 +457,20 @@ function updateTrafficBanner(checkins) {
   }).join('');
 }
 
+// Checkin.is_first_checkin is trivially true for every single row on a
+// brand-new net's first-ever session (there's no prior checkin anywhere on
+// the net for ANY callsign to be compared against) -- without this, "welcome
+// new folks" would mean "welcome literally everyone", both as a wall of pills
+// in the banner and a 👋 on every row, which conveys nothing and just looks
+// broken. SessionOut.net_has_history (server-computed, see
+// _net_has_prior_checkin_history) is false only in that specific case, so
+// this gates both the banner and the per-row badge below.
+function _showWelcomeBadges() {
+  return !!(currentSessionData && currentSessionData.net_has_history);
+}
+
 function updateWelcomeBanner(checkins) {
-  const firstTimers = checkins.filter(c => c.is_first_checkin);
+  const firstTimers = _showWelcomeBadges() ? checkins.filter(c => c.is_first_checkin) : [];
   const banner = document.getElementById('welcome-banner');
   if (firstTimers.length === 0) {
     banner.style.display = 'none';
@@ -550,7 +562,7 @@ function renderCheckins(checkins) {
       const tacticalCell = c.tactical_callsign
         ? esc(c.tactical_callsign)
         : (c.evac_zone ? `📍 ${esc(c.evac_zone)}` : '—');
-      const welcomeBadge = c.is_first_checkin ? ` <span title="${t('First check-in on this net')}" style="font-size:11px">👋</span>` : '';
+      const welcomeBadge = (c.is_first_checkin && _showWelcomeBadges()) ? ` <span title="${t('First check-in on this net')}" style="font-size:11px">👋</span>` : '';
       return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
         <span class="tactical-callsign">${tacticalCell}</span>
         <span class="callsign">${esc(c.callsign)}${welcomeBadge}${posBadge}</span>
@@ -559,7 +571,7 @@ function renderCheckins(checkins) {
       </div>`;
     }
 
-    const welcomeBadge = c.is_first_checkin ? ` <span title="${t('First check-in on this net')}" style="font-size:11px">👋</span>` : '';
+    const welcomeBadge = (c.is_first_checkin && _showWelcomeBadges()) ? ` <span title="${t('First check-in on this net')}" style="font-size:11px">👋</span>` : '';
     return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
       <span class="callsign">${esc(c.callsign)}${welcomeBadge}${posBadge}</span>
       <span class="checkin-name">${esc(c.name || '—')}</span>

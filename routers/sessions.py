@@ -16,7 +16,7 @@ import net_repository
 from database import get_db
 from models import ActivationSchedule, Checkin, Net, NetControlShift, NetSession, TacticalPosition, TrafficMessage, User
 from routers.deps import get_current_user
-from routers.helpers import _get_net_for_user, _get_session_for_user, _preferred_names_for_net, _tactical_callsigns_for_session
+from routers.helpers import _get_net_for_user, _get_session_for_user, _net_has_prior_checkin_history, _preferred_names_for_net, _tactical_callsigns_for_session
 from routers.schedules import _duty_labels_for_session
 
 router = APIRouter()
@@ -79,6 +79,13 @@ class SessionOut(BaseModel):
     next_ncs_name: Optional[str] = None
     next_broadcaster_callsign: Optional[str] = None
     next_broadcaster_name: Optional[str] = None
+    # Whether this net has ever had a checkin in a session other than this one
+    # (issue follow-up) -- lets the frontend's "👋 welcome new folks" banner
+    # tell a genuinely new face apart from "every checkin is first_checkin
+    # because the net itself has no history yet". Only computed for the one
+    # session actually being viewed (get_session); defaults True elsewhere
+    # (list_sessions) since nothing there reads it.
+    net_has_history: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -212,6 +219,7 @@ async def get_session(session_id: int, current_user: User = Depends(get_current_
     count = (await db.execute(select(func.count(Checkin.id)).filter(Checkin.session_id == session.id))).scalar()
     out = SessionOut.model_validate(session)
     out.checkin_count = count
+    out.net_has_history = await _net_has_prior_checkin_history(session.net_id, session.id, db)
     net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
     if net:
         for k, v in (await _duty_labels_for_session(net, session, db)).items():

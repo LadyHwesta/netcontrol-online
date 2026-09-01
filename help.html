@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — First-Timer Welcome Banner No Longer Fires on a Brand-New Net (v2.24.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li><strong>Fixed:</strong> the 👋 "welcome new folks" banner and per-row badge were showing for <em>every</em> check-in on a brand-new net's first-ever session — technically correct (it genuinely is each callsign's first check-in on that net), but meaningless as a "welcome": there's no history yet for anyone to be new relative to, so a full roster lit up instead of just the actual newcomers.</li>
+              <li>The banner/badge now only appear once the net has at least one check-in from an earlier session — a real "returning regulars" backdrop for a new face to stand out against. A net's very first session checks in normally, with no first-timer highlighting; from its second session on, genuinely new callsigns get welcomed exactly as before.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Named, Reusable Activation Schedules (v2.24.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>An ARES/ACES net can now save <strong>multiple named Activation Schedules</strong> under its <strong>🚨 Activation Roster</strong> tab — e.g. "Full Activation", "Weather Watch", "Shelter Ops Only" — each with its own tactical roster and Net Control rotation. This replaces the single one-time planning queue from the previous release.</li>

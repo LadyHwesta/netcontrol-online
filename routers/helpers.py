@@ -22,7 +22,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Net, NetSession, NetShare, Organization, OrganizationMembership, StationRemark, SystemSetting, TacticalPosition, User, utcnow
+from models import Checkin, Net, NetSession, NetShare, Organization, OrganizationMembership, StationRemark, SystemSetting, TacticalPosition, User, utcnow
 from routers.schemas import NetOut
 
 # ---------------------------------------------------------------------------
@@ -371,6 +371,23 @@ async def _tactical_callsigns_for_net(net_id: int, db: AsyncSession) -> dict:
         .filter(NetSession.net_id == net_id)
     )).all()
     return {r.id: r.tactical_callsign for r in rows}
+
+
+async def _net_has_prior_checkin_history(net_id: int, exclude_session_id: int, db: AsyncSession) -> bool:
+    """True if this net has at least one checkin in a session other than
+    exclude_session_id (issue follow-up) -- distinguishes a genuinely new
+    face on an established net from the trivial case of a brand-new net's
+    very first session, where Checkin.is_first_checkin is True for every
+    single row simply because there's no history yet to compare against.
+    Powers the frontend's "👋 welcome new folks" banner (SessionOut.
+    net_has_history) so it doesn't fire as "welcome" for an entire roster on
+    day one."""
+    return bool((await db.execute(
+        select(Checkin.id)
+        .join(NetSession, NetSession.id == Checkin.session_id)
+        .filter(NetSession.net_id == net_id, NetSession.id != exclude_session_id)
+        .limit(1)
+    )).scalar())
 
 
 # ---------------------------------------------------------------------------

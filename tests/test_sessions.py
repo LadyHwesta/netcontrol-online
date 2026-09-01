@@ -44,6 +44,49 @@ class TestSessionLifecycle:
         resp = client.get("/sessions/99999", headers=admin_headers)
         assert resp.status_code == 404
 
+
+class TestNetHasHistory:
+    """SessionOut.net_has_history (issue follow-up) — lets the frontend's
+    "👋 welcome new folks" banner tell a genuinely new face on an established
+    net apart from a brand-new net's first-ever session, where every single
+    checkin is trivially is_first_checkin (there's no net history yet for
+    ANY callsign to be compared against)."""
+
+    def test_false_on_a_brand_new_nets_first_session(self, client, admin_headers, net):
+        session = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        client.post(f"/sessions/{session['id']}/checkins", json={"callsign": "W1AW"}, headers=admin_headers)
+        resp = client.get(f"/sessions/{session['id']}", headers=admin_headers)
+        assert resp.json()["net_has_history"] is False
+
+    def test_stays_false_for_the_rest_of_that_same_session(self, client, admin_headers, net):
+        """Excludes the session being viewed from the history check -- adding
+        more checkins to session #1 itself shouldn't flip it to True."""
+        session = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        client.post(f"/sessions/{session['id']}/checkins", json={"callsign": "W1AW"}, headers=admin_headers)
+        client.post(f"/sessions/{session['id']}/checkins", json={"callsign": "KJ7ABC"}, headers=admin_headers)
+        resp = client.get(f"/sessions/{session['id']}", headers=admin_headers)
+        assert resp.json()["net_has_history"] is False
+
+    def test_true_once_a_prior_session_has_a_checkin(self, client, admin_headers, net):
+        s1 = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        client.post(f"/sessions/{s1['id']}/checkins", json={"callsign": "W1AW"}, headers=admin_headers)
+        client.patch(f"/sessions/{s1['id']}/end", headers=admin_headers)
+
+        s2 = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        resp = client.get(f"/sessions/{s2['id']}", headers=admin_headers)
+        assert resp.json()["net_has_history"] is True
+
+    def test_false_before_any_checkin_exists_on_a_new_net(self, client, admin_headers, net):
+        """Computed from scratch on every GET, not derived from the current
+        session's own checkins -- so it's already correctly False the moment
+        a brand-new net's first session is opened, before anyone has checked
+        in yet. Matters because the frontend caches this once per session
+        load rather than re-fetching per checkin (see checkins.js's
+        _showWelcomeBadges())."""
+        session = client.post(f"/nets/{net['id']}/sessions", json={}, headers=admin_headers).json()
+        resp = client.get(f"/sessions/{session['id']}", headers=admin_headers)
+        assert resp.json()["net_has_history"] is False
+
     def test_end_session(self, client, admin_headers, session):
         resp = client.patch(f"/sessions/{session['id']}/end", headers=admin_headers)
         assert resp.status_code == 200

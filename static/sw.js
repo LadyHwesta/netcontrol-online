@@ -31,7 +31,7 @@
 // entry now only matters for the offline-fallback case, but it's worth
 // keeping current regardless.
 
-const CACHE_NAME = 'netcontrol-online-shell-v66';
+const CACHE_NAME = 'netcontrol-online-shell-v67';
 
 const PRECACHE_URLS = [
   '/',
@@ -47,7 +47,7 @@ const PRECACHE_URLS = [
   '/static/js/report.js?v=21',
   '/static/js/nets.js?v=33',
   '/static/js/sessions.js?v=32',
-  '/static/js/checkins.js?v=39',
+  '/static/js/checkins.js?v=40',
   '/static/js/history.js?v=22',
   '/static/js/admin.js?v=40',
   '/static/js/schedules.js?v=23',
