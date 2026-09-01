@@ -437,6 +437,9 @@ async function loadReassignTab() {
   document.getElementById('reassign-user-org-select').innerHTML = orgOptions;
   document.getElementById('reassign-net-org-select').innerHTML = orgOptions;
   document.getElementById('addmembership-org-select').innerHTML = orgOptions;
+  document.getElementById('createuser-org-select').innerHTML =
+    orgOptions + `<option value="__new__">${t('+ Create New Organization')}</option>`;
+  onCreateUserOrgChange();
   document.getElementById('reassign-net-org-filter').innerHTML =
     `<option value="">${t('All Organizations')}</option>` + orgOptions;
   document.getElementById('reassign-net-org-filter').value = previousFilter;
@@ -452,6 +455,61 @@ async function loadReassignTab() {
 
   filterReassignNets();
   filterReassignOwnerNets();
+}
+
+function onCreateUserOrgChange() {
+  const isNew = document.getElementById('createuser-org-select').value === '__new__';
+  document.getElementById('createuser-neworg-fields').style.display = isNew ? '' : 'none';
+  // A brand new org always needs an admin (server-side enforced too, same
+  // rule self-registration already applies to a founder) -- the role
+  // picker only matters when joining an org that already has one.
+  const roleSelect = document.getElementById('createuser-role');
+  roleSelect.disabled = isNew;
+  if (isNew) roleSelect.value = 'admin';
+}
+
+// Create user directly (issue follow-up) — super-admin, any org (or a brand
+// new one). Org-scoped equivalent is addOperator() above, always the
+// admin's own current org; this posts to /admin/users instead of
+// /orgs/{id}/users, with either an org_id or org_name+org_website_url.
+async function submitCreateUser(btn) {
+  const callsign = document.getElementById('createuser-callsign').value.trim().toUpperCase();
+  const name = document.getElementById('createuser-name').value.trim();
+  const email = document.getElementById('createuser-email').value.trim();
+  const gmrs_callsign = document.getElementById('createuser-gmrs').value.trim().toUpperCase() || null;
+  const role = document.getElementById('createuser-role').value;
+  const orgSelectValue = document.getElementById('createuser-org-select').value;
+  if (!callsign || !name || !email) return toast(t('Fill in callsign, name, and email'), 'error');
+  if (!orgSelectValue) return toast(t('Choose an organization'), 'error');
+
+  const body = { callsign, name, email, gmrs_callsign, role };
+  if (orgSelectValue === '__new__') {
+    const org_name = document.getElementById('createuser-neworg-name').value.trim();
+    const org_website_url = document.getElementById('createuser-neworg-website').value.trim();
+    if (!org_name || !org_website_url) return toast(t('New organization needs a name and a website URL'), 'error');
+    body.org_name = org_name;
+    body.org_website_url = org_website_url;
+  } else {
+    body.org_id = Number(orgSelectValue);
+  }
+
+  btnLoading(btn, true);
+  try {
+    const result = await apiFetch('/admin/users', { method: 'POST', body: JSON.stringify(body) });
+    toast(`${callsign} ${t('added to')} ${result.org_name} — ${t("they'll receive an email to set their password")}`, 'success');
+    document.getElementById('createuser-callsign').value = '';
+    document.getElementById('createuser-name').value = '';
+    document.getElementById('createuser-email').value = '';
+    document.getElementById('createuser-gmrs').value = '';
+    document.getElementById('createuser-role').value = 'member';
+    document.getElementById('createuser-neworg-name').value = '';
+    document.getElementById('createuser-neworg-website').value = '';
+    loadReassignTab();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btnLoading(btn, false);
+  }
 }
 
 // Nets aren't refetched here -- just re-rendered from the already-loaded

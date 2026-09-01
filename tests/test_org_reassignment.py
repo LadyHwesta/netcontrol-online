@@ -106,6 +106,107 @@ class TestCreateOrgUser:
         assert resp.status_code == 403
 
 
+class TestAdminCreateUser:
+    """POST /admin/users (issue follow-up) — the any-org (or brand-new-org)
+    equivalent of POST /orgs/{id}/users above, super-admin only. Shares
+    _create_invited_user with it, so duplicate-callsign/email/SMTP-required
+    behavior is already covered by TestCreateOrgUser; this focuses on what's
+    actually different here: org targeting."""
+
+    def test_requires_super_admin(self, client, smtp_configured, sent_emails, app_base_url):
+        super_token = _bootstrap_super_admin(client)
+        org_id, admin_token = _create_org(client, super_token, "W1A", "orga", "Org A")
+        # An org admin (not a super admin) is forbidden here, unlike the
+        # org-scoped endpoint they CAN use.
+        resp = client.post("/admin/users", headers=auth(admin_token), json={
+            "callsign": "W1NEW", "name": "New Op", "email": "new@example.com", "org_id": org_id,
+        })
+        assert resp.status_code == 403
+
+    def test_assign_to_existing_org_by_id(self, client, smtp_configured, sent_emails, app_base_url):
+        super_token = _bootstrap_super_admin(client)
+        org_id, _ = _create_org(client, super_token, "W1A", "orga", "Org A")
+        sent_emails.clear()
+        resp = client.post("/admin/users", headers=auth(super_token), json={
+            "callsign": "w1new", "name": "New Op", "email": "new@example.com",
+            "role": "admin", "org_id": org_id,
+        })
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["callsign"] == "W1NEW"
+        assert data["org_name"] == "Org A"
+        assert data["is_active"] is True
+
+        members = client.get(f"/orgs/{org_id}/members", headers=auth(super_token)).json()
+        member = next(m for m in members if m["callsign"] == "W1NEW")
+        assert member["approved"] is True
+        assert member["role"] == "admin"
+
+        assert len(sent_emails) == 1
+        assert "setpw=" in sent_emails[0]["body_html"]
+
+    def test_unknown_org_id_404(self, client, smtp_configured, sent_emails, app_base_url):
+        super_token = _bootstrap_super_admin(client)
+        resp = client.post("/admin/users", headers=auth(super_token), json={
+            "callsign": "W1NEW", "name": "New Op", "email": "new@example.com", "org_id": 999999,
+        })
+        assert resp.status_code == 404
+
+    def test_creates_new_org_on_the_fly(self, client, smtp_configured, sent_emails, app_base_url):
+        super_token = _bootstrap_super_admin(client)
+        sent_emails.clear()
+        # role="member" requested, but must be forced to "admin" -- see next
+        # assertion. A brand new org with no admin would be immediately
+        # orphaned: no one but a super admin could ever manage it.
+        resp = client.post("/admin/users", headers=auth(super_token), json={
+            "callsign": "W1FOUNDER", "name": "Founder", "email": "founder@example.com",
+            "role": "member",
+            "org_name": "Brand New Club", "org_website_url": "https://brandnew.example.org",
+        })
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["org_name"] == "Brand New Club"
+        assert data["is_active"] is True
+
+        orgs = client.get("/orgs").json()
+        org = next(o for o in orgs if o["name"] == "Brand New Club")
+        assert org["website_url"] == "https://brandnew.example.org"
+        members = client.get(f"/orgs/{org['id']}/members", headers=auth(super_token)).json()
+        founder = next(m for m in members if m["callsign"] == "W1FOUNDER")
+        assert founder["approved"] is True
+        assert founder["role"] == "admin"
+
+    def test_new_org_without_website_rejected(self, client, smtp_configured, sent_emails, app_base_url):
+        super_token = _bootstrap_super_admin(client)
+        resp = client.post("/admin/users", headers=auth(super_token), json={
+            "callsign": "W1FOUNDER", "name": "Founder", "email": "founder@example.com",
+            "org_name": "No Website Club",
+        })
+        assert resp.status_code == 400
+
+    def test_neither_org_id_nor_org_name_rejected(self, client, smtp_configured, sent_emails, app_base_url):
+        super_token = _bootstrap_super_admin(client)
+        resp = client.post("/admin/users", headers=auth(super_token), json={
+            "callsign": "W1NEW", "name": "New Op", "email": "new@example.com",
+        })
+        assert resp.status_code == 400
+
+    def test_existing_org_name_joins_rather_than_duplicating(self, client, smtp_configured, sent_emails, app_base_url):
+        """org_name resolves through the same _get_or_create_org join-or-create
+        logic self-registration uses -- a name matching an already-existing
+        org's slug joins it instead of creating a second one."""
+        super_token = _bootstrap_super_admin(client)
+        org_id, _ = _create_org(client, super_token, "W1A", "orga", "Org A")
+        resp = client.post("/admin/users", headers=auth(super_token), json={
+            "callsign": "W1JOIN", "name": "Joiner", "email": "joiner@example.com",
+            "org_name": "Org A", "org_website_url": "https://ignored.example.org",
+        })
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["org_name"] == "Org A"
+        orgs = client.get("/orgs").json()
+        assert len([o for o in orgs if o["slug"] == "orga"]) == 1
+
+
 class TestSetPassword:
     def test_valid_token_sets_password_and_logs_in(self, client, smtp_configured, sent_emails, app_base_url):
         super_token = _bootstrap_super_admin(client)

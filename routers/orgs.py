@@ -4,7 +4,6 @@ Organizations (issue #1 — multi-tenancy) + Branding.
 
 import pathlib
 import re
-import secrets
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
@@ -449,69 +448,18 @@ class OrgUserCreate(BaseModel):
 async def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     """Admin-seeds an operator account directly — for bringing existing
     operators onto the org without a self-registration/approval round trip
-    (issue #1 follow-up). Auto-approved (the admin creating it IS the
-    approval): is_active is already True, but hashed_password is an unusable
-    random placeholder, so login is impossible until the operator follows
-    the emailed link to set their own password. Requires SMTP to be
-    configured — otherwise the account would be created with no way to ever
-    become usable."""
-    import hashlib
-
-    from routers.auth import hash_password
-
-    if not helpers._smtp_configured():
-        raise HTTPException(400, "Email must be configured (Admin → Email) before creating operator accounts this way — the invite link is sent by email.")
+    (issue #1 follow-up). Always targets THIS org (org_id, the caller's own
+    current one in practice); a super admin wanting to target a different
+    org, or create a brand new one on the spot, uses POST /admin/users
+    instead (issue follow-up) — same underlying _create_invited_user."""
     org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
-    if (await db.execute(select(User).filter(User.callsign == data.callsign))).scalar_one_or_none():
-        raise HTTPException(400, "Callsign already registered")
-    if (await db.execute(select(User).filter(User.email == data.email))).scalar_one_or_none():
-        raise HTTPException(400, "Email already registered")
-
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-
-    user = User(
-        callsign=data.callsign,
-        name=data.name,
-        email=data.email,
-        gmrs_callsign=(data.gmrs_callsign or "").strip().upper() or None,
-        hashed_password=hash_password(secrets.token_urlsafe(32)),
-        is_active=True,
-        is_admin=False,
-        email_verified=True,   # vouched for by the org admin who entered it
-        current_org_id=org.id,
-        password_set_token=token_hash,
-        password_set_sent_at=datetime.now(timezone.utc),
+    user = await helpers._create_invited_user(
+        data.callsign, data.name, data.email,
+        (data.gmrs_callsign or "").strip().upper() or None,
+        org, data.role, db,
     )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-
-    db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
-    await db.commit()
-
-    set_link = helpers._app_url(f"/?setpw={raw_token}")
-    helpers.send_email(
-        to=[user.email],
-        subject=f"[NetControl Online] You've Been Added to {org.name}",
-        body_html=f"""<div style="font-family:sans-serif;max-width:520px">
-  <h2 style="color:#FF9900">Welcome to {org.name}</h2>
-  <p>Hello <strong>{user.name}</strong> ({user.callsign}),</p>
-  <p>An administrator has created an account for you on NetControl Online, part of <strong>{org.name}</strong>. Set a password to get started:</p>
-  {f'<p style="margin-top:16px"><a href="{set_link}" style="background:#FF9900;color:#000;padding:10px 20px;text-decoration:none;border-radius:20px;font-weight:bold;display:inline-block">Set Your Password</a></p>' if set_link else '<p>Contact your administrator for a link to set your password.</p>'}
-  <p style="color:#888;font-size:12px">If you weren't expecting this, please disregard this message.</p>
-</div>""",
-        body_text=(
-            f"Hello {user.name} ({user.callsign}),\n\n"
-            f"An administrator has created an account for you on NetControl Online, part of {org.name}. "
-            f"Set a password to get started:\n\n"
-            + (f"{set_link}\n\n" if set_link else "Contact your administrator for a link to set your password.\n\n")
-            + "If you weren't expecting this, please disregard this message."
-        ),
-    )
-
     return AdminUserOut(
         **UserOut.model_validate(user).model_dump(),
         org_name=org.name,

@@ -6,7 +6,7 @@ import os
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,7 @@ from database import engine, get_db
 from models import EnabledLanguage, Organization, OrganizationMembership, OrgEnabledLanguage, User
 from routers import helpers
 from routers.deps import get_current_user
-from routers.helpers import _delete_orphaned_orgs
+from routers.helpers import _create_invited_user, _delete_orphaned_orgs, _get_or_create_org
 from routers.schemas import AdminUserOut, UserOut
 
 router = APIRouter()
@@ -49,6 +49,66 @@ async def admin_list_users(admin: User = Depends(require_admin), db: AsyncSessio
         )
         for u, org in rows
     ]
+
+
+class AdminUserCreate(BaseModel):
+    """Super-admin equivalent of orgs.py's OrgUserCreate (issue follow-up)
+    -- that endpoint always seeds into the calling admin's own current org;
+    this one lets a super admin target ANY existing org by id, or found a
+    brand new one on the spot. Exactly one of org_id / org_name is
+    required, mirroring the same choice a self-registering user makes
+    (routers/auth.py's UserCreate) -- join an existing org, or found a new
+    one -- just with no approval step, since the super admin's own action
+    IS the approval."""
+    callsign: str
+    name: str
+    email: EmailStr
+    gmrs_callsign: Optional[str] = None
+    role: Literal["member", "admin"] = "member"
+    org_id: Optional[int] = None          # assign to this existing org
+    org_name: Optional[str] = None        # ...or found a new one with this name
+    org_website_url: Optional[str] = None  # required alongside org_name (_get_or_create_org enforces it)
+
+    @field_validator("callsign")
+    @classmethod
+    def callsign_upper(cls, v):
+        return v.upper().strip()
+
+
+@router.post("/admin/users", response_model=AdminUserOut, status_code=201)
+async def admin_create_user(data: AdminUserCreate, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Manually add a user from the backend (issue follow-up) — a super
+    admin can assign the new account to any existing organization, or
+    create a brand new one for it in the same step. See
+    _create_invited_user's docstring for the actual account-creation and
+    invite-email behavior, shared with orgs.py's org-scoped equivalent."""
+    role = data.role
+    if data.org_id:
+        org = (await db.execute(select(Organization).filter(Organization.id == data.org_id))).scalar_one_or_none()
+        if not org:
+            raise HTTPException(404, "Organization not found")
+    elif data.org_name:
+        org, org_created = await _get_or_create_org(None, data.org_name, data.org_website_url, db)
+        # A brand new org must have an admin, or it's immediately orphaned --
+        # no one (besides a super admin) could ever manage it, approve
+        # further members, etc. Same rule self-registration already enforces
+        # for a founder (routers/auth.py's register()); the role picker in
+        # the UI is only meaningful when joining an org that already has one.
+        if org_created:
+            role = "admin"
+    else:
+        raise HTTPException(400, "Choose an existing organization or provide a name for a new one")
+
+    user = await _create_invited_user(
+        data.callsign, data.name, data.email,
+        (data.gmrs_callsign or "").strip().upper() or None,
+        org, role, db,
+    )
+    return AdminUserOut(
+        **UserOut.model_validate(user).model_dump(),
+        org_name=org.name,
+        org_website_url=org.website_url,
+    )
 
 
 @router.patch("/admin/users/{user_id}/approve", response_model=UserOut)

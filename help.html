@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Super Admins Can Create Users in Any Organization (v2.27.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Admin → <strong>🔀 Reassign</strong> (super admin only) has a new <strong>CREATE USER</strong> card — creates an account directly and assigns it to any existing organization, or founds a brand new one for it in the same step. Approved immediately; the new operator gets an email with a link to set their own password, same as the existing per-org <strong>ADD OPERATOR</strong> card (Your Organization tab), which stays exactly as it was — always seeding into whichever org you're currently switched into, no picker.</li>
+              <li>Founding a new organization this way always makes the new account its admin, regardless of the role selected — an organization with no admin would be immediately unmanageable by anyone but a super admin, the same rule self-registration already applies to whoever founds an org that way.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Per-Instance Redis Database Isolation (v2.26.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Deploy/ops refinement, not an in-app feature: yesterday's Redis support (for running multiple <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">uvicorn</code> workers safely) had no way to keep multiple <em>instances</em> sharing one Redis server from colliding — this server already supports several independent instances (main/testing/demo) side by side. New <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">REDIS_DB</code> setting in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> gives each instance its own numbered logical database.</li>

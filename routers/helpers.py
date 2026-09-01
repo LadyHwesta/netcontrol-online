@@ -6,6 +6,7 @@ lives directly in that router file instead (see the helper-usage mapping
 done for the main.py split for the full single-vs-shared breakdown).
 """
 
+import hashlib
 import logging
 import os
 import pathlib
@@ -425,6 +426,74 @@ async def _delete_orphaned_orgs(org_ids: set[int], db: AsyncSession) -> None:
             org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
             if org:
                 await db.delete(org)
+
+
+async def _create_invited_user(
+    callsign: str, name: str, email: str, gmrs_callsign: Optional[str],
+    org: Organization, role: str, db: AsyncSession,
+) -> User:
+    """Admin-seeds an operator account directly, into `org`, with an emailed
+    invite link to set their own password (models.py's password_set_token
+    doc comment) -- shared by POST /orgs/{id}/users (an org admin, always
+    their own current org) and POST /admin/users (a super admin, any
+    existing org or a brand new one -- issue follow-up). Auto-approved: the
+    admin creating it IS the approval, so is_active is already True, but
+    hashed_password is an unusable random placeholder until the invite link
+    is followed. Requires SMTP to be configured -- otherwise the account
+    would be created with no way to ever become usable. Raises
+    HTTPException on a duplicate callsign/email, same as registration."""
+    if not _smtp_configured():
+        raise HTTPException(400, "Email must be configured (Admin → Email) before creating operator accounts this way — the invite link is sent by email.")
+    if (await db.execute(select(User).filter(User.callsign == callsign))).scalar_one_or_none():
+        raise HTTPException(400, "Callsign already registered")
+    if (await db.execute(select(User).filter(User.email == email))).scalar_one_or_none():
+        raise HTTPException(400, "Email already registered")
+
+    from routers.auth import hash_password  # local import -- avoids a routers.auth <-> routers.helpers cycle
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+    user = User(
+        callsign=callsign,
+        name=name,
+        email=email,
+        gmrs_callsign=gmrs_callsign,
+        hashed_password=hash_password(secrets.token_urlsafe(32)),
+        is_active=True,
+        is_admin=False,
+        email_verified=True,   # vouched for by the admin who entered it
+        current_org_id=org.id,
+        password_set_token=token_hash,
+        password_set_sent_at=utcnow(),
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=role, approved=True))
+    await db.commit()
+
+    set_link = _app_url(f"/?setpw={raw_token}")
+    send_email(
+        to=[user.email],
+        subject=f"[NetControl Online] You've Been Added to {org.name}",
+        body_html=f"""<div style="font-family:sans-serif;max-width:520px">
+  <h2 style="color:#FF9900">Welcome to {org.name}</h2>
+  <p>Hello <strong>{user.name}</strong> ({user.callsign}),</p>
+  <p>An administrator has created an account for you on NetControl Online, part of <strong>{org.name}</strong>. Set a password to get started:</p>
+  {f'<p style="margin-top:16px"><a href="{set_link}" style="background:#FF9900;color:#000;padding:10px 20px;text-decoration:none;border-radius:20px;font-weight:bold;display:inline-block">Set Your Password</a></p>' if set_link else '<p>Contact your administrator for a link to set your password.</p>'}
+  <p style="color:#888;font-size:12px">If you weren't expecting this, please disregard this message.</p>
+</div>""",
+        body_text=(
+            f"Hello {user.name} ({user.callsign}),\n\n"
+            f"An administrator has created an account for you on NetControl Online, part of {org.name}. "
+            f"Set a password to get started:\n\n"
+            + (f"{set_link}\n\n" if set_link else "Contact your administrator for a link to set your password.\n\n")
+            + "If you weren't expecting this, please disregard this message."
+        ),
+    )
+    return user
 
 
 # ---------------------------------------------------------------------------
