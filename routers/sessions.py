@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import get_db
-from models import Checkin, Net, NetSession, TacticalPosition, TrafficMessage, User
+from models import Checkin, Net, NetControlShift, NetSession, TacticalPosition, TrafficMessage, User
 from routers.deps import get_current_user
 from routers.helpers import _get_net_for_user, _get_session_for_user, _preferred_names_for_net, _tactical_callsigns_for_session
 from routers.schedules import _duty_labels_for_session
@@ -142,6 +142,7 @@ async def start_session(net_id: int, data: SessionCreate, current_user: User = D
     if session.is_activation:
         duty = await _duty_labels_for_session(net, session, db)
         nc_position = TacticalPosition(
+            net_id=net_id,
             session_id=session.id,
             tactical_callsign="NET CONTROL",
             is_net_control=True,
@@ -159,6 +160,24 @@ async def start_session(net_id: int, data: SessionCreate, current_user: User = D
                 has_traffic=False,
                 tactical_position_id=nc_position.id,
             ))
+            await db.commit()
+
+        # Attach any tactical positions / NC rotation shifts pre-planned for this
+        # net before the activation started (issue follow-up) -- a one-time queue,
+        # not a persistent template: this drains it into the session that just
+        # started, exactly as if each row had been created live just now, and
+        # planning starts empty again for the net's next activation.
+        planned_positions = (await db.execute(select(TacticalPosition).filter(
+            TacticalPosition.net_id == net_id, TacticalPosition.session_id.is_(None),
+        ))).scalars().all()
+        for p in planned_positions:
+            p.session_id = session.id
+        planned_shifts = (await db.execute(select(NetControlShift).filter(
+            NetControlShift.net_id == net_id, NetControlShift.session_id.is_(None),
+        ))).scalars().all()
+        for s in planned_shifts:
+            s.session_id = session.id
+        if planned_positions or planned_shifts:
             await db.commit()
 
     out = SessionOut.model_validate(session)

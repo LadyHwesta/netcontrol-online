@@ -69,6 +69,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Pre-Activation Roster Planning; APRS Map/Dialog Overlap Fixed (v2.22.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>An ARES/ACES net's edit form now has an <strong>🚨 Activation Roster (Planned)</strong> section — queue up tactical positions (SHELTER 1, LOGISTICS, etc.) and the Net Control rotation before your next activation, instead of only once the net is already live. The moment you start that net's next activation session, everything queued here is pulled straight into it exactly as if it had been added live; the list is then empty again, ready for the next activation's (likely different) roster.</li>
+              <li><strong>Fixed:</strong> opening the 📍 manual GPS position dialog on a check-in while the APRS station map was visible behind it rendered the live map <em>on top of</em> the dialog instead of behind it — its buttons were unclickable and the only way back was a hard refresh. Leaflet's own map layers use CSS z-index values up to 1000; the dialog's was 100, so the map wasn't just visible through it, it was actually capturing every click. Raised to 1100.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — APRS Map Default View; Two Silent Click Bugs Fixed (v2.21.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>A net's <strong>APRS Map</strong> section now has a configurable <strong>default view</strong> — where the map opens before any station has reported a position, so a regional net opens zoomed to its usual coverage area instead of a generic continental-US default, and a nationwide/worldwide activation can open zoomed out to match. Once real positions start coming in, the map still auto-fits to them as before — the default only covers the empty/early state.</li>

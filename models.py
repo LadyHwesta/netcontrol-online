@@ -249,14 +249,24 @@ class NetSession(Base):
 
 class TacticalPosition(Base):
     """A tactical assignment slot for one ARES/ACES activation session (issue #21)
-    — e.g. "SHELTER 1". Session-scoped and re-created fresh each activation, not a
-    reusable net-level template: different activations commonly need entirely
-    different tactical rosters. Who currently holds it, and its shift history, are
-    derived from Checkin rows (tactical_position_id + signed_off_at), not stored here."""
+    — e.g. "SHELTER 1". Re-created fresh each activation, not a reusable net-level
+    template: different activations commonly need entirely different tactical
+    rosters. Who currently holds it, and its shift history, are derived from
+    Checkin rows (tactical_position_id + signed_off_at), not stored here.
+
+    session_id is nullable (issue follow-up) so a position can be pre-planned
+    before the activation it's for has actually been started — net.is_ares alone
+    gates that, same as everything else here. A "planned" row has session_id NULL
+    and only net_id set; when the net's next activation session is started,
+    start_session() attaches every such row by setting its session_id, at which
+    point it behaves exactly like one created live. This is a one-time queue, not
+    a persistent template: once attached it belongs to that session like anything
+    else added during it, and planning starts fresh for the next activation."""
     __tablename__ = "tactical_positions"
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="CASCADE"), nullable=False)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="CASCADE"), nullable=True)
     tactical_callsign = Column(String(50), nullable=False)   # e.g. "SHELTER 1"
     location = Column(String(200), nullable=True)
     assigned_callsign = Column(String(12), nullable=True)    # planned/expected operator
@@ -265,7 +275,9 @@ class TacticalPosition(Base):
     # Auto-created (one per activation session) to track Net Control itself through the
     # same sign-on/off/shift-history mechanism as any other position — NCS commonly hands
     # off mid-activation, unlike the single day-level schedule sign-up routine sessions use.
-    # Not user-creatable and not deletable; enforced in main.py, not here.
+    # Not user-creatable and not deletable; enforced in main.py, not here. Never planned
+    # ahead of time (see class docstring) -- its initial occupant already comes from the
+    # existing day-level Net Control Signup schedule, which is plannable pre-net-start.
     is_net_control = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
@@ -284,11 +296,17 @@ class NetControlShift(Base):
     (via the auto-created is_net_control TacticalPosition's sign-on) pre-fills from
     whichever shift here has the earliest scheduled_start, then removes it -- this
     table is a forward-looking queue, not a permanent log; the actual handoff, and
-    its history, lives on the TacticalPosition/Checkin side as always."""
+    its history, lives on the TacticalPosition/Checkin side as always.
+
+    session_id is nullable for the same pre-planning reason as
+    TacticalPosition.session_id above (issue follow-up) -- a "planned" shift has
+    session_id NULL and only net_id set, and gets attached (session_id filled in)
+    by start_session() the moment the net's next activation session begins."""
     __tablename__ = "net_control_shifts"
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="CASCADE"), nullable=False)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="CASCADE"), nullable=True)
     callsign = Column(String(12), nullable=False)
     name = Column(String(100), nullable=True)
     scheduled_start = Column(UTCDateTime, nullable=False)

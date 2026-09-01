@@ -517,6 +517,32 @@ MIGRATIONS = [
      "CREATE INDEX IF NOT EXISTS ix_org_enabled_languages_org_id ON org_enabled_languages (org_id)"),
     ("index: org_enabled_languages code",
      "CREATE INDEX IF NOT EXISTS ix_org_enabled_languages_code ON org_enabled_languages (code)"),
+
+    # ── Pre-activation tactical/NC roster planning (issue follow-up) — lets a
+    # net admin queue up tactical positions and the Net Control rotation before
+    # an activation session exists, instead of only once it's already live.
+    # session_id becomes nullable (a planned row has none yet); net_id is new
+    # and backfilled from the owning session for every existing row, then
+    # required going forward for both planned and already-live rows alike.
+    ("tactical_positions: net_id column",
+     "ALTER TABLE tactical_positions ADD COLUMN IF NOT EXISTS net_id INTEGER REFERENCES nets(id) ON DELETE CASCADE"),
+    ("tactical_positions: backfill net_id from session",
+     """UPDATE tactical_positions p SET net_id = s.net_id
+        FROM net_sessions s WHERE s.id = p.session_id AND p.net_id IS NULL"""),
+    ("tactical_positions: net_id is required",
+     "ALTER TABLE tactical_positions ALTER COLUMN net_id SET NOT NULL"),
+    ("tactical_positions: session_id becomes optional (planned rows)",
+     "ALTER TABLE tactical_positions ALTER COLUMN session_id DROP NOT NULL"),
+
+    ("net_control_shifts: net_id column",
+     "ALTER TABLE net_control_shifts ADD COLUMN IF NOT EXISTS net_id INTEGER REFERENCES nets(id) ON DELETE CASCADE"),
+    ("net_control_shifts: backfill net_id from session",
+     """UPDATE net_control_shifts h SET net_id = s.net_id
+        FROM net_sessions s WHERE s.id = h.session_id AND h.net_id IS NULL"""),
+    ("net_control_shifts: net_id is required",
+     "ALTER TABLE net_control_shifts ALTER COLUMN net_id SET NOT NULL"),
+    ("net_control_shifts: session_id becomes optional (planned rows)",
+     "ALTER TABLE net_control_shifts ALTER COLUMN session_id DROP NOT NULL"),
 ]
 
 # ---------------------------------------------------------------------------

@@ -85,6 +85,7 @@ function showNetForm() {
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
   document.getElementById('net-aprs-section').style.display = 'none';
+  document.getElementById('net-tactical-section').style.display = 'none';
   document.getElementById('net-aprs-map-enabled').checked = false;
   document.getElementById('aprs-default-lat').value = '';
   document.getElementById('aprs-default-lon').value = '';
@@ -121,6 +122,7 @@ function onNetTypeChange() {
     document.getElementById('net-dmr-section').style.display = 'none';
     document.getElementById('net-aprs-section').style.display = 'none';
     document.getElementById('net-aprs-map-enabled').checked = false;
+    document.getElementById('net-tactical-section').style.display = 'none';
   }
 }
 
@@ -251,6 +253,7 @@ function cancelNetForm() {
   document.getElementById('net-sharing-section').style.display = 'none';
   document.getElementById('net-dmr-section').style.display = 'none';
   document.getElementById('net-aprs-section').style.display = 'none';
+  document.getElementById('net-tactical-section').style.display = 'none';
   editNetId = null;
   shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [] };
   switchNetFormTab('details');
@@ -304,6 +307,15 @@ async function editNet(id) {
   } else {
     document.getElementById('net-dmr-section').style.display = 'none';
     document.getElementById('net-aprs-section').style.display = 'none';
+  }
+  // Activation Roster planning (issue follow-up) — same access level as live
+  // tactical-position management (plain net access is enough, not edit-rights
+  // specifically), but only worth showing at all for an ARES/ACES net.
+  if (n.is_ares) {
+    document.getElementById('net-tactical-section').style.display = '';
+    await loadActivationRoster(id);
+  } else {
+    document.getElementById('net-tactical-section').style.display = 'none';
   }
 }
 
@@ -475,4 +487,122 @@ async function deleteNet(id) {
 onEnter(['net-name', 'net-freq', 'net-dmr-tg', 'net-broadcast-label', 'net-reminder-minutes',
          'net-band', 'net-mode', 'net-ctcss-tone', 'net-region', 'net-state', 'net-website',
          'aprs-fi-key', 'aprs-filter'], saveNet);
+
+// ============================================================
+// ACTIVATION ROSTER PLANNING (issue follow-up) — pre-activation tactical
+// positions / Net Control rotation, queued up for an ARES/ACES net before its
+// next activation session exists. Mirrors the live versions of these lists
+// (checkins.js's Station Schedule tab) but reads/writes the net-scoped
+// /nets/{id}/planned-* endpoints instead of the session-scoped ones — the
+// backend attaches every row here to whichever activation session is started
+// next, at which point it's just a normal live position/shift (see
+// routers/tactical.py and routers/sessions.py's start_session()).
+// ============================================================
+
+async function loadActivationRoster(netId) {
+  let positions = [], shifts = [];
+  try { positions = await apiFetch(`/nets/${netId}/planned-tactical-positions`); } catch {}
+  try { shifts = await apiFetch(`/nets/${netId}/planned-net-control-shifts`); } catch {}
+  renderPlannedTacticalPositions(positions);
+  renderPlannedNetControlShifts(shifts);
+  setDefaultMonthDay('plan-nc-month', 'plan-nc-day');
+}
+
+function renderPlannedTacticalPositions(positions) {
+  const listEl = document.getElementById('planned-tactical-list');
+  if (!listEl) return;
+  if (!positions.length) {
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('Nothing queued yet — add a position above.')}</p>`;
+    return;
+  }
+  listEl.innerHTML = positions.map(p => `
+    <div class="card" style="padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <span class="callsign">${esc(p.tactical_callsign)}</span>${p.location ? ` <span class="text-muted" style="font-size:12px">— ${esc(p.location)}</span>` : ''}
+        ${p.assigned_callsign ? `<div style="font-size:12px;color:var(--text-muted)">${t('Planned')}: ${esc(p.assigned_callsign)}${p.assigned_name ? ` (${esc(p.assigned_name)})` : ''}</div>` : ''}
+      </div>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removePlannedTacticalPosition(${p.id})">✕ ${t('Remove')}</button>
+    </div>`).join('');
+}
+
+function renderPlannedNetControlShifts(shifts) {
+  const listEl = document.getElementById('planned-net-control-list');
+  if (!listEl) return;
+  if (!shifts.length) {
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('Nothing queued yet — add a shift above.')}</p>`;
+    return;
+  }
+  const sorted = [...shifts].sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start));
+  listEl.innerHTML = sorted.map(s => `
+    <div class="card" style="padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <span class="callsign">${esc(s.callsign)}</span>${s.name ? ` <span class="text-muted" style="font-size:12px">— ${esc(s.name)}</span>` : ''}
+      </div>
+      <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">🕐 ${fmt(s.scheduled_start)}</span>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removePlannedNetControlShift(${s.id})">✕ ${t('Remove')}</button>
+    </div>`).join('');
+}
+
+async function addPlannedTacticalPosition() {
+  if (!editNetId) return;
+  const tactical_callsign = document.getElementById('plan-tac-callsign').value.trim().toUpperCase();
+  const location = document.getElementById('plan-tac-location').value.trim() || null;
+  const assigned_callsign = document.getElementById('plan-tac-assigned-callsign').value.trim().toUpperCase() || null;
+  const assigned_name = document.getElementById('plan-tac-assigned-name').value.trim() || null;
+  if (!tactical_callsign) return toast(t('Tactical callsign required'), 'error');
+  try {
+    await apiFetch(`/nets/${editNetId}/planned-tactical-positions`, {
+      method: 'POST',
+      body: JSON.stringify({ tactical_callsign, location, assigned_callsign, assigned_name }),
+    });
+    document.getElementById('plan-tac-callsign').value = '';
+    document.getElementById('plan-tac-location').value = '';
+    document.getElementById('plan-tac-assigned-callsign').value = '';
+    document.getElementById('plan-tac-assigned-name').value = '';
+    toast(t('Position queued'), 'success');
+    await loadActivationRoster(editNetId);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function removePlannedTacticalPosition(id) {
+  if (!confirm(t('Remove this planned position?'))) return;
+  try {
+    await apiFetch(`/tactical-positions/${id}`, { method: 'DELETE' });
+    toast(t('Position removed'), 'success');
+    await loadActivationRoster(editNetId);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function addPlannedNetControlShift() {
+  if (!editNetId) return;
+  const callsign = document.getElementById('plan-nc-callsign').value.trim().toUpperCase();
+  const name = document.getElementById('plan-nc-name').value.trim() || null;
+  const month = document.getElementById('plan-nc-month').value;
+  const day = document.getElementById('plan-nc-day').value;
+  const time = document.getElementById('plan-nc-time').value;
+  if (!callsign) return toast(t('Callsign required'), 'error');
+  if (!month || !day) return toast(t('Scheduled sign-on date required'), 'error');
+  const year = new Date().getFullYear();
+  const scheduled_start = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${time || '00:00'}`).toISOString();
+  try {
+    await apiFetch(`/nets/${editNetId}/planned-net-control-shifts`, {
+      method: 'POST',
+      body: JSON.stringify({ callsign, name, scheduled_start }),
+    });
+    document.getElementById('plan-nc-callsign').value = '';
+    document.getElementById('plan-nc-name').value = '';
+    document.getElementById('plan-nc-time').value = '';
+    setDefaultMonthDay('plan-nc-month', 'plan-nc-day');
+    toast(t('Shift queued'), 'success');
+    await loadActivationRoster(editNetId);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function removePlannedNetControlShift(id) {
+  try {
+    await apiFetch(`/net-control-shifts/${id}`, { method: 'DELETE' });
+    toast(t('Shift removed'), 'success');
+    await loadActivationRoster(editNetId);
+  } catch (e) { toast(e.message, 'error'); }
+}
 
