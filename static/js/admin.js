@@ -48,10 +48,37 @@ async function saveOrgEdit() {
 }
 
 // ============================================================
-// ADD OPERATOR (issue #1 follow-up) — admin-created accounts, seeded
-// directly into the admin's own current org, auto-approved. Shown to org
-// admins and super admins alike (both act on their own current org here).
+// ADD OPERATOR (issue #1 follow-up) — admin-created accounts, auto-approved.
+// An org admin always seeds into their own current org (no picker -- that's
+// the only org they can act on anyway). A super admin gets an org picker
+// here too (issue follow-up), defaulting to their own current org but
+// changeable to any existing org, or "+ Create New Organization" to found
+// one on the spot -- posts to /admin/users instead of /orgs/{id}/users in
+// that case. See loadAddOperatorOrgPicker(), called only for super admins.
 // ============================================================
+async function loadAddOperatorOrgPicker() {
+  const picker = document.getElementById('addop-org-picker');
+  let orgs = [];
+  try { orgs = await apiFetch('/orgs'); } catch (e) { toast(e.message, 'error'); }
+  const orgOptions = orgs.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+  const select = document.getElementById('addop-org-select');
+  select.innerHTML = orgOptions + `<option value="__new__">${t('+ Create New Organization')}</option>`;
+  if (orgs.some(o => o.id === currentUser.current_org_id)) select.value = currentUser.current_org_id;
+  picker.style.display = '';
+  onAddOpOrgChange();
+}
+
+function onAddOpOrgChange() {
+  const isNew = document.getElementById('addop-org-select').value === '__new__';
+  document.getElementById('addop-neworg-fields').style.display = isNew ? '' : 'none';
+  // A brand new org always needs an admin (server-side enforced too, same
+  // rule self-registration already applies to a founder) -- the role
+  // picker only matters when joining an org that already has one.
+  const roleSelect = document.getElementById('addop-role');
+  roleSelect.disabled = isNew;
+  if (isNew) roleSelect.value = 'admin';
+}
+
 async function addOperator(btn) {
   const callsign = document.getElementById('addop-callsign').value.trim().toUpperCase();
   const name = document.getElementById('addop-name').value.trim();
@@ -59,19 +86,42 @@ async function addOperator(btn) {
   const gmrs_callsign = document.getElementById('addop-gmrs').value.trim().toUpperCase() || null;
   const role = document.getElementById('addop-role').value;
   if (!callsign || !name || !email) return toast(t('Fill in callsign, name, and email'), 'error');
+
+  // Super admin with the org picker showing: POST /admin/users, targeting
+  // whichever org is selected (or founding a new one). Everyone else
+  // (org admins, and a super admin before the picker has loaded): unchanged
+  // -- POST /orgs/{their current org}/users, exactly as before this feature.
+  let url = `/orgs/${currentUser.current_org_id}/users`;
+  let body = { callsign, name, email, gmrs_callsign, role };
+  const orgPickerVisible = document.getElementById('addop-org-picker').style.display !== 'none';
+  if (orgPickerVisible) {
+    const orgSelectValue = document.getElementById('addop-org-select').value;
+    if (!orgSelectValue) return toast(t('Choose an organization'), 'error');
+    url = '/admin/users';
+    if (orgSelectValue === '__new__') {
+      const org_name = document.getElementById('addop-neworg-name').value.trim();
+      const org_website_url = document.getElementById('addop-neworg-website').value.trim();
+      if (!org_name || !org_website_url) return toast(t('New organization needs a name and a website URL'), 'error');
+      body = { ...body, org_name, org_website_url };
+    } else {
+      body = { ...body, org_id: Number(orgSelectValue) };
+    }
+  }
+
   btnLoading(btn, true);
   try {
-    await apiFetch(`/orgs/${currentUser.current_org_id}/users`, {
-      method: 'POST',
-      body: JSON.stringify({ callsign, name, email, gmrs_callsign, role }),
-    });
-    toast(`${callsign} ${t("added — they'll receive an email to set their password")}`, 'success');
+    const result = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+    toast(`${callsign} ${t('added to')} ${result.org_name} — ${t("they'll receive an email to set their password")}`, 'success');
     document.getElementById('addop-callsign').value = '';
     document.getElementById('addop-name').value = '';
     document.getElementById('addop-email').value = '';
     document.getElementById('addop-gmrs').value = '';
     document.getElementById('addop-role').value = 'member';
+    document.getElementById('addop-role').disabled = false;
+    document.getElementById('addop-neworg-name').value = '';
+    document.getElementById('addop-neworg-website').value = '';
     if (window.isOrgAdminOnly) loadOrgOperators(); else loadAdminUsers();
+    if (orgPickerVisible) loadAddOperatorOrgPicker();  // refresh in case a new org was just created
   } catch (e) {
     toast(e.message, 'error');
   } finally {
@@ -437,9 +487,6 @@ async function loadReassignTab() {
   document.getElementById('reassign-user-org-select').innerHTML = orgOptions;
   document.getElementById('reassign-net-org-select').innerHTML = orgOptions;
   document.getElementById('addmembership-org-select').innerHTML = orgOptions;
-  document.getElementById('createuser-org-select').innerHTML =
-    orgOptions + `<option value="__new__">${t('+ Create New Organization')}</option>`;
-  onCreateUserOrgChange();
   document.getElementById('reassign-net-org-filter').innerHTML =
     `<option value="">${t('All Organizations')}</option>` + orgOptions;
   document.getElementById('reassign-net-org-filter').value = previousFilter;
@@ -455,61 +502,6 @@ async function loadReassignTab() {
 
   filterReassignNets();
   filterReassignOwnerNets();
-}
-
-function onCreateUserOrgChange() {
-  const isNew = document.getElementById('createuser-org-select').value === '__new__';
-  document.getElementById('createuser-neworg-fields').style.display = isNew ? '' : 'none';
-  // A brand new org always needs an admin (server-side enforced too, same
-  // rule self-registration already applies to a founder) -- the role
-  // picker only matters when joining an org that already has one.
-  const roleSelect = document.getElementById('createuser-role');
-  roleSelect.disabled = isNew;
-  if (isNew) roleSelect.value = 'admin';
-}
-
-// Create user directly (issue follow-up) — super-admin, any org (or a brand
-// new one). Org-scoped equivalent is addOperator() above, always the
-// admin's own current org; this posts to /admin/users instead of
-// /orgs/{id}/users, with either an org_id or org_name+org_website_url.
-async function submitCreateUser(btn) {
-  const callsign = document.getElementById('createuser-callsign').value.trim().toUpperCase();
-  const name = document.getElementById('createuser-name').value.trim();
-  const email = document.getElementById('createuser-email').value.trim();
-  const gmrs_callsign = document.getElementById('createuser-gmrs').value.trim().toUpperCase() || null;
-  const role = document.getElementById('createuser-role').value;
-  const orgSelectValue = document.getElementById('createuser-org-select').value;
-  if (!callsign || !name || !email) return toast(t('Fill in callsign, name, and email'), 'error');
-  if (!orgSelectValue) return toast(t('Choose an organization'), 'error');
-
-  const body = { callsign, name, email, gmrs_callsign, role };
-  if (orgSelectValue === '__new__') {
-    const org_name = document.getElementById('createuser-neworg-name').value.trim();
-    const org_website_url = document.getElementById('createuser-neworg-website').value.trim();
-    if (!org_name || !org_website_url) return toast(t('New organization needs a name and a website URL'), 'error');
-    body.org_name = org_name;
-    body.org_website_url = org_website_url;
-  } else {
-    body.org_id = Number(orgSelectValue);
-  }
-
-  btnLoading(btn, true);
-  try {
-    const result = await apiFetch('/admin/users', { method: 'POST', body: JSON.stringify(body) });
-    toast(`${callsign} ${t('added to')} ${result.org_name} — ${t("they'll receive an email to set their password")}`, 'success');
-    document.getElementById('createuser-callsign').value = '';
-    document.getElementById('createuser-name').value = '';
-    document.getElementById('createuser-email').value = '';
-    document.getElementById('createuser-gmrs').value = '';
-    document.getElementById('createuser-role').value = 'member';
-    document.getElementById('createuser-neworg-name').value = '';
-    document.getElementById('createuser-neworg-website').value = '';
-    loadReassignTab();
-  } catch (e) {
-    toast(e.message, 'error');
-  } finally {
-    btnLoading(btn, false);
-  }
 }
 
 // Nets aren't refetched here -- just re-rendered from the already-loaded

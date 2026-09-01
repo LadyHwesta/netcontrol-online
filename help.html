@@ -74,6 +74,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Create-User Org Picker Moved to the Add Operator Card (v2.27.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Yesterday's any-org (or new-org) user creation lived in its own <strong>CREATE USER</strong> card under Admin → 🔀 Reassign — not where a super admin naturally looked for it. It's now part of the existing <strong>ADD OPERATOR</strong> card (Your Organization tab) instead: for a super admin, an organization picker appears there (defaulting to their current org, changeable to any other, or <strong>+ Create New Organization</strong>); an org admin sees the card exactly as it's always been, no picker, since they can only ever act on their own org anyway. No new endpoints — same <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">POST /admin/users</code> from yesterday, just relocated on the page.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Super Admins Can Create Users in Any Organization (v2.27.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Admin → <strong>🔀 Reassign</strong> (super admin only) has a new <strong>CREATE USER</strong> card — creates an account directly and assigns it to any existing organization, or founds a brand new one for it in the same step. Approved immediately; the new operator gets an email with a link to set their own password, same as the existing per-org <strong>ADD OPERATOR</strong> card (Your Organization tab), which stays exactly as it was — always seeding into whichever org you're currently switched into, no picker.</li>

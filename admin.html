@@ -103,13 +103,34 @@
           <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()" data-i18n="Save Organization">Save Organization</button>
         </div>
 
-        <!-- Add operator directly (issue #1 follow-up) -->
+        <!-- Add operator directly (issue #1 follow-up). The organization picker
+             below is super-admin only (issue follow-up) -- an org admin can only
+             ever seed their own current org anyway, so for them this always
+             stays exactly what it was: no picker, implicit target. -->
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="ADD OPERATOR">ADD OPERATOR</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Create an account directly — useful for seeding your organization with existing operators. They're approved immediately and receive an email with a link to set their own password.">
-            Create an account directly — useful for seeding your organization with existing operators.
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Create an account directly — useful for seeding an organization with existing operators. They're approved immediately and receive an email with a link to set their own password.">
+            Create an account directly — useful for seeding an organization with existing operators.
             They're approved immediately and receive an email with a link to set their own password.
           </p>
+          <div id="addop-org-picker" style="display:none;margin-bottom:12px">
+            <div class="form-group">
+              <label data-i18n="Organization">Organization</label>
+              <select class="form-control" id="addop-org-select" onchange="onAddOpOrgChange()"></select>
+            </div>
+            <div id="addop-neworg-fields" style="display:none">
+              <div class="form-row">
+                <div class="form-group">
+                  <label data-i18n="New Organization Name">New Organization Name</label>
+                  <input class="form-control" id="addop-neworg-name" placeholder="Example ARES Group" />
+                </div>
+                <div class="form-group">
+                  <label data-i18n="Website URL">Website URL</label>
+                  <input class="form-control" id="addop-neworg-website" placeholder="https://example.org" />
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label data-i18n="Callsign">Callsign</label>
@@ -394,61 +415,6 @@
 
       <!-- ── Reassign panel (super admin only, issue #1 follow-up) ─── -->
       <div id="admin-panel-reassign" style="display:none">
-        <!-- Create user directly (issue follow-up) — the org-scoped "ADD OPERATOR"
-             card (Your Organization tab) always seeds into the admin's own current
-             org; this is the any-org (or brand-new-org) version, super-admin only. -->
-        <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="CREATE USER">CREATE USER</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Create an account directly in any organization, or found a brand new one for it. Approved immediately; they receive an email with a link to set their own password.">
-            Create an account directly in any organization, or found a brand new one for it.
-            Approved immediately; they receive an email with a link to set their own password.
-          </p>
-          <div class="form-row">
-            <div class="form-group">
-              <label data-i18n="Callsign">Callsign</label>
-              <input class="form-control" id="createuser-callsign" placeholder="W1AW" style="text-transform:uppercase" />
-            </div>
-            <div class="form-group">
-              <label data-i18n="Name">Name</label>
-              <input class="form-control" id="createuser-name" placeholder="Operator name" data-i18n-placeholder="Operator name" />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label data-i18n="Email">Email</label>
-              <input class="form-control" id="createuser-email" type="email" placeholder="you@example.com" />
-            </div>
-            <div class="form-group">
-              <label><span data-i18n="GMRS Callsign">GMRS Callsign</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
-              <input class="form-control" id="createuser-gmrs" placeholder="WRXX123" style="text-transform:uppercase" />
-            </div>
-            <div class="form-group">
-              <label data-i18n="Role">Role</label>
-              <select class="form-control" id="createuser-role">
-                <option value="member" data-i18n="Member">Member</option>
-                <option value="admin" data-i18n="Org Admin">Org Admin</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label data-i18n="Organization">Organization</label>
-            <select class="form-control" id="createuser-org-select" onchange="onCreateUserOrgChange()"></select>
-          </div>
-          <div id="createuser-neworg-fields" style="display:none">
-            <div class="form-row">
-              <div class="form-group">
-                <label data-i18n="New Organization Name">New Organization Name</label>
-                <input class="form-control" id="createuser-neworg-name" placeholder="Example ARES Group" />
-              </div>
-              <div class="form-group">
-                <label data-i18n="Website URL">Website URL</label>
-                <input class="form-control" id="createuser-neworg-website" placeholder="https://example.org" />
-              </div>
-            </div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="submitCreateUser(this)" data-i18n="+ Create User">+ Create User</button>
-        </div>
-
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="MOVE A USER">MOVE A USER</h3>
           <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Moves a user into a different organization — removes their membership in every other organization they belong to.">
@@ -553,7 +519,7 @@
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/js/branding.js?v=24"></script>
-<script src="/static/js/admin.js?v=41"></script>
+<script src="/static/js/admin.js?v=42"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {
@@ -612,6 +578,7 @@
     } else {
       loadAdminUsers();
       loadAdminBranding();
+      loadAddOperatorOrgPicker();   // fire-and-forget; non-blocking
     }
   }
   initPage();
