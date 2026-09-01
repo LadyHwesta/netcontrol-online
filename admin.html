@@ -41,7 +41,7 @@
       </select>
       <a id="i18n-credit" class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
         style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
-      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+      <button class="btn btn-ghost btn-sm" onclick="logout()" data-i18n="Logout">Logout</button>
     </div>
   </header>
   <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
@@ -57,18 +57,18 @@
       <a class="sidebar-btn" href="/directory" target="_blank" data-i18n="📖 Net Directory ↗">📖 Net Directory ↗</a>
     </nav>
     <div id="content">
-      <h2 class="section-title">Admin</h2>
+      <h2 class="section-title" data-i18n="Admin">Admin</h2>
 
       <!-- Tab bar -->
       <div class="tab-bar">
-        <button class="tab-btn active" id="admin-tab-operators" onclick="switchAdminTab('operators')">👥 Operators</button>
-        <button class="tab-btn" id="admin-tab-branding"   onclick="switchAdminTab('branding')">🎨 Branding</button>
-        <button class="tab-btn" id="admin-tab-email"      onclick="switchAdminTab('email')">📧 Email</button>
-        <button class="tab-btn" id="admin-tab-netrepo"    onclick="switchAdminTab('netrepo')">🌐 Net Repository</button>
-        <button class="tab-btn" id="admin-tab-dbstats"    onclick="switchAdminTab('dbstats')">🗄️ DB Stats</button>
-        <button class="tab-btn" id="admin-tab-languages"  onclick="switchAdminTab('languages')">🌐 Languages</button>
-        <button class="tab-btn" id="admin-tab-announce"   onclick="switchAdminTab('announce')">📢 Announcements</button>
-        <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')">🔀 Reassign</button>
+        <button class="tab-btn active" id="admin-tab-operators" onclick="switchAdminTab('operators')" data-i18n="👥 Operators">👥 Operators</button>
+        <button class="tab-btn" id="admin-tab-branding"   onclick="switchAdminTab('branding')" data-i18n="🎨 Branding">🎨 Branding</button>
+        <button class="tab-btn" id="admin-tab-email"      onclick="switchAdminTab('email')" data-i18n="📧 Email">📧 Email</button>
+        <button class="tab-btn" id="admin-tab-netrepo"    onclick="switchAdminTab('netrepo')" data-i18n="🌐 Net Repository">🌐 Net Repository</button>
+        <button class="tab-btn" id="admin-tab-dbstats"    onclick="switchAdminTab('dbstats')" data-i18n="🗄️ DB Stats">🗄️ DB Stats</button>
+        <button class="tab-btn" id="admin-tab-languages"  onclick="switchAdminTab('languages')" data-i18n="🌐 Languages">🌐 Languages</button>
+        <button class="tab-btn" id="admin-tab-announce"   onclick="switchAdminTab('announce')" data-i18n="📢 Announcements">📢 Announcements</button>
+        <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')" data-i18n="🔀 Reassign">🔀 Reassign</button>
       </div>
 
       <!-- ── Operators panel ───────────────────────────────────── -->
@@ -76,103 +76,103 @@
 
         <!-- Your organization (issue #1 follow-up) -->
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)">YOUR ORGANIZATION</h3>
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)" data-i18n="YOUR ORGANIZATION">YOUR ORGANIZATION</h3>
           <div class="form-row">
             <div class="form-group">
-              <label>Name</label>
-              <input class="form-control" id="org-edit-name" placeholder="Organization name" />
+              <label data-i18n="Name">Name</label>
+              <input class="form-control" id="org-edit-name" placeholder="Organization name" data-i18n-placeholder="Organization name" />
             </div>
             <div class="form-group">
-              <label>Website URL</label>
+              <label data-i18n="Website URL">Website URL</label>
               <input class="form-control" id="org-edit-website" placeholder="https://your-club-website.org" />
             </div>
           </div>
           <div class="form-group">
-            <label>Banner Message <span class="text-muted" style="font-size:11px">(shown at the top of every page to your org's members — leave blank for none)</span></label>
+            <label><span data-i18n="Banner Message">Banner Message</span> <span class="text-muted" style="font-size:11px" data-i18n="(shown at the top of every page to your org's members — leave blank for none)">(shown at the top of every page to your org's members — leave blank for none)</span></label>
             <textarea class="form-control" id="org-edit-banner" rows="2" placeholder="e.g. Field Day setup starts 6am Saturday at the usual site"></textarea>
           </div>
           <div class="form-group">
-            <label>aprs.fi API Key <span class="text-muted" style="font-size:11px">(shared by every net in your org using aprs.fi as its APRS source — free key from <a href="https://aprs.fi/page/api" target="_blank" style="color:var(--lc-orange)">aprs.fi/page/api</a>)</span></label>
-            <input class="form-control mono" id="org-edit-aprs-key" placeholder="Leave blank to disable aprs.fi lookups org-wide" />
+            <label><span data-i18n="aprs.fi API Key">aprs.fi API Key</span> <span class="text-muted" style="font-size:11px"><span data-i18n="(shared by every net in your org using aprs.fi as its APRS source — free key from">(shared by every net in your org using aprs.fi as its APRS source — free key from</span> <a href="https://aprs.fi/page/api" target="_blank" style="color:var(--lc-orange)">aprs.fi/page/api</a>)</span></label>
+            <input class="form-control mono" id="org-edit-aprs-key" placeholder="Leave blank to disable aprs.fi lookups org-wide" data-i18n-placeholder="Leave blank to disable aprs.fi lookups org-wide" />
           </div>
-          <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()">Save Organization</button>
+          <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()" data-i18n="Save Organization">Save Organization</button>
         </div>
 
         <!-- Add operator directly (issue #1 follow-up) -->
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">ADD OPERATOR</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="ADD OPERATOR">ADD OPERATOR</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Create an account directly — useful for seeding your organization with existing operators. They're approved immediately and receive an email with a link to set their own password.">
             Create an account directly — useful for seeding your organization with existing operators.
             They're approved immediately and receive an email with a link to set their own password.
           </p>
           <div class="form-row">
             <div class="form-group">
-              <label>Callsign</label>
+              <label data-i18n="Callsign">Callsign</label>
               <input class="form-control" id="addop-callsign" placeholder="W1AW" style="text-transform:uppercase" />
             </div>
             <div class="form-group">
-              <label>Name</label>
-              <input class="form-control" id="addop-name" placeholder="Operator name" />
+              <label data-i18n="Name">Name</label>
+              <input class="form-control" id="addop-name" placeholder="Operator name" data-i18n-placeholder="Operator name" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Email</label>
+              <label data-i18n="Email">Email</label>
               <input class="form-control" id="addop-email" type="email" placeholder="you@example.com" />
             </div>
             <div class="form-group">
-              <label>GMRS Callsign <span class="text-muted" style="font-size:11px">(optional)</span></label>
+              <label><span data-i18n="GMRS Callsign">GMRS Callsign</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
               <input class="form-control" id="addop-gmrs" placeholder="WRXX123" style="text-transform:uppercase" />
             </div>
             <div class="form-group">
-              <label>Role</label>
+              <label data-i18n="Role">Role</label>
               <select class="form-control" id="addop-role">
-                <option value="member">Member</option>
-                <option value="admin">Org Admin</option>
+                <option value="member" data-i18n="Member">Member</option>
+                <option value="admin" data-i18n="Org Admin">Org Admin</option>
               </select>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="addOperator(this)">+ Add Operator</button>
+          <button class="btn btn-primary btn-sm" onclick="addOperator(this)" data-i18n="+ Add Operator">+ Add Operator</button>
         </div>
 
         <!-- Pending approvals -->
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)">PENDING APPROVAL</h3>
-          <div id="admin-pending-list"><p class="text-muted">Loading…</p></div>
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)" data-i18n="PENDING APPROVAL">PENDING APPROVAL</h3>
+          <div id="admin-pending-list"><p class="text-muted" data-i18n="Loading…">Loading…</p></div>
         </div>
 
         <!-- All operators -->
         <div class="card">
-          <h3 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)">ALL OPERATORS</h3>
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--text-muted)" data-i18n="ALL OPERATORS">ALL OPERATORS</h3>
           <div style="overflow-x:auto">
             <table class="tbl" id="admin-users-table">
               <thead>
-                <tr><th>Callsign</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Notify</th><th>Registered</th><th>Actions</th></tr>
+                <tr><th data-i18n="Callsign">Callsign</th><th data-i18n="Name">Name</th><th data-i18n="Email">Email</th><th data-i18n="Role">Role</th><th data-i18n="Status">Status</th><th data-i18n="Notify">Notify</th><th data-i18n="Registered">Registered</th><th data-i18n="Actions">Actions</th></tr>
               </thead>
               <tbody id="admin-users-tbody"></tbody>
             </table>
           </div>
-          <div class="empty" id="admin-users-empty" style="display:none"><p>No users found.</p></div>
+          <div class="empty" id="admin-users-empty" style="display:none"><p data-i18n="No users found.">No users found.</p></div>
         </div>
 
         <!-- Nets in your org (org-admin-only view -- super admins have the
              equivalent, any-org version in the Reassign tab instead) -->
         <div class="card" id="org-nets-card" style="display:none;margin-top:16px">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">NETS IN YOUR ORGANIZATION</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="NETS IN YOUR ORGANIZATION">NETS IN YOUR ORGANIZATION</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Reassign a net's owner within your organization — useful when an operator steps down and someone else takes over their net.">
             Reassign a net's owner within your organization — useful when an operator steps down and someone else takes over their net.
           </p>
           <div class="form-row">
             <div class="form-group">
-              <label>Net</label>
+              <label data-i18n="Net">Net</label>
               <select class="form-control" id="org-net-select"></select>
             </div>
             <div class="form-group">
-              <label>New Owner</label>
+              <label data-i18n="New Owner">New Owner</label>
               <select class="form-control" id="org-net-owner-select"></select>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="submitOrgNetOwner(this)">Change Owner</button>
+          <button class="btn btn-primary btn-sm" onclick="submitOrgNetOwner(this)" data-i18n="Change Owner">Change Owner</button>
         </div>
 
       </div><!-- /admin-panel-operators -->
@@ -180,33 +180,33 @@
       <!-- ── Branding panel ────────────────────────────────────── -->
       <div id="admin-panel-branding" style="display:none">
         <div class="card">
-          <h3 style="margin:0 0 14px;font-size:14px;color:var(--text-muted)">BRANDING</h3>
+          <h3 style="margin:0 0 14px;font-size:14px;color:var(--text-muted)" data-i18n="BRANDING">BRANDING</h3>
           <div class="form-row">
             <div class="form-group">
-              <label>Organization Name</label>
+              <label data-i18n="Organization Name">Organization Name</label>
               <input class="form-control" id="branding-org-name" placeholder="e.g. King County ARES" />
             </div>
             <div class="form-group">
-              <label>Website URL</label>
+              <label data-i18n="Website URL">Website URL</label>
               <input class="form-control" id="branding-website-url" placeholder="https://your-club-website.org" />
             </div>
           </div>
           <div class="form-group">
-            <label>Tagline / Subtitle</label>
+            <label data-i18n="Tagline / Subtitle">Tagline / Subtitle</label>
             <input class="form-control" id="branding-tagline" placeholder="e.g. Served Agency: King County Emergency Management" />
           </div>
           <div class="form-group">
-            <label>Logo <span class="text-muted" style="font-size:11px">(PNG, JPG, GIF, WebP, or SVG — displayed in the header)</span></label>
+            <label><span data-i18n="Logo">Logo</span> <span class="text-muted" style="font-size:11px" data-i18n="(PNG, JPG, GIF, WebP, or SVG — displayed in the header)">(PNG, JPG, GIF, WebP, or SVG — displayed in the header)</span></label>
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
               <img id="branding-logo-preview" src="/logo" style="max-height:48px;max-width:180px;display:none;border-radius:4px"
                 onerror="this.style.display='none'" onload="this.style.display=''" />
               <input type="file" id="branding-logo-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
                 style="font-size:13px;color:var(--text)" onchange="previewLogo(this)" />
-              <button class="btn btn-danger btn-sm" id="branding-logo-delete-btn" onclick="deleteLogo()" style="display:none">Remove Logo</button>
+              <button class="btn btn-danger btn-sm" id="branding-logo-delete-btn" onclick="deleteLogo()" style="display:none" data-i18n="Remove Logo">Remove Logo</button>
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn btn-primary btn-sm" onclick="saveBranding()">Save Branding</button>
+            <button class="btn btn-primary btn-sm" onclick="saveBranding()" data-i18n="Save Branding">Save Branding</button>
           </div>
         </div>
       </div><!-- /admin-panel-branding -->
@@ -214,18 +214,18 @@
       <!-- ── Email panel ───────────────────────────────────────── -->
       <div id="admin-panel-email" style="display:none">
         <div class="card">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">EMAIL CONFIGURATION</h3>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="EMAIL CONFIGURATION">EMAIL CONFIGURATION</h3>
           <div id="admin-email-status" style="font-size:13px">
-            <span class="text-muted">Checking…</span>
+            <span class="text-muted" data-i18n="Checking…">Checking…</span>
           </div>
           <p id="admin-email-config-hint" class="text-muted" style="font-size:11px;margin:10px 0 0">
-            Configure via
+            <span data-i18n="Configure via">Configure via</span>
             <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">SMTP_HOST</code>,
             <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">SMTP_PORT</code>,
             <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">SMTP_USER</code>,
             <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">SMTP_PASSWORD</code>,
             <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">SMTP_FROM</code>
-            in your <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> file, then restart the service.
+            <span data-i18n="in your">in your</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> <span data-i18n="file, then restart the service.">file, then restart the service.</span>
           </p>
         </div>
       </div><!-- /admin-panel-email -->
@@ -233,58 +233,58 @@
       <!-- ── Net Repository panel ─────────────────────────────────── -->
       <div id="admin-panel-netrepo" style="display:none">
         <div class="card">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">NET REPOSITORY</h3>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="NET REPOSITORY">NET REPOSITORY</h3>
           <p class="text-muted" style="font-size:12px;margin:0 0 14px">
-            Pushes nets with <strong>List in Public Net Directory</strong> enabled to
+            <span data-i18n="Pushes nets with">Pushes nets with</span> <strong data-i18n="List in Public Net Directory">List in Public Net Directory</strong> <span data-i18n="enabled to">enabled to</span>
             <a href="https://github.com/LadyHwesta/Net-Repository" target="_blank" style="color:var(--lc-orange)">Net Repository</a>,
-            a separate, community-run central directory.
+            <span data-i18n="a separate, community-run central directory.">a separate, community-run central directory.</span>
           </p>
 
           <div id="netrepo-status" style="font-size:13px;margin-bottom:14px">
-            <span class="text-muted">Checking…</span>
+            <span class="text-muted" data-i18n="Checking…">Checking…</span>
           </div>
 
           <p id="netrepo-no-url-hint" class="text-muted" style="font-size:11px;display:none;margin-bottom:14px">
-            Set <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">NET_REPOSITORY_URL</code>
-            in your <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> file (see <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env.example</code>), then restart the service — a key can't be requested until Net Repository's instance URL is known.
+            <span data-i18n="Set">Set</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">NET_REPOSITORY_URL</code>
+            <span data-i18n="in your">in your</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env</code> <span data-i18n="file (see">file (see</span> <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">.env.example</code><span data-i18n="), then restart the service — a key can't be requested until Net Repository's instance URL is known.">), then restart the service — a key can't be requested until Net Repository's instance URL is known.</span>
           </p>
 
           <div id="netrepo-request-form" style="display:none">
             <div class="form-row">
               <div class="form-group">
-                <label>Name <span class="text-muted" style="font-size:11px">(shown to the Net Repository admin)</span></label>
+                <label><span data-i18n="Name">Name</span> <span class="text-muted" style="font-size:11px" data-i18n="(shown to the Net Repository admin)">(shown to the Net Repository admin)</span></label>
                 <input class="form-control" id="netrepo-req-name" placeholder="e.g. King County ARES" />
               </div>
               <div class="form-group">
-                <label>Contact Callsign</label>
+                <label data-i18n="Contact Callsign">Contact Callsign</label>
                 <input class="form-control" id="netrepo-req-callsign" placeholder="W7XYZ" style="text-transform:uppercase" />
               </div>
             </div>
             <div class="form-group">
-              <label>This Instance's URL <span class="text-muted" style="font-size:11px">(optional)</span></label>
+              <label><span data-i18n="This Instance's URL">This Instance's URL</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
               <input class="form-control" id="netrepo-req-url" placeholder="https://your-instance.example.org" />
             </div>
             <div class="form-group">
-              <label>Notes <span class="text-muted" style="font-size:11px">(optional)</span></label>
-              <input class="form-control" id="netrepo-req-notes" placeholder="Anything the reviewer should know" />
+              <label><span data-i18n="Notes">Notes</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
+              <input class="form-control" id="netrepo-req-notes" placeholder="Anything the reviewer should know" data-i18n-placeholder="Anything the reviewer should know" />
             </div>
-            <button class="btn btn-primary btn-sm" onclick="requestNetRepoKey()">Request API Key</button>
+            <button class="btn btn-primary btn-sm" onclick="requestNetRepoKey()" data-i18n="Request API Key">Request API Key</button>
           </div>
 
           <div id="netrepo-pending-actions" style="display:none">
-            <button class="btn btn-ghost btn-sm" onclick="checkNetRepoKeyStatus()">🔄 Check Status</button>
+            <button class="btn btn-ghost btn-sm" onclick="checkNetRepoKeyStatus()" data-i18n="🔄 Check Status">🔄 Check Status</button>
           </div>
 
           <div id="netrepo-key-reveal" style="display:none;margin-top:14px;background:var(--surface);border:1px solid var(--lc-orange);border-radius:6px;padding:12px">
-            <div style="font-size:12px;color:var(--lc-orange);font-weight:700;margin-bottom:6px">⚠ Copy this key now — it will not be shown again</div>
+            <div style="font-size:12px;color:var(--lc-orange);font-weight:700;margin-bottom:6px" data-i18n="⚠ Copy this key now — it will not be shown again">⚠ Copy this key now — it will not be shown again</div>
             <div style="display:flex;gap:8px;align-items:center">
               <code id="netrepo-key-value" style="flex:1;word-break:break-all;font-size:12px;color:var(--text)"></code>
-              <button class="btn btn-ghost btn-sm" onclick="copyNetRepoKey()">📋 Copy</button>
+              <button class="btn btn-ghost btn-sm" onclick="copyNetRepoKey()" data-i18n="📋 Copy">📋 Copy</button>
             </div>
           </div>
 
           <div id="netrepo-clear-actions" style="display:none;margin-top:8px">
-            <button class="btn btn-danger btn-sm" onclick="clearNetRepoKey()">Forget This Key</button>
+            <button class="btn btn-danger btn-sm" onclick="clearNetRepoKey()" data-i18n="Forget This Key">Forget This Key</button>
           </div>
         </div>
       </div><!-- /admin-panel-netrepo -->
@@ -292,38 +292,38 @@
       <!-- ── DB Stats panel ───────────────────────────────────────── -->
       <div id="admin-panel-dbstats" style="display:none">
         <div class="card">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">DATABASE</h3>
-          <div id="dbstats-sqlite-note" class="text-muted" style="font-size:12px;display:none">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="DATABASE">DATABASE</h3>
+          <div id="dbstats-sqlite-note" class="text-muted" style="font-size:12px;display:none" data-i18n="This instance is running on SQLite — connection/query stats only apply to Postgres deployments.">
             This instance is running on SQLite — connection/query stats only apply to Postgres deployments.
           </div>
           <div id="dbstats-summary" style="display:none;gap:24px;flex-wrap:wrap;margin-bottom:14px">
             <div>
-              <div class="text-muted" style="font-size:11px">DATABASE SIZE</div>
+              <div class="text-muted" style="font-size:11px" data-i18n="DATABASE SIZE">DATABASE SIZE</div>
               <div id="dbstats-size" style="font-size:20px;font-weight:700"></div>
             </div>
             <div>
-              <div class="text-muted" style="font-size:11px">CONNECTIONS</div>
+              <div class="text-muted" style="font-size:11px" data-i18n="CONNECTIONS">CONNECTIONS</div>
               <div id="dbstats-connections" style="font-size:20px;font-weight:700"></div>
             </div>
           </div>
         </div>
 
         <div class="card" id="dbstats-tables-card" style="display:none">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">LARGEST TABLES</h3>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="LARGEST TABLES">LARGEST TABLES</h3>
           <div style="overflow-x:auto">
             <table class="tbl" id="dbstats-tables-table">
-              <thead><tr><th>Table</th><th>Size</th><th>Rows (est.)</th></tr></thead>
+              <thead><tr><th data-i18n="Table">Table</th><th data-i18n="Size">Size</th><th data-i18n="Rows (est.)">Rows (est.)</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
         </div>
 
         <div class="card" id="dbstats-slow-card" style="display:none">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">SLOWEST QUERIES</h3>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="SLOWEST QUERIES">SLOWEST QUERIES</h3>
           <p id="dbstats-slow-note" class="text-muted" style="font-size:11px;display:none;margin:0 0 10px"></p>
           <div style="overflow-x:auto">
             <table class="tbl" id="dbstats-slow-table" style="display:none">
-              <thead><tr><th>Query</th><th>Calls</th><th>Avg (ms)</th><th>Total (ms)</th></tr></thead>
+              <thead><tr><th data-i18n="Query">Query</th><th data-i18n="Calls">Calls</th><th data-i18n="Avg (ms)">Avg (ms)</th><th data-i18n="Total (ms)">Total (ms)</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -333,154 +333,154 @@
       <!-- ── Languages panel (UI translation via argos-translate) ── -->
       <div id="admin-panel-languages" style="display:none">
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">ENABLED LANGUAGES FOR YOUR ORGANIZATION</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 10px">
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="ENABLED LANGUAGES FOR YOUR ORGANIZATION">ENABLED LANGUAGES FOR YOUR ORGANIZATION</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 10px" data-i18n="Scoped to your own organization only — enabling a language here doesn't affect any other organization on this server, and vice versa.">
             Scoped to your own organization only — enabling a language here doesn't affect any other organization on this server, and vice versa.
           </p>
           <p id="languages-disabled-note" class="text-muted" style="font-size:12px;display:none">
-            Translation isn't configured on this server — set <code style="background:var(--surface);padding:1px 5px;border-radius:3px">TRANSLATION_ENABLED=true</code> in <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code> and install <code style="background:var(--surface);padding:1px 5px;border-radius:3px">argostranslate</code> (see README) to use this tab.
+            <span data-i18n="Translation isn't configured on this server — set">Translation isn't configured on this server — set</span> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">TRANSLATION_ENABLED=true</code> <span data-i18n="in your">in your</span> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env</code> <span data-i18n="and install">and install</span> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">argostranslate</code> <span data-i18n="(see README) to use this tab.">(see README) to use this tab.</span>
           </p>
           <div style="overflow-x:auto">
             <table class="tbl" id="languages-table" style="display:none">
-              <thead><tr><th>Language</th><th>Code</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th data-i18n="Language">Language</th><th data-i18n="Code">Code</th><th data-i18n="Status">Status</th><th></th></tr></thead>
               <tbody id="languages-tbody"></tbody>
             </table>
           </div>
-          <div class="empty" id="languages-empty" style="display:none"><p>No languages enabled yet.</p></div>
+          <div class="empty" id="languages-empty" style="display:none"><p data-i18n="No languages enabled yet.">No languages enabled yet.</p></div>
         </div>
 
         <div class="card" id="languages-add-card" style="display:none">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">ENABLE A LANGUAGE</h3>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="ENABLE A LANGUAGE">ENABLE A LANGUAGE</h3>
           <p class="text-muted" style="font-size:12px;margin:0 0 10px">
-            Enabling a language installs its argos-translate model server-wide (shared with any other organization that also uses it — no duplicate downloads) and pre-translates the app's known UI strings in the background — this can take a while the first time a given language is enabled on this server. Any argos-translate-supported <a href="https://github.com/argosopentech/argos-translate#supported-languages" target="_blank" style="color:var(--lc-orange)">language code</a> works (e.g. <code style="background:var(--surface);padding:1px 5px;border-radius:3px">es</code>, <code style="background:var(--surface);padding:1px 5px;border-radius:3px">fr</code>, <code style="background:var(--surface);padding:1px 5px;border-radius:3px">de</code>).
+            <span data-i18n="Enabling a language installs its argos-translate model server-wide (shared with any other organization that also uses it — no duplicate downloads) and pre-translates the app's known UI strings in the background — this can take a while the first time a given language is enabled on this server. Any argos-translate-supported">Enabling a language installs its argos-translate model server-wide (shared with any other organization that also uses it — no duplicate downloads) and pre-translates the app's known UI strings in the background — this can take a while the first time a given language is enabled on this server. Any argos-translate-supported</span> <a href="https://github.com/argosopentech/argos-translate#supported-languages" target="_blank" style="color:var(--lc-orange)">language code</a> <span data-i18n="works (e.g.">works (e.g.</span> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">es</code>, <code style="background:var(--surface);padding:1px 5px;border-radius:3px">fr</code>, <code style="background:var(--surface);padding:1px 5px;border-radius:3px">de</code>).
           </p>
           <div class="form-row">
             <div class="form-group">
-              <label>Language Code</label>
+              <label data-i18n="Language Code">Language Code</label>
               <input class="form-control mono" id="lang-add-code" placeholder="es" style="max-width:120px" />
             </div>
             <div class="form-group">
-              <label>Display Name</label>
+              <label data-i18n="Display Name">Display Name</label>
               <input class="form-control" id="lang-add-name" placeholder="Español" style="max-width:200px" />
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="enableLanguage()">Enable Language</button>
+          <button class="btn btn-primary btn-sm" onclick="enableLanguage()" data-i18n="Enable Language">Enable Language</button>
         </div>
       </div><!-- /admin-panel-languages -->
 
       <!-- ── Announcements panel (super admin only, instance-wide) ─── -->
       <div id="admin-panel-announce" style="display:none">
         <div class="card">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">LOGIN SCREEN MESSAGE</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">Shown to everyone on the login screen, before they sign in. Leave blank for none.</p>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="LOGIN SCREEN MESSAGE">LOGIN SCREEN MESSAGE</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Shown to everyone on the login screen, before they sign in. Leave blank for none.">Shown to everyone on the login screen, before they sign in. Leave blank for none.</p>
           <div class="form-group">
             <textarea class="form-control" id="announce-login" rows="3" placeholder="e.g. Scheduled maintenance Saturday 8-9am Pacific"></textarea>
           </div>
         </div>
         <div class="card">
-          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)">POST-LOGIN WELCOME POPUP</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">Shown as a dismissible popup right after signing in. Each user sees it once per message — editing the text makes it pop up again for everyone. Leave blank for none.</p>
+          <h3 style="margin:0 0 10px;font-size:14px;color:var(--text-muted)" data-i18n="POST-LOGIN WELCOME POPUP">POST-LOGIN WELCOME POPUP</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Shown as a dismissible popup right after signing in. Each user sees it once per message — editing the text makes it pop up again for everyone. Leave blank for none.">Shown as a dismissible popup right after signing in. Each user sees it once per message — editing the text makes it pop up again for everyone. Leave blank for none.</p>
           <div class="form-group">
             <textarea class="form-control" id="announce-popup" rows="4" placeholder="e.g. Welcome! Please review the updated net script before Tuesday's net."></textarea>
           </div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="saveAnnouncements()">Save Announcements</button>
+        <button class="btn btn-primary btn-sm" onclick="saveAnnouncements()" data-i18n="Save Announcements">Save Announcements</button>
       </div><!-- /admin-panel-announce -->
 
       <!-- ── Reassign panel (super admin only, issue #1 follow-up) ─── -->
       <div id="admin-panel-reassign" style="display:none">
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">MOVE A USER</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="MOVE A USER">MOVE A USER</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Moves a user into a different organization — removes their membership in every other organization they belong to.">
             Moves a user into a different organization — removes their membership in every other organization they belong to.
           </p>
           <div class="form-row">
             <div class="form-group">
-              <label>User</label>
+              <label data-i18n="User">User</label>
               <select class="form-control" id="reassign-user-select"></select>
             </div>
             <div class="form-group">
-              <label>Target Organization</label>
+              <label data-i18n="Target Organization">Target Organization</label>
               <select class="form-control" id="reassign-user-org-select"></select>
             </div>
             <div class="form-group">
-              <label>Role</label>
+              <label data-i18n="Role">Role</label>
               <select class="form-control" id="reassign-user-role-select">
-                <option value="member">Member</option>
-                <option value="admin">Org Admin</option>
+                <option value="member" data-i18n="Member">Member</option>
+                <option value="admin" data-i18n="Org Admin">Org Admin</option>
               </select>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="submitReassignUser(this)">Move User</button>
+          <button class="btn btn-primary btn-sm" onclick="submitReassignUser(this)" data-i18n="Move User">Move User</button>
         </div>
 
         <div class="card" style="margin-bottom:16px">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">ADD USER TO ANOTHER ORGANIZATION</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="ADD USER TO ANOTHER ORGANIZATION">ADD USER TO ANOTHER ORGANIZATION</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Adds a user to an additional organization without touching their existing memberships — for an operator who legitimately needs to work across more than one org.">
             Adds a user to an additional organization without touching their existing memberships — for an operator who legitimately needs to work across more than one org.
           </p>
           <div class="form-row">
             <div class="form-group">
-              <label>User</label>
+              <label data-i18n="User">User</label>
               <select class="form-control" id="addmembership-user-select"></select>
             </div>
             <div class="form-group">
-              <label>Organization To Add</label>
+              <label data-i18n="Organization To Add">Organization To Add</label>
               <select class="form-control" id="addmembership-org-select"></select>
             </div>
             <div class="form-group">
-              <label>Role</label>
+              <label data-i18n="Role">Role</label>
               <select class="form-control" id="addmembership-role-select">
-                <option value="member">Member</option>
-                <option value="admin">Org Admin</option>
+                <option value="member" data-i18n="Member">Member</option>
+                <option value="admin" data-i18n="Org Admin">Org Admin</option>
               </select>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="submitAddMembership(this)">Add to Organization</button>
+          <button class="btn btn-primary btn-sm" onclick="submitAddMembership(this)" data-i18n="Add to Organization">Add to Organization</button>
         </div>
 
         <div class="card">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">MOVE A NET</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="MOVE A NET">MOVE A NET</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Moves a net (with its sessions and history) into a different organization. Ownership and sharing are left unchanged.">
             Moves a net (with its sessions and history) into a different organization. Ownership and sharing are left unchanged.
           </p>
           <div class="form-group">
-            <label>Filter By Current Organization</label>
+            <label data-i18n="Filter By Current Organization">Filter By Current Organization</label>
             <select class="form-control" id="reassign-net-org-filter" onchange="filterReassignNets()"></select>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Net</label>
+              <label data-i18n="Net">Net</label>
               <select class="form-control" id="reassign-net-select"></select>
             </div>
             <div class="form-group">
-              <label>Target Organization</label>
+              <label data-i18n="Target Organization">Target Organization</label>
               <select class="form-control" id="reassign-net-org-select"></select>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="submitReassignNet(this)">Move Net</button>
+          <button class="btn btn-primary btn-sm" onclick="submitReassignNet(this)" data-i18n="Move Net">Move Net</button>
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)">REASSIGN NET OWNER</h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="REASSIGN NET OWNER">REASSIGN NET OWNER</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Changes who owns a net. The new owner must already be an approved member of the net's organization.">
             Changes who owns a net. The new owner must already be an approved member of the net's organization.
           </p>
           <div class="form-group">
-            <label>Filter By Current Organization</label>
+            <label data-i18n="Filter By Current Organization">Filter By Current Organization</label>
             <select class="form-control" id="reassign-owner-net-org-filter" onchange="filterReassignOwnerNets()"></select>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Net</label>
+              <label data-i18n="Net">Net</label>
               <select class="form-control" id="reassign-owner-net-select" onchange="onReassignOwnerNetChange()"></select>
             </div>
             <div class="form-group">
-              <label>New Owner</label>
+              <label data-i18n="New Owner">New Owner</label>
               <select class="form-control" id="reassign-owner-user-select"></select>
             </div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="submitReassignNetOwner(this)">Change Owner</button>
+          <button class="btn btn-primary btn-sm" onclick="submitReassignNetOwner(this)" data-i18n="Change Owner">Change Owner</button>
         </div>
       </div><!-- /admin-panel-reassign -->
 
@@ -492,8 +492,8 @@
 <script src="/static/js/auth.js?v=30"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
-<script src="/static/js/branding.js?v=23"></script>
-<script src="/static/js/admin.js?v=39"></script>
+<script src="/static/js/branding.js?v=24"></script>
+<script src="/static/js/admin.js?v=40"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {
@@ -545,7 +545,7 @@
       ['branding', 'email', 'netrepo', 'dbstats', 'announce', 'reassign'].forEach(t => {
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
-      document.querySelector('#content h2.section-title').textContent = 'Organization Admin';
+      document.querySelector('#content h2.section-title').textContent = t('Organization Admin');
       document.getElementById('org-nets-card').style.display = '';
       loadOrgOperators();
       loadOrgNets();

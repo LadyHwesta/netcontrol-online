@@ -41,7 +41,7 @@
       </select>
       <a id="i18n-credit" class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
         style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
-      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+      <button class="btn btn-ghost btn-sm" onclick="logout()" data-i18n="Logout">Logout</button>
     </div>
   </header>
   <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
@@ -67,6 +67,16 @@
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Admin Panel (v2.20.7)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Extends UI translation to the entire <strong>Admin</strong> page — every tab's static markup (Operators, Branding, Email, Net Repository, DB Stats, Languages, Announcements, Reassign) and <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">admin.js</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">branding.js</code>'s dynamic rendering (user/member tables, pending-approval cards, status badges, all toasts/confirms).</li>
+              <li>Fixed a bug found along the way: the Languages tab's status-badge lookup was a plain object built once when the script first loaded, before any language was even selected — its labels would have stayed frozen in whatever language was active at page load instead of updating live. Turned it into a function so it's rebuilt fresh on every render.</li>
+              <li>Also fixed: the "Logout" button in the shared header was missed by the very first translation pass (auth screen + nav, v2.19.0) on all 5 chrome pages — it's the one piece of that header that was never actually a link with its own <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">data-i18n</code>.</li>
+              <li>No backend changes.</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Session List &amp; Schedule Sign-ups (v2.20.6)</div>
@@ -1235,7 +1245,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
   <script src="/static/js/auth.js?v=30"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
-  <script src="/static/js/branding.js?v=23"></script>
+  <script src="/static/js/branding.js?v=24"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 
   <script>

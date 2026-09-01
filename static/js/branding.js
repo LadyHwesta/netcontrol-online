@@ -110,20 +110,20 @@ async function saveBranding() {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
         body: fd,
-      }).then(r => { if (!r.ok) throw new Error('Logo upload failed'); });
+      }).then(r => { if (!r.ok) throw new Error(t('Logo upload failed')); });
       fileInput.value = '';
     }
-    toast('Branding saved');
+    toast(t('Branding saved'));
     await loadBranding();
     await loadAdminBranding();
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteLogo() {
-  if (!confirm('Remove the current logo?')) return;
+  if (!confirm(t('Remove the current logo?'))) return;
   try {
     await apiFetch('/admin/branding/logo', { method: 'DELETE' });
-    toast('Logo removed');
+    toast(t('Logo removed'));
     await loadBranding();
     await loadAdminBranding();
   } catch (e) { toast(e.message, 'error'); }
