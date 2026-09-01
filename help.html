@@ -74,6 +74,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Per-Organization Branding (v2.30.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Admin → 👥 Operators → <strong>Your Organization</strong> now has a <strong>Tagline</strong> field and a <strong>Logo</strong> upload, editable by that org's own admin — not just a super admin. Previously the only Branding controls (Admin → 🎨 Branding) were a single logo/name/tagline shared by the <em>entire deployment</em>, hidden from org admins entirely; on an instance with more than one organization, every org showed the exact same identity. Each org can now set its own.</li>
+              <li>An org's own tagline/logo show in the header while you're working within that org, and on that org's own public <strong>Directory</strong>/<strong>Live</strong> pages — falling back to the instance-wide Branding logo/tagline for whichever piece an org hasn't set its own, or the default NetControl Online look if neither has.</li>
+              <li><strong>Heads up if you run a single-organization instance:</strong> the logged-in header now shows your <em>organization's</em> name (Admin → Your Organization) instead of the instance-wide Branding name — the two are usually the same, but if you'd set them differently, rename your organization to match (or leave Branding's name for the pre-login screen only, which is unaffected).</li>
+              <li>Instance-wide Branding (Admin → 🎨 Branding, still super-admin only) is unchanged in scope: it's what's shown on the pre-login screen and used for the installed app's name/icon — genuinely instance-wide concerns with no specific organization to brand yet.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Offline Mode Fixes (Desktop PWA Install + Session Persistence) (v2.29.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Fixed a real bug: reloading the app, or relaunching it after installing it as a desktop app (Chrome's <strong>Install NetControl Online</strong>), while offline used to log you all the way out — the identity check treated "can't reach the server" the same as "your session is invalid" and cleared your saved login. It now only logs you out for an actual rejection from the server; a plain network failure keeps you signed in using your last-known info, so the offline check-in queue (issue #9) is still reachable when you need it most. A small <strong>📡 Offline</strong> banner now appears app-wide whenever the browser has no connection, so it's clear when data might be limited or stale rather than looking like it's gone.</li>
@@ -1422,10 +1432,10 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
 </div>
   <script src="/static/js/state.js?v=24"></script>
   <script src="/static/js/utils.js?v=21"></script>
-  <script src="/static/js/auth.js?v=31"></script>
+  <script src="/static/js/auth.js?v=32"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
-  <script src="/static/js/branding.js?v=24"></script>
+  <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 
   <script>

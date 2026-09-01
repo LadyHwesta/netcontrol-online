@@ -15,6 +15,8 @@ approve their own account, a super admin's sign-off via the existing global
 Joining an EXISTING org is unchanged: that org's own admin approves it.
 """
 
+import io
+
 from helpers import register, login, auth
 
 
@@ -327,6 +329,134 @@ class TestOrgEditing:
         resp = client.patch(f"/orgs/{org_a_id}", json={"name": "Fixed by Super Admin"}, headers=auth(super_token))
         assert resp.status_code == 200
         assert resp.json()["name"] == "Fixed by Super Admin"
+
+    def test_org_admin_can_set_tagline(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+
+        resp = client.patch(f"/orgs/{org_id}", json={
+            "name": "Owner Org", "tagline": "Served Agency: King County EM",
+        }, headers=auth(token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["tagline"] == "Served Agency: King County EM"
+
+        # Persisted -- shows up for a fresh lookup too
+        mine = client.get("/orgs/mine", headers=auth(token)).json()
+        assert mine[0]["tagline"] == "Served Agency: King County EM"
+
+    def test_org_tagline_can_be_cleared(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+        client.patch(f"/orgs/{org_id}", json={"name": "Owner Org", "tagline": "Something"}, headers=auth(token))
+
+        resp = client.patch(f"/orgs/{org_id}", json={"name": "Owner Org", "tagline": ""}, headers=auth(token))
+        assert resp.status_code == 200
+        assert resp.json()["tagline"] is None
+
+
+class TestOrgLogo:
+    """POST/DELETE/GET /orgs/{id}/logo -- per-org branding (issue follow-up),
+    the org-scoped counterpart to the instance-wide POST/DELETE
+    /admin/branding/logo + public GET /logo (no prior test coverage exists
+    for those instance endpoints either -- not a regression here, just not
+    fixing that pre-existing gap in this pass)."""
+
+    def _logo_file(self, filename="logo.png"):
+        return {"file": (filename, io.BytesIO(b"not a real image, just bytes"), "image/png")}
+
+    def test_org_admin_can_upload_and_fetch_logo(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+
+        resp = client.post(f"/orgs/{org_id}/logo", files=self._logo_file(), headers=auth(token))
+        assert resp.status_code == 204, resp.text
+
+        # Public -- no auth required to fetch it back
+        img = client.get(f"/orgs/{org_id}/logo")
+        assert img.status_code == 200
+        assert img.content == b"not a real image, just bytes"
+        assert img.headers["content-type"] == "image/png"
+
+        # has_logo reflects it everywhere an org is returned
+        assert client.get("/orgs/mine", headers=auth(token)).json()[0]["has_logo"] is True
+        orgs = client.get("/orgs").json()
+        assert next(o for o in orgs if o["id"] == org_id)["has_logo"] is True
+
+    def test_uploading_new_logo_replaces_old_one(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+
+        client.post(f"/orgs/{org_id}/logo", files=self._logo_file("first.png"), headers=auth(token))
+        client.post(f"/orgs/{org_id}/logo", files=self._logo_file("second.jpg"), headers=auth(token))
+
+        img = client.get(f"/orgs/{org_id}/logo")
+        assert img.status_code == 200
+        assert img.headers["content-type"] == "image/jpeg"  # the second (replacing) upload
+
+    def test_org_admin_can_delete_logo(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+        client.post(f"/orgs/{org_id}/logo", files=self._logo_file(), headers=auth(token))
+
+        resp = client.delete(f"/orgs/{org_id}/logo", headers=auth(token))
+        assert resp.status_code == 204
+
+        assert client.get(f"/orgs/{org_id}/logo").status_code == 404
+        assert client.get("/orgs/mine", headers=auth(token)).json()[0]["has_logo"] is False
+
+    def test_logo_fetch_404s_with_none_uploaded(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+
+        resp = client.get(f"/orgs/{org_id}/logo")
+        assert resp.status_code == 404
+
+    def test_rejects_unsupported_file_type(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+
+        resp = client.post(f"/orgs/{org_id}/logo",
+            files={"file": ("logo.exe", io.BytesIO(b"nope"), "application/octet-stream")},
+            headers=auth(token))
+        assert resp.status_code == 400
+
+    def test_non_admin_member_cannot_upload_logo(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        owner_token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+
+        register(client, "W2MEMBER", "Member", "member@example.com")
+        pending = client.get(f"/orgs/{org_id}/pending-members", headers=auth(owner_token)).json()
+        member_id = next(m["user_id"] for m in pending if m["callsign"] == "W2MEMBER")
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(owner_token))
+        member_token = login(client, "W2MEMBER")
+
+        resp = client.post(f"/orgs/{org_id}/logo", files=self._logo_file(), headers=auth(member_token))
+        assert resp.status_code == 403
+
+    def test_org_admin_cannot_upload_logo_for_a_different_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        token_a = _org_owner(client, super_token, "W1AORG", "org-a", "Org A")
+        token_b = _org_owner(client, super_token, "W1BORG", "org-b", "Org B")
+        org_b_id = client.get("/auth/me", headers=auth(token_b)).json()["current_org_id"]
+
+        resp = client.post(f"/orgs/{org_b_id}/logo", files=self._logo_file(), headers=auth(token_a))
+        assert resp.status_code == 403
+
+    def test_super_admin_can_upload_logo_for_any_org(self, client):
+        super_token = _bootstrap_super_admin(client)
+        token_a = _org_owner(client, super_token, "W1AORG", "org-a", "Org A")
+        org_a_id = client.get("/auth/me", headers=auth(token_a)).json()["current_org_id"]
+
+        resp = client.post(f"/orgs/{org_a_id}/logo", files=self._logo_file(), headers=auth(super_token))
+        assert resp.status_code == 204
 
 
 class TestOrgMemberRoles:

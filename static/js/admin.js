@@ -15,8 +15,18 @@ async function loadOrgEditForm() {
     if (!org) return;
     document.getElementById('org-edit-name').value = org.name;
     document.getElementById('org-edit-website').value = org.website_url || '';
+    document.getElementById('org-edit-tagline').value = org.tagline || '';
     document.getElementById('org-edit-banner').value = org.banner_message || '';
     document.getElementById('org-edit-name').dataset.orgId = org.id;
+    const deleteBtn = document.getElementById('org-edit-logo-delete-btn');
+    const preview = document.getElementById('org-edit-logo-preview');
+    if (org.has_logo) {
+      preview.src = `/orgs/${org.id}/logo?` + Date.now();
+      deleteBtn.style.display = '';
+    } else {
+      preview.style.display = 'none';
+      deleteBtn.style.display = 'none';
+    }
     // Separate endpoint -- the aprs.fi key is a real secret, deliberately
     // not part of OrganizationOut/GET /orgs above (see routers/orgs.py).
     try {
@@ -26,24 +36,58 @@ async function loadOrgEditForm() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+function previewOrgLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const preview = document.getElementById('org-edit-logo-preview');
+  preview.src = URL.createObjectURL(file);
+}
+
+async function deleteOrgLogo() {
+  const orgId = document.getElementById('org-edit-name').dataset.orgId;
+  if (!orgId || !confirm(t('Remove this organization\'s logo?'))) return;
+  try {
+    await apiFetch(`/orgs/${orgId}/logo`, { method: 'DELETE' });
+    toast(t('Logo removed'));
+    await loadOrgEditForm();
+    loadOrgBanner();   // re-applies branding for the header too
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function saveOrgEdit() {
   const orgId = document.getElementById('org-edit-name').dataset.orgId;
   if (!orgId) return;
   const name = document.getElementById('org-edit-name').value.trim();
   if (!name) return toast(t('Organization name is required'), 'error');
   const websiteUrl = document.getElementById('org-edit-website').value.trim();
+  const tagline = document.getElementById('org-edit-tagline').value.trim();
   const bannerMessage = document.getElementById('org-edit-banner').value.trim();
   const aprsKey = document.getElementById('org-edit-aprs-key').value.trim();
   try {
     await apiFetch(`/orgs/${orgId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name, website_url: websiteUrl || null, banner_message: bannerMessage || null }),
+      body: JSON.stringify({ name, website_url: websiteUrl || null, banner_message: bannerMessage || null, tagline: tagline || null }),
     });
     await apiFetch(`/orgs/${orgId}/aprs-key`, {
       method: 'PUT',
       body: JSON.stringify({ aprs_fi_api_key: aprsKey || null }),
     });
+    // Upload logo if a file was selected -- same two-step shape as the
+    // instance-wide saveBranding() in branding.js.
+    const fileInput = document.getElementById('org-edit-logo-file');
+    if (fileInput.files[0]) {
+      const fd = new FormData();
+      fd.append('file', fileInput.files[0]);
+      await fetch(`/orgs/${orgId}/logo`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd,
+      }).then(r => { if (!r.ok) throw new Error(t('Logo upload failed')); });
+      fileInput.value = '';
+    }
     toast(t('Organization saved'), 'success');
+    await loadOrgEditForm();
+    loadOrgBanner();   // re-applies branding for the header too
   } catch (e) { toast(e.message, 'error'); }
 }
 

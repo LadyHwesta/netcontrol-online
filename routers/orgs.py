@@ -16,11 +16,25 @@ from database import get_db
 from models import Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrgEnabledLanguage, SystemSetting, User
 from routers import helpers
 from routers.deps import get_current_user
-from routers.helpers import _get_or_create_org, _net_to_out
+from routers.helpers import _get_or_create_org, _net_to_out, _org_logo_file
 from routers.schemas import AdminUserOut, NetOut, OrganizationOut, UserOut
 from routers.translation import _translation_configured, run_enable_language_job
 
 router = APIRouter()
+
+
+def _org_to_out(org: Organization, cls=OrganizationOut, **extra) -> OrganizationOut:
+    """Builds OrganizationOut (or a subclass -- see MyOrgOut's `cls=` callers)
+    with has_logo computed from disk -- not a real column, so it can't be
+    picked up by response_model's automatic from_attributes conversion.
+    Every endpoint returning an org (or list of them) goes through this
+    instead of a bare `return org`/`.scalars().all()` so has_logo/tagline
+    are never silently dropped."""
+    return cls(
+        id=org.id, name=org.name, slug=org.slug, website_url=org.website_url,
+        banner_message=org.banner_message, tagline=org.tagline,
+        has_logo=_org_logo_file(org.id) is not None, **extra,
+    )
 
 
 class OrgMemberOut(BaseModel):
@@ -70,9 +84,10 @@ async def list_orgs(db: AsyncSession = Depends(get_db)):
     await _delete_orphaned_orgs() cleans those up outright, but this filter is a
     second line of defense against ever listing a dead-end org (issue #1
     follow-up)."""
-    return (
+    orgs = (
         (await db.execute(select(Organization).join(OrganizationMembership, OrganizationMembership.org_id == Organization.id).filter(OrganizationMembership.role == "admin", OrganizationMembership.approved == True).distinct().order_by(Organization.name))).scalars().all()
     )
+    return [_org_to_out(org) for org in orgs]
 
 
 @router.get("/orgs/mine", response_model=list[MyOrgOut])
@@ -85,23 +100,26 @@ async def list_my_orgs(current_user: User = Depends(get_current_user), db: Async
         .filter(OrganizationMembership.user_id == current_user.id, OrganizationMembership.approved == True)
         .order_by(Organization.name)
     )).all()
-    return [MyOrgOut(id=org.id, name=org.name, slug=org.slug, website_url=org.website_url, banner_message=org.banner_message, role=role) for org, role in rows]
+    return [_org_to_out(org, cls=MyOrgOut, role=role) for org, role in rows]
 
 
 class OrganizationUpdate(BaseModel):
     name: str
     website_url: Optional[str] = None
     banner_message: Optional[str] = None
+    tagline: Optional[str] = None
 
 
 @router.patch("/orgs/{org_id}", response_model=OrganizationOut)
 async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
-    """Rename an org / fix its website / set its banner message — previously
-    there was no way to do any of this at all once created (issue #1
-    follow-up; an org's name is its own property, independent of the
+    """Rename an org / fix its website / set its banner message or tagline —
+    previously there was no way to do any of this at all once created (issue
+    #1 follow-up; an org's name is its own property, independent of the
     instance-wide Branding settings, so changing Branding doesn't
     retroactively rename any org). Slug is intentionally not editable here
-    — it's baked into public /directory/<slug> and /live/<slug> URLs."""
+    — it's baked into public /directory/<slug> and /live/<slug> URLs. The
+    logo half of per-org branding is a separate upload -- see
+    POST/DELETE /orgs/{org_id}/logo below."""
     org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
     if not org:
         raise HTTPException(404, "Organization not found")
@@ -114,9 +132,10 @@ async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depend
     org.name = name
     org.website_url = website or None
     org.banner_message = (data.banner_message or "").strip() or None
+    org.tagline = (data.tagline or "").strip() or None
     await db.commit()
     await db.refresh(org)
-    return org
+    return _org_to_out(org)
 
 
 class OrgAprsKeyOut(BaseModel):
@@ -148,6 +167,60 @@ async def update_org_aprs_key(org_id: int, data: OrgAprsKeyUpdate, admin: User =
     org.aprs_fi_api_key = (data.aprs_fi_api_key or "").strip() or None
     await db.commit()
     return OrgAprsKeyOut(aprs_fi_api_key=org.aprs_fi_api_key)
+
+
+# ---------------------------------------------------------------------------
+# Per-organization branding — logo (issue follow-up). The text half
+# (tagline) is edited via PATCH /orgs/{org_id} above, alongside name/
+# website/banner; the logo is a file upload so it gets its own endpoints,
+# mirroring the instance-wide POST/DELETE /admin/branding/logo and public
+# GET /logo below exactly, just org-scoped via require_org_admin and
+# namespaced on disk via _org_logo_file().
+# ---------------------------------------------------------------------------
+
+@router.post("/orgs/{org_id}/logo", status_code=204)
+async def upload_org_logo(org_id: int, file: UploadFile = File(...), admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    """Org admin only — upload this org's own logo (PNG, JPG, GIF, WebP, SVG),
+    shown on this org's public /directory and /live pages and in the header
+    while working within it (falls back to instance-wide Branding's logo, if
+    any, when an org hasn't set its own — see static/js/branding.js)."""
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in helpers._LOGO_EXTS:
+        raise HTTPException(400, "Unsupported file type — use PNG, JPG, GIF, WebP, or SVG")
+    for old in helpers.UPLOADS_DIR.glob(f"org_{org_id}_logo.*"):
+        old.unlink(missing_ok=True)
+    dest = helpers.UPLOADS_DIR / f"org_{org_id}_logo.{ext}"
+    dest.write_bytes(await file.read())
+
+
+@router.delete("/orgs/{org_id}/logo", status_code=204)
+async def delete_org_logo(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    """Org admin only — remove this org's own logo (instance-wide Branding's
+    logo, if set, takes back over for this org's pages)."""
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    for old in helpers.UPLOADS_DIR.glob(f"org_{org_id}_logo.*"):
+        old.unlink(missing_ok=True)
+
+
+@router.get("/orgs/{org_id}/logo")
+def get_org_logo(org_id: int):
+    """Public endpoint — serves an org's uploaded logo file. No auth: loaded
+    directly in <img src> on public /directory/{slug} and /live/{slug} pages,
+    same trust level as the instance-wide GET /logo."""
+    p = _org_logo_file(org_id)
+    if not p:
+        raise HTTPException(404, "No logo uploaded for this organization")
+    ext = p.suffix.lstrip(".")
+    mime = {
+        "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml",
+    }.get(ext, "application/octet-stream")
+    return Response(content=p.read_bytes(), media_type=mime)
 
 
 # ---------------------------------------------------------------------------

@@ -54,19 +54,58 @@ function applyBranding(b) {
 // instance-wide Branding above -- loaded via /orgs/mine (already scoped to
 // the caller's own approved orgs) rather than /branding, and rendered into
 // a shared #org-banner element every page includes right below its header.
+//
+// Also applies per-org branding (issue follow-up) while it's got the org
+// object in hand -- one /orgs/mine round trip doing both jobs, called again
+// by switchCurrentOrg() so the header updates immediately on an org switch,
+// not just on next reload.
 async function loadOrgBanner() {
   const el = document.getElementById('org-banner');
-  if (!el || !currentUser) return;
+  if (!currentUser) return;
   try {
     const mine = await apiFetch('/orgs/mine');
     const org = mine.find(o => o.id === currentUser.current_org_id);
-    if (org && org.banner_message) {
-      el.textContent = org.banner_message;
-      el.style.display = '';
-    } else {
-      el.style.display = 'none';
+    if (el) {
+      if (org && org.banner_message) {
+        el.textContent = org.banner_message;
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
     }
-  } catch { el.style.display = 'none'; }
+    applyOrgBranding(org);
+  } catch { if (el) el.style.display = 'none'; }
+}
+
+// Per-org branding (issue follow-up) -- layers over whatever instance-wide
+// Branding (applyBranding() above) already painted: the org's own name
+// always wins once logged in (every org has one, unlike tagline/logo),
+// tagline/logo only override when the org has actually set its own,
+// otherwise the instance-wide default (or built-in fallback) already
+// showing is left alone. Mirrored (not shared, since these are standalone
+// pages with their own inline scripts) in public.html/directory.html for
+// the equivalent per-org public pages.
+function applyOrgBranding(org) {
+  if (!org) return;
+  const titleEl = document.getElementById('header-title');
+  titleEl.innerHTML = `<span>${esc(org.name)}</span>`;
+  document.title = org.name + ' — NetControl Online';
+  if (org.website_url) {
+    titleEl.style.cursor = 'pointer';
+    titleEl.onclick = () => window.open(org.website_url, '_blank');
+    titleEl.title = org.website_url;
+  }
+  if (org.tagline) {
+    const tagEl = document.getElementById('header-tagline');
+    tagEl.textContent = org.tagline;
+    tagEl.style.display = '';
+  }
+  if (org.has_logo) {
+    const logoEl = document.getElementById('header-logo');
+    logoEl.src = `/orgs/${org.id}/logo?` + Date.now();
+    logoEl.style.display = '';
+    document.getElementById('header-antenna').style.display = 'none';
+  }
 }
 
 async function loadAdminBranding() {

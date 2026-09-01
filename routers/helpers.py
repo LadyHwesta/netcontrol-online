@@ -32,6 +32,24 @@ from routers.schemas import NetOut
 UPLOADS_DIR = pathlib.Path(__file__).parent.parent / "uploads"
 STATIC_DIR = pathlib.Path(__file__).parent.parent / "static"
 
+_LOGO_EXTS = ("png", "jpg", "jpeg", "gif", "webp", "svg")
+
+
+def _org_logo_file(org_id: int) -> Optional[pathlib.Path]:
+    """Return an org's own uploaded logo file if one exists (per-org branding,
+    issue follow-up) -- same "glob the uploads dir by extension" shape as
+    routers/orgs.py's instance-wide _logo_file(), just namespaced per org so
+    each organization's logo lives alongside the shared one without
+    colliding. Lives here (not orgs.py) since routers/public.py -- the
+    org-scoped /directory and /live pages -- needs it too.
+    Both this and routers/orgs.py's upload_logo()/_logo_file() share the
+    "org_{id}_logo.{ext}" naming; keep in sync if that ever changes."""
+    for ext in _LOGO_EXTS:
+        p = UPLOADS_DIR / f"org_{org_id}_logo.{ext}"
+        if p.exists():
+            return p
+    return None
+
 # ---------------------------------------------------------------------------
 # SMTP / Email config
 # ---------------------------------------------------------------------------

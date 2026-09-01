@@ -459,6 +459,11 @@ MIGRATIONS = [
     # login_message/welcome_popup_message live in system_settings (key/value,
     # already an existing table) -- no schema change needed for those.
 
+    # ── Per-organization branding (issue follow-up — logo lives on disk,
+    #    namespaced per org, no column needed for it) ──
+    ("organizations: tagline column",
+     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS tagline VARCHAR(200)"),
+
     # ── Manually-reported GPS position on a checkin (issue follow-up) ──
     ("checkins: lat/lon columns",
      "ALTER TABLE checkins ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION"),

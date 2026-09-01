@@ -16,6 +16,7 @@ from database import get_db
 from models import Checkin, Net, NetSchedule, NetSession, Organization, User
 from routers.aprs import _public_aprs_positions
 from routers.helpers import STATIC_DIR
+from routers.orgs import _org_to_out
 from routers.schedules import _duty_labels_for_session, _schedule_to_out
 from routers.schemas import OrganizationOut
 
@@ -195,9 +196,23 @@ async def public_directory_page(request: Request, org_slug: Optional[str] = None
 async def public_organizations(db: AsyncSession = Depends(get_db)):
     """Orgs with at least one net in the public directory — powers the org
     picker shown at bare /directory or /live (no slug in the URL)."""
-    return (
+    orgs = (
         (await db.execute(select(Organization).join(Net, Net.org_id == Organization.id).filter(Net.public_listed == True).distinct().order_by(Organization.name))).scalars().all()
     )
+    return [_org_to_out(org) for org in orgs]
+
+
+@router.get("/public/organizations/{slug}", response_model=OrganizationOut)
+async def public_organization_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
+    """One org's public branding (name/tagline/logo) by slug — powers
+    per-org branding on /directory/{slug} and /live/{slug} (issue
+    follow-up). Deliberately NOT filtered by Net.public_listed like the
+    picker above — an org's own page shows its own branding regardless of
+    whether it happens to have a public net listed right now."""
+    org = (await db.execute(select(Organization).filter(Organization.slug == slug))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    return _org_to_out(org)
 
 
 @router.get("/public/directory")

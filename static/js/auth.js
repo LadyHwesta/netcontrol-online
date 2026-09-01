@@ -384,6 +384,7 @@ async function switchCurrentOrg(orgId) {
     currentUser = await apiFetch('/auth/current-org', { method: 'PATCH', body: JSON.stringify({ org_id: Number(orgId) }) });
     toast('Switched organization', 'success');
     loadOrgSwitcher();   // re-derive nav-admin visibility for the new org
+    loadOrgBanner();     // re-applies branding + banner message for the new org
     await loadNets();
     showView('nets');
   } catch (e) {

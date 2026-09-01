@@ -93,6 +93,20 @@
             </div>
           </div>
           <div class="form-group">
+            <label><span data-i18n="Tagline / Subtitle">Tagline / Subtitle</span> <span class="text-muted" style="font-size:11px" data-i18n="(shown under your org's name — leave blank for none)">(shown under your org's name — leave blank for none)</span></label>
+            <input class="form-control" id="org-edit-tagline" placeholder="e.g. Served Agency: King County Emergency Management" />
+          </div>
+          <div class="form-group">
+            <label><span data-i18n="Logo">Logo</span> <span class="text-muted" style="font-size:11px" data-i18n="(PNG, JPG, GIF, WebP, or SVG — shown in the header while working in this org, and on its public Directory/Live pages)">(PNG, JPG, GIF, WebP, or SVG — shown in the header while working in this org, and on its public Directory/Live pages)</span></label>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <img id="org-edit-logo-preview" style="max-height:48px;max-width:180px;display:none;border-radius:4px"
+                onerror="this.style.display='none'" onload="this.style.display=''" />
+              <input type="file" id="org-edit-logo-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                style="font-size:13px;color:var(--text)" onchange="previewOrgLogo(this)" />
+              <button class="btn btn-danger btn-sm" id="org-edit-logo-delete-btn" onclick="deleteOrgLogo()" style="display:none" data-i18n="Remove Logo">Remove Logo</button>
+            </div>
+          </div>
+          <div class="form-group">
             <label><span data-i18n="Banner Message">Banner Message</span> <span class="text-muted" style="font-size:11px" data-i18n="(shown at the top of every page to your org's members — leave blank for none)">(shown at the top of every page to your org's members — leave blank for none)</span></label>
             <textarea class="form-control" id="org-edit-banner" rows="2" placeholder="e.g. Field Day setup starts 6am Saturday at the usual site"></textarea>
           </div>
@@ -515,11 +529,11 @@
 </div>
 <script src="/static/js/state.js?v=24"></script>
 <script src="/static/js/utils.js?v=21"></script>
-<script src="/static/js/auth.js?v=31"></script>
+<script src="/static/js/auth.js?v=32"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
-<script src="/static/js/branding.js?v=24"></script>
-<script src="/static/js/admin.js?v=42"></script>
+<script src="/static/js/branding.js?v=25"></script>
+<script src="/static/js/admin.js?v=43"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {

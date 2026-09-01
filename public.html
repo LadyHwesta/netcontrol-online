@@ -527,6 +527,35 @@
         antennaEl.style.display = 'none';
       }
     } catch {}
+    // Per-org branding (issue follow-up) -- layers over the instance-wide
+    // defaults just applied above, for the org this specific slug belongs
+    // to: name always wins (every org has one); tagline/logo only when this
+    // org has actually set its own, otherwise the instance default (or
+    // built-in fallback) already showing is left alone. No slug (bare
+    // /live org picker) -- nothing to layer, instance branding stands.
+    const slug = orgSlugFromPath();
+    if (!slug) return;
+    try {
+      const org = await fetch('/public/organizations/' + encodeURIComponent(slug)).then(r => r.ok ? r.json() : null);
+      if (!org) return;
+      const titleEl = document.getElementById('header-title');
+      titleEl.innerHTML = `<span>${esc(org.name)}</span> — Live`;
+      document.title = org.name + ' — Live Nets';
+      if (org.website_url) {
+        titleEl.style.cursor = 'pointer';
+        titleEl.onclick = () => window.open(org.website_url, '_blank');
+      }
+      if (org.tagline) {
+        const tagEl = document.getElementById('header-tagline');
+        tagEl.textContent = org.tagline;
+        tagEl.style.display = '';
+      }
+      if (org.has_logo) {
+        document.getElementById('header-logo').src = `/orgs/${org.id}/logo?` + Date.now();
+        document.getElementById('header-logo').style.display = '';
+        document.getElementById('header-antenna').style.display = 'none';
+      }
+    } catch {}
   }
 
   // ── Boot ─────────────────────────────────────────────

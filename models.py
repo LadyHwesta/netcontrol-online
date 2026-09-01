@@ -93,6 +93,14 @@ class Organization(Base):
     # super-admin-set and stored in SystemSetting instead, since those apply
     # across every org rather than being a property of one.
     banner_message = Column(Text, nullable=True)
+    # Org-admin-set per-org branding (issue follow-up) -- the per-org
+    # counterpart to instance-wide Branding's tagline (routers/orgs.py's
+    # BRANDING_KEYS), shown under this org's name on its own public
+    # /directory/{slug} and /live/{slug} pages and in the header while
+    # working within it. The logo half of per-org branding has no column
+    # here -- same "glob the uploads dir" pattern as the instance logo,
+    # namespaced per org (see routers/helpers.py's _org_logo_file()).
+    tagline = Column(String(200), nullable=True)
     # aprs.fi API key (issue follow-up), shared by every net in this org that
     # uses aprs_fi as its APRS source -- one key per org rather than
     # re-entered per net. Org-admin-set; deliberately NOT exposed on

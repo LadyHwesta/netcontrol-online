@@ -146,6 +146,31 @@ class TestPublicDirectoryOrgScoping:
         assert resp.status_code == 200
         assert any(o["slug"] == "default" for o in resp.json())
 
+    def test_public_organization_by_slug_returns_branding(self, client, admin_headers):
+        """GET /public/organizations/{slug} (issue follow-up — per-org
+        branding) powers /directory/{slug} and /live/{slug}'s own header,
+        independent of whether the org happens to have a public-listed net
+        right now (unlike the picker endpoint above, which is filtered)."""
+        org_id = client.get("/auth/me", headers=admin_headers).json()["current_org_id"]
+        client.patch(f"/orgs/{org_id}", json={"name": "Default Org", "tagline": "Test Tagline"}, headers=admin_headers)
+        resp = client.get("/public/organizations/default")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["slug"] == "default"
+        assert data["tagline"] == "Test Tagline"
+        assert data["has_logo"] is False
+
+    def test_public_organization_by_slug_works_with_no_public_nets(self, client, admin_headers):
+        """No public-listed net at all -- still resolves (the picker endpoint
+        above would exclude it; this one intentionally doesn't)."""
+        resp = client.get("/public/organizations/default")
+        assert resp.status_code == 200
+        assert resp.json()["slug"] == "default"
+
+    def test_public_organization_by_slug_404s_for_unknown_slug(self, client):
+        resp = client.get("/public/organizations/does-not-exist")
+        assert resp.status_code == 404
+
     def test_directory_slug_route_loads_without_auth(self, client):
         resp = client.get("/directory/default")
         assert resp.status_code == 200
