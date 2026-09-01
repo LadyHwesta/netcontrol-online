@@ -69,6 +69,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Translation Coverage: Check-In Panel (v2.20.5)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Extends UI translation (see below) to <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">checkins.js</code> — the check-in roster, CSV import, callsign lookup/search, offline queue banner, Expected Stations, the full ARES/ACES Tactical Assignments &amp; Station Schedule workflow (add/edit/sign-on/sign-off/hand-off/history for tactical positions and Net Control shifts), the evacuation zone roster, the traffic message log, and station remarks/preferred-name editors. This was the last and largest slice of the incremental rollout tracked in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">TECH_DEBT.md</code> — flagged early on as the hardest file for its dynamically-rendered, sometimes ternary-composed strings.</li>
+              <li>New <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">tn(n, singular, plural)</code> helper in <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">i18n.js</code> for count-based text ("N check-in(s)", "N imported", etc.) — translates the singular and plural English templates as two independent strings, then substitutes the count. Deliberately sticks to English's own one/other split rather than implementing each target language's actual plural rules (Russian's 3 forms, Arabic's 6, etc.) — a known, accepted limitation of machine-translating a template rather than using a proper ICU-style plural-aware translation system, same "machine translation isn't perfect" caveat already shown next to the language switcher.</li>
+              <li>No backend changes — this only adds <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">t()</code>/<code style="background:var(--surface2);padding:1px 5px;border-radius:3px">tn()</code> calls to an already-shipped screen (necessarily all JS-side here, unlike earlier slices — checkins.js has no static HTML counterpart to attach <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">data-i18n</code> to; everything it shows is rendered dynamically).</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-08-31 — Fix: Service Worker Never Actually Checked for Updates (v2.20.4)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Follow-up to the network-first fix below (v2.20.3), after confirming by direct reproduction that a hard refresh does <strong>not</strong> bypass an already-installed service worker or force it to check for a new version — only an explicit update check does, and this app never asked for one. A browser could stay wedged on an old service worker (old cached pages/scripts) through any number of reloads, hard or otherwise, until its own internal, heavily-throttled background check eventually got around to it.</li>
@@ -1217,7 +1226,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
   <script src="/static/js/utils.js?v=8"></script>
   <script src="/static/js/auth.js?v=30"></script>
   <script src="/static/js/theme.js?v=1"></script>
-  <script src="/static/js/i18n.js?v=3"></script>
+  <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=23"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 

@@ -25,6 +25,21 @@ function t(text) {
   return text;
 }
 
+// Count-aware sibling of t(). translate_cached/argos-translate has no notion
+// of grammatical number, so this deliberately keeps to English's own simple
+// one/other split rather than pretending to implement each target
+// language's real plural rules (Russian's 3 forms, Arabic's 6, etc.) --
+// singular/plural are each translated as their own fixed template (with a
+// literal "{n}" placeholder) via t(), then the count is substituted after
+// translation. Grammatically imperfect for languages with richer plural
+// systems (same honest "machine translation isn't perfect" caveat already
+// called out next to the language switcher), but far better than showing
+// English only for counts other than 1, and it's what every other count
+// display in this app already did in English before translation existed.
+function tn(n, singular, plural) {
+  return t(n === 1 ? singular : plural).replace('{n}', n);
+}
+
 // Collects strings t() had no cached translation for and, shortly after
 // the page settles, sends them once as a batch to /i18n/translate-batch.
 // The very first time a brand-new string is hit in a given language it

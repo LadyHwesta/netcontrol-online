@@ -12,21 +12,21 @@ function openCheckinImportModal() {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
     <div style="background:var(--surface);border:2px solid var(--lc-blue);border-radius:10px;padding:24px;max-width:480px;width:100%">
-      <h3 style="margin:0 0 8px;color:var(--lc-blue)">📥 Import Check-ins from CSV</h3>
+      <h3 style="margin:0 0 8px;color:var(--lc-blue)">📥 ${t('Import Check-ins from CSV')}</h3>
       <p style="margin:0 0 14px;font-size:13px;color:var(--text-muted);line-height:1.5">
-        Upload a CSV of check-ins — handy for a long roster from a net logged after the fact.
-        Only <strong>Callsign</strong> is required; every other column is optional.
+        ${t('Upload a CSV of check-ins — handy for a long roster from a net logged after the fact.')}
+        ${t('Only')} <strong>${t('Callsign')}</strong> ${t('is required; every other column is optional.')}
       </p>
       <p style="margin:0 0 14px">
-        <a href="#" onclick="triggerDownload(API + '/checkins/import-sample'); return false;" style="color:var(--lc-orange);font-size:13px">📄 Download a sample CSV</a>
+        <a href="#" onclick="triggerDownload(API + '/checkins/import-sample'); return false;" style="color:var(--lc-orange);font-size:13px">📄 ${t('Download a sample CSV')}</a>
       </p>
       <div class="form-group" style="margin-bottom:14px">
         <input type="file" id="checkin-import-file" accept=".csv,text/csv" class="form-control" />
       </div>
       <div id="checkin-import-result"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-        <button class="btn btn-ghost" onclick="document.getElementById('checkin-import-modal').remove()">Close</button>
-        <button class="btn btn-primary" onclick="submitCheckinImport(this)">Upload</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('checkin-import-modal').remove()">${t('Close')}</button>
+        <button class="btn btn-primary" onclick="submitCheckinImport(this)">${t('Upload')}</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -36,7 +36,7 @@ function openCheckinImportModal() {
 async function submitCheckinImport(btn) {
   const fileInput = document.getElementById('checkin-import-file');
   const file = fileInput.files[0];
-  if (!file) return toast('Choose a CSV file first', 'error');
+  if (!file) return toast(t('Choose a CSV file first'), 'error');
   btnLoading(btn, true);
   try {
     const fd = new FormData();
@@ -47,10 +47,10 @@ async function submitCheckinImport(btn) {
       body: fd,
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.detail || 'Import failed');
+    if (!res.ok) throw new Error(result.detail || t('Import failed'));
     renderCheckinImportResult(result);
     toast(
-      `Imported ${result.imported} check-in${result.imported === 1 ? '' : 's'}` + (result.skipped ? `, ${result.skipped} skipped` : ''),
+      tn(result.imported, 'Imported {n} check-in', 'Imported {n} check-ins') + (result.skipped ? `, ${t('{n} skipped').replace('{n}', result.skipped)}` : ''),
       result.skipped ? 'error' : 'success'
     );
     await loadCheckins();
@@ -65,11 +65,11 @@ async function submitCheckinImport(btn) {
 function renderCheckinImportResult(result) {
   const el = document.getElementById('checkin-import-result');
   if (!el) return;
-  let html = `<div style="font-size:13px"><strong style="color:var(--lc-green)">${result.imported} imported</strong>`;
+  let html = `<div style="font-size:13px"><strong style="color:var(--lc-green)">${t('{n} imported').replace('{n}', result.imported)}</strong>`;
   if (result.skipped > 0) {
-    html += `, <strong style="color:var(--lc-red)">${result.skipped} skipped</strong></div>`;
+    html += `, <strong style="color:var(--lc-red)">${t('{n} skipped').replace('{n}', result.skipped)}</strong></div>`;
     html += `<div style="max-height:160px;overflow-y:auto;margin-top:8px;font-size:12px;border:1px solid var(--lc-border);border-radius:6px;padding:8px">`;
-    html += result.errors.map(e => `<div style="padding:2px 0">Row ${e.row}${e.callsign ? ` (${esc(e.callsign)})` : ''}: ${esc(e.reason)}</div>`).join('');
+    html += result.errors.map(e => `<div style="padding:2px 0">${t('Row')} ${e.row}${e.callsign ? ` (${esc(e.callsign)})` : ''}: ${esc(e.reason)}</div>`).join('');
     html += `</div>`;
   } else {
     html += `</div>`;
@@ -99,7 +99,7 @@ async function lookupCallsign(callsign) {
   const generation = ++lookupGeneration;
   if (lookupCache[callsign]) { applyLookupResult(lookupCache[callsign]); return; }
 
-  setLookupInfo('<span class="lookup-spinner"></span><span class="text-muted" style="font-size:11px">Looking up…</span>');
+  setLookupInfo(`<span class="lookup-spinner"></span><span class="text-muted" style="font-size:11px">${t('Looking up…')}</span>`);
   try {
     const result = await apiFetch(`/callsign/${encodeURIComponent(callsign)}/lookup`);
     if (generation !== lookupGeneration) return;  // superseded by a newer lookup/clear
@@ -115,7 +115,7 @@ function remarkPillText(data) {
   const parts = [];
   if (data && data.preferred_name) parts.push('👤 ' + data.preferred_name);
   if (data && data.remark) parts.push('📝 ' + data.remark);
-  return parts.length ? parts.join('   ') : '+ Name/Remark';
+  return parts.length ? parts.join('   ') : t('+ Name/Remark');
 }
 
 function renderRemarkPill(callsign, data) {
@@ -126,7 +126,7 @@ function renderRemarkPill(callsign, data) {
   const pill = document.createElement('span');
   pill.id = 'remark-pill';
   pill.style.cssText = 'display:inline-flex;align-items:center;gap:5px;margin-left:6px;font-size:11px;cursor:pointer;background:rgba(255,204,0,0.15);border:1px solid rgba(255,204,0,0.4);border-radius:4px;padding:1px 7px;color:var(--lc-orange)';
-  pill.title = 'Click to set a preferred name and/or remark for this station';
+  pill.title = t('Click to set a preferred name and/or remark for this station');
   pill.innerHTML = `<span>${esc(remarkPillText(data))}</span>`;
   pill.onclick = () => showRemarkEditor(callsign, data);
   info.appendChild(pill);
@@ -135,8 +135,8 @@ function renderRemarkPill(callsign, data) {
 function applyLookupResult(result) {
   if (result.status !== 'found') {
     const notFoundMsg = currentNetIsGmrs
-      ? 'Not found in GMRS database'
-      : 'Not found in FCC database';
+      ? t('Not found in GMRS database')
+      : t('Not found in FCC database');
     setLookupInfo(`<span class="lookup-notfound">${notFoundMsg}</span>`);
     // Preferred name/remark isn't tied to a successful FCC/GMRS lookup — always
     // offer the pill so a station missing from the database can still get one.
@@ -192,12 +192,12 @@ async function addCheckin() {
     || (currentNet && currentNet.dmr_talkgroup)
     || null;
   const dmr_region = document.getElementById('ci-dmr-region').value.trim() || null;
-  if (!callsign) { toast('Callsign required', 'error'); document.getElementById('ci-call').focus(); return; }
+  if (!callsign) { toast(t('Callsign required'), 'error'); document.getElementById('ci-call').focus(); return; }
   const payload = { callsign, name, signal_report, comments, has_traffic, evac_zone, dmr_talkgroup, dmr_region };
   try {
     const created = await apiFetch(`/sessions/${currentSessionId}/checkins`, { method: 'POST', body: JSON.stringify(payload) });
     _clearCheckinForm();
-    toast(`${callsign} checked in`, 'success');
+    toast(`${callsign} ${t('checked in')}`, 'success');
     markRecentCheckin(created.id);
     await loadCheckins();
     renderExpectedList();   // refresh expected list to show new checkin state
@@ -209,7 +209,7 @@ async function addCheckin() {
       await queueCheckin(currentSessionId, payload, token);
       _registerBackgroundSync();
       _clearCheckinForm();
-      toast(`${callsign} queued — offline, will send automatically`, 'success');
+      toast(`${callsign} ${t('queued — offline, will send automatically')}`, 'success');
       await refreshOfflineQueueBanner();
     } else {
       toast(e.message, 'error');
@@ -253,19 +253,19 @@ async function refreshOfflineQueueBanner() {
   const failedCount = pending.filter(p => p.status === 'failed').length;
   const waitingCount = pending.length - failedCount;
   document.getElementById('offline-queue-summary').textContent =
-    (waitingCount ? `⏳ ${waitingCount} check-in${waitingCount !== 1 ? 's' : ''} waiting to sync` : '')
-    + (failedCount ? `${waitingCount ? ' · ' : ''}⚠ ${failedCount} failed` : '');
+    (waitingCount ? `⏳ ${tn(waitingCount, '{n} check-in waiting to sync', '{n} check-ins waiting to sync')}` : '')
+    + (failedCount ? `${waitingCount ? ' · ' : ''}⚠ ${t('{n} failed').replace('{n}', failedCount)}` : '');
   document.getElementById('offline-queue-list').innerHTML = pending.map(p => {
     if (p.status === 'failed') {
       return `<div style="display:flex;align-items:center;gap:8px;margin-top:3px">
         <span class="callsign" style="color:var(--lc-red)">${esc(p.payload.callsign)}</span>
-        <span class="text-muted" style="font-size:11px">${esc(p.last_error || 'failed')}</span>
-        <button class="btn btn-ghost btn-sm" onclick="dismissFailedCheckin('${p.id}')" style="margin-left:auto">Dismiss</button>
+        <span class="text-muted" style="font-size:11px">${esc(p.last_error || t('failed'))}</span>
+        <button class="btn btn-ghost btn-sm" onclick="dismissFailedCheckin('${p.id}')" style="margin-left:auto">${t('Dismiss')}</button>
       </div>`;
     }
     return `<div style="display:flex;align-items:center;gap:8px;margin-top:3px">
       <span class="callsign">${esc(p.payload.callsign)}</span>
-      <span class="text-muted" style="font-size:11px">queued ${fmt(p.queued_at)}</span>
+      <span class="text-muted" style="font-size:11px">${t('queued')} ${fmt(p.queued_at)}</span>
     </div>`;
   }).join('');
 }
@@ -336,14 +336,14 @@ function selectCallsign(callsign) {
 
 async function searchCallsigns(q) {
   const generation = ++lookupGeneration;
-  setLookupInfo('<span class="lookup-spinner"></span><span class="text-muted" style="font-size:11px">Searching…</span>');
+  setLookupInfo(`<span class="lookup-spinner"></span><span class="text-muted" style="font-size:11px">${t('Searching…')}</span>`);
   try {
     const netParam = currentNetId ? `&net_id=${currentNetId}` : '';
     const results = await apiFetch(`/callsign/search?q=${encodeURIComponent(q)}${netParam}`);
     if (generation !== lookupGeneration) return;  // superseded by a newer lookup/search/clear
     clearLookupInfo();
     if (results.length === 0) {
-      setLookupInfo('<span class="lookup-notfound">No matches found</span>');
+      setLookupInfo(`<span class="lookup-notfound">${t('No matches found')}</span>`);
     } else if (results.length === 1 && results[0].callsign === q) {
       // Exact single match — auto-select
       selectCallsign(results[0].callsign);
@@ -352,7 +352,7 @@ async function searchCallsigns(q) {
     }
   } catch (err) {
     if (generation !== lookupGeneration) return;
-    setLookupInfo(`<span class="lookup-notfound">Search error: ${esc(err.message)}</span>`);
+    setLookupInfo(`<span class="lookup-notfound">${t('Search error:')} ${esc(err.message)}</span>`);
   }
 }
 
@@ -449,7 +449,7 @@ function updateTrafficBanner(checkins) {
                 background:rgba(0,0,0,0.18);border-radius:5px;padding:2px 8px;
                 ${called ? 'opacity:0.45;text-decoration:line-through;' : ''}
                 font-weight:700;white-space:nowrap">
-      <input type="checkbox" ${called ? 'checked' : ''} ${pending ? 'disabled title="Not checked in yet"' : ''}
+      <input type="checkbox" ${called ? 'checked' : ''} ${pending ? `disabled title="${t('Not checked in yet')}"` : ''}
         onchange="markTrafficCalled(${id})"
         style="accent-color:#000;width:13px;height:13px;cursor:pointer" />
       ${esc(label)}
@@ -507,7 +507,7 @@ function renderCheckins(checkins) {
   const list = document.getElementById('checkins-list');
   const empty = document.getElementById('checkins-empty');
   const count = document.getElementById('checkin-count-label');
-  count.textContent = `${checkins.length} check-in${checkins.length !== 1 ? 's' : ''}`;
+  count.textContent = tn(checkins.length, '{n} check-in', '{n} check-ins');
 
   updateTrafficBanner(checkins);
   updateWelcomeBanner(checkins);
@@ -522,14 +522,14 @@ function renderCheckins(checkins) {
   const hasDmr = !!currentDmrConfig;
   list.innerHTML = checkins.map(c => {
     const details = [
-      c.signal_report ? `Signal: ${c.signal_report}` : null,
-      c.comments ? `Comments: ${c.comments}` : null,
-      currentNetIsAres && c.evac_zone ? `Zone: ${c.evac_zone}` : null,
-      hasDmr && c.dmr_talkgroup ? `TG: ${c.dmr_talkgroup}` : null,
-      hasDmr && c.dmr_region ? `Region: ${c.dmr_region}` : null,
-      c.tactical_callsign ? `Tactical: ${c.tactical_callsign}` : null,
-      c.signed_off_at ? `Signed off: ${fmt(c.signed_off_at)}` : null,
-      `Checked in: ${fmt(c.checked_in_at)}`,
+      c.signal_report ? `${t('Signal:')} ${c.signal_report}` : null,
+      c.comments ? `${t('Comments:')} ${c.comments}` : null,
+      currentNetIsAres && c.evac_zone ? `${t('Zone:')} ${c.evac_zone}` : null,
+      hasDmr && c.dmr_talkgroup ? `${t('TG:')} ${c.dmr_talkgroup}` : null,
+      hasDmr && c.dmr_region ? `${t('Region:')} ${c.dmr_region}` : null,
+      c.tactical_callsign ? `${t('Tactical:')} ${c.tactical_callsign}` : null,
+      c.signed_off_at ? `${t('Signed off:')} ${fmt(c.signed_off_at)}` : null,
+      `${t('Checked in:')} ${fmt(c.checked_in_at)}`,
     ].filter(Boolean).join(' · ');
 
     // Manual GPS position badge (issue follow-up) -- always clickable, dim
@@ -537,7 +537,7 @@ function renderCheckins(checkins) {
     // Shown on both row layouts below since ARES/ACES field team positions
     // are, if anything, the more likely case to need this.
     const hasPos = c.lat != null && c.lon != null;
-    const posBadge = ` <span class="checkin-pos-badge" title="${hasPos ? 'Position reported — click to edit' : 'Set GPS position'}"
+    const posBadge = ` <span class="checkin-pos-badge" title="${hasPos ? t('Position reported — click to edit') : t('Set GPS position')}"
       style="cursor:pointer;opacity:${hasPos ? 1 : 0.3}"
       onclick="openCheckinPositionModal(${c.id}, ${JSON.stringify(c.callsign)}, ${hasPos ? c.lat : 'null'}, ${hasPos ? c.lon : 'null'})">📍</span>`;
 
@@ -550,7 +550,7 @@ function renderCheckins(checkins) {
       const tacticalCell = c.tactical_callsign
         ? esc(c.tactical_callsign)
         : (c.evac_zone ? `📍 ${esc(c.evac_zone)}` : '—');
-      const welcomeBadge = c.is_first_checkin ? ' <span title="First check-in on this net" style="font-size:11px">👋</span>' : '';
+      const welcomeBadge = c.is_first_checkin ? ` <span title="${t('First check-in on this net')}" style="font-size:11px">👋</span>` : '';
       return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
         <span class="tactical-callsign">${tacticalCell}</span>
         <span class="callsign">${esc(c.callsign)}${welcomeBadge}${posBadge}</span>
@@ -559,12 +559,12 @@ function renderCheckins(checkins) {
       </div>`;
     }
 
-    const welcomeBadge = c.is_first_checkin ? ' <span title="First check-in on this net" style="font-size:11px">👋</span>' : '';
+    const welcomeBadge = c.is_first_checkin ? ` <span title="${t('First check-in on this net')}" style="font-size:11px">👋</span>` : '';
     return `<div class="checkin-row${isRecentCheckin(c.id) ? ' checkin-recent' : ''}" title="${esc(details)}">
       <span class="callsign">${esc(c.callsign)}${welcomeBadge}${posBadge}</span>
       <span class="checkin-name">${esc(c.name || '—')}</span>
       <button class="btn btn-sm ${c.has_traffic ? 'btn-danger' : 'btn-ghost'}"
-        style="font-size:14px;padding:2px 8px" title="${c.has_traffic ? 'Traffic — click to clear' : 'Click to flag traffic'}"
+        style="font-size:14px;padding:2px 8px" title="${c.has_traffic ? t('Traffic — click to clear') : t('Click to flag traffic')}"
         onclick="toggleTraffic(${c.id})">${c.has_traffic ? '📢' : '○'}</button>
       <button class="btn btn-danger btn-sm" onclick="removeCheckin(${c.id})">✕</button>
     </div>`;
@@ -593,10 +593,10 @@ async function saveCheckinPosition() {
   const id = document.getElementById('checkin-position-id').value;
   const lat = parseFloat(document.getElementById('checkin-position-lat').value);
   const lon = parseFloat(document.getElementById('checkin-position-lon').value);
-  if (isNaN(lat) || isNaN(lon)) return toast('Enter both latitude and longitude', 'error');
+  if (isNaN(lat) || isNaN(lon)) return toast(t('Enter both latitude and longitude'), 'error');
   try {
     await apiFetch(`/checkins/${id}/position`, { method: 'PATCH', body: JSON.stringify({ lat, lon }) });
-    toast('Position saved');
+    toast(t('Position saved'));
     closeCheckinPositionModal();
     await loadCheckins();
     refreshAprsMap();   // picks up the new/cleared pin on the map if it's open
@@ -607,7 +607,7 @@ async function clearCheckinPosition() {
   const id = document.getElementById('checkin-position-id').value;
   try {
     await apiFetch(`/checkins/${id}/position`, { method: 'PATCH', body: JSON.stringify({ lat: null, lon: null }) });
-    toast('Position cleared');
+    toast(t('Position cleared'));
     closeCheckinPositionModal();
     await loadCheckins();
     refreshAprsMap();
@@ -615,10 +615,10 @@ async function clearCheckinPosition() {
 }
 
 async function removeCheckin(id) {
-  if (!confirm('Remove this check-in?')) return;
+  if (!confirm(t('Remove this check-in?'))) return;
   try {
     await apiFetch(`/checkins/${id}`, { method: 'DELETE' });
-    toast('Check-in removed');
+    toast(t('Check-in removed'));
     await loadCheckins();
     renderExpectedList();
   } catch (e) { toast(e.message, 'error'); }
@@ -656,7 +656,7 @@ async function loadExpectedStations() {
   const minCheckins = parseInt(document.getElementById('exp-min').value) || 2;
   const weeks = parseInt(document.getElementById('exp-weeks').value) || 4;
   const listEl = document.getElementById('expected-list');
-  listEl.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">Loading…</p>';
+  listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('Loading…')}</p>`;
   try {
     expectedStations = await apiFetch(`/nets/${currentNetId}/expected?min_checkins=${minCheckins}&weeks=${weeks}`);
     renderExpectedList();
@@ -681,7 +681,7 @@ function renderExpectedList() {
 
   const listEl = document.getElementById('expected-list');
   if (!expectedStations.length) {
-    listEl.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No matching stations found.</p>';
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No matching stations found.')}</p>`;
     return;
   }
   const alreadyIn = checkedInCallsigns();
@@ -690,7 +690,7 @@ function renderExpectedList() {
     const checkboxGroup = checked
       ? `<label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--lc-orange);white-space:nowrap">
            <input type="checkbox" checked disabled style="accent-color:var(--lc-orange);width:15px;height:15px" />
-           Check In
+           ${t('Check In')}
          </label>
          <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">—</span>`
       : `<label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--lc-orange);cursor:pointer;white-space:nowrap">
@@ -698,31 +698,31 @@ function renderExpectedList() {
              style="accent-color:var(--lc-orange);width:15px;height:15px;cursor:pointer"
              data-callsign="${esc(st.callsign)}" data-name="${esc(st.name || '')}"
              onchange="if(this.checked) checkInExpected(this, this.dataset.callsign, this.dataset.name)" />
-           Check In
+           ${t('Check In')}
          </label>
          <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--lc-red);cursor:pointer;white-space:nowrap">
            <input type="checkbox" id="exp-traffic-${esc(st.callsign)}"
              style="accent-color:var(--lc-red);width:15px;height:15px;cursor:pointer"
              data-callsign="${esc(st.callsign)}"
              onchange="toggleExpectedTraffic(this.dataset.callsign, this.checked)" />
-           Traffic
+           ${t('Traffic')}
          </label>`;
     const knownZone = evacZones[st.callsign];
     const zoneBadge = currentNetIsAres
       ? `<span style="font-size:11px;color:var(--lc-blue);white-space:nowrap;min-width:60px;text-align:right"
-              title="Last known zone">${knownZone ? '📍 ' + esc(knownZone) : ''}</span>`
+              title="${t('Last known zone')}">${knownZone ? '📍 ' + esc(knownZone) : ''}</span>`
       : '';
     return `<div class="exp-row" style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;${checked ? 'opacity:.45' : ''}">
       ${checkboxGroup}
       <span class="callsign" style="min-width:80px">${esc(st.callsign)}</span>
       <span style="flex:1;display:flex;align-items:center;gap:6px;min-width:120px">
         <span class="exp-name-display" style="color:var(--text-muted);font-size:12px">${esc(st.name || '')}</span>
-        <button type="button" title="Set preferred name / remark for this station"
+        <button type="button" title="${t('Set preferred name / remark for this station')}"
           onclick="toggleExpectedRemarkEditor(this, '${esc(st.callsign)}')"
           style="background:none;border:none;color:var(--lc-orange);cursor:pointer;font-size:11px;padding:0 2px;opacity:0.7">✏️</button>
       </span>
       ${zoneBadge}
-      <span style="font-size:11px;color:var(--lc-blue);white-space:nowrap" title="Check-ins in window">${st.checkin_count}✓</span>
+      <span style="font-size:11px;color:var(--lc-blue);white-space:nowrap" title="${t('Check-ins in window')}">${st.checkin_count}✓</span>
     </div>`;
   }).join('');
 }
@@ -785,7 +785,7 @@ async function addTacticalPosition() {
     const localStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${time || '00:00'}`;
     scheduled_start = new Date(localStr).toISOString();
   }
-  if (!tactical_callsign) return toast('Tactical callsign required', 'error');
+  if (!tactical_callsign) return toast(t('Tactical callsign required'), 'error');
   try {
     await apiFetch(`/sessions/${currentSessionId}/tactical-positions`, {
       method: 'POST',
@@ -797,7 +797,7 @@ async function addTacticalPosition() {
     document.getElementById('tac-pos-assigned-name').value = '';
     setDefaultMonthDay('tac-pos-scheduled-month', 'tac-pos-scheduled-day');
     document.getElementById('tac-pos-scheduled-time').value = '';
-    toast('Position added', 'success');
+    toast(t('Position added'), 'success');
     await loadTacticalPositions();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -813,8 +813,8 @@ async function addNetControlShift() {
   const month = document.getElementById('nc-shift-month').value;
   const day = document.getElementById('nc-shift-day').value;
   const time = document.getElementById('nc-shift-time').value;
-  if (!callsign) return toast('Callsign required', 'error');
-  if (!month || !day) return toast('Scheduled sign-on date required', 'error');
+  if (!callsign) return toast(t('Callsign required'), 'error');
+  if (!month || !day) return toast(t('Scheduled sign-on date required'), 'error');
   const year = new Date().getFullYear();
   const scheduled_start = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${time || '00:00'}`).toISOString();
   try {
@@ -826,7 +826,7 @@ async function addNetControlShift() {
     document.getElementById('nc-shift-name').value = '';
     document.getElementById('nc-shift-time').value = '';
     setDefaultMonthDay('nc-shift-month', 'nc-shift-day');
-    toast('Shift added', 'success');
+    toast(t('Shift added'), 'success');
     await loadTacticalPositions();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -834,7 +834,7 @@ async function addNetControlShift() {
 async function removeNetControlShift(id) {
   try {
     await apiFetch(`/net-control-shifts/${id}`, { method: 'DELETE' });
-    toast('Shift removed', 'success');
+    toast(t('Shift removed'), 'success');
     await loadTacticalPositions();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -843,26 +843,26 @@ function renderNetControlShifts() {
   const listEl = document.getElementById('net-control-shifts-list');
   if (!listEl) return;
   if (!netControlShifts.length) {
-    listEl.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No planned shifts yet — add one above to queue up the next handoff.</p>';
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No planned shifts yet — add one above to queue up the next handoff.')}</p>`;
     return;
   }
   const sorted = [...netControlShifts].sort((a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start));
   listEl.innerHTML = sorted.map((s, i) => `
     <div class="card" style="padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap${i === 0 ? ';border-color:var(--lc-blue)' : ''}">
       <div style="flex:1;min-width:160px">
-        ${i === 0 ? '<div class="text-muted" style="font-size:10px;color:var(--lc-blue)">NEXT UP</div>' : ''}
+        ${i === 0 ? `<div class="text-muted" style="font-size:10px;color:var(--lc-blue)">${t('NEXT UP')}</div>` : ''}
         <span class="callsign">${esc(s.callsign)}</span>${s.name ? ` <span class="text-muted" style="font-size:12px">— ${esc(s.name)}</span>` : ''}
       </div>
       <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">🕐 ${fmt(s.scheduled_start)}</span>
-      <button type="button" class="btn btn-danger btn-sm" onclick="removeNetControlShift(${s.id})">✕ Remove</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removeNetControlShift(${s.id})">✕ ${t('Remove')}</button>
     </div>`).join('');
 }
 
 async function removeTacticalPosition(id) {
-  if (!confirm('Remove this tactical position? Its shift history is kept, just no longer linked to a position.')) return;
+  if (!confirm(t('Remove this tactical position? Its shift history is kept, just no longer linked to a position.'))) return;
   try {
     await apiFetch(`/tactical-positions/${id}`, { method: 'DELETE' });
-    toast('Position removed', 'success');
+    toast(t('Position removed'), 'success');
     await loadTacticalPositions();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -882,7 +882,7 @@ function renderStationSchedule() {
   if (!listEl) return;
   const positions = tacticalPositions.filter(p => !p.is_net_control);
   if (!positions.length) {
-    listEl.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No tactical positions yet — add one above.</p>';
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No tactical positions yet — add one above.')}</p>`;
     return;
   }
   listEl.innerHTML = positions.map(p => {
@@ -892,14 +892,14 @@ function renderStationSchedule() {
         <div style="flex:1;min-width:160px">
           <span class="callsign">${esc(p.tactical_callsign)}</span>
           ${p.location ? `<span class="text-muted" style="font-size:12px;margin-left:8px">📍 ${esc(p.location)}</span>` : ''}
-          ${p.assigned_callsign ? `<div class="text-muted" style="font-size:11px;margin-top:2px">Planned: ${esc(p.assigned_callsign)}${p.assigned_name ? ' — ' + esc(p.assigned_name) : ''}</div>` : ''}
-          ${p.scheduled_start ? `<div class="text-muted" style="font-size:11px;margin-top:2px">🕐 Sign-on: ${fmt(p.scheduled_start)}</div>` : ''}
+          ${p.assigned_callsign ? `<div class="text-muted" style="font-size:11px;margin-top:2px">${t('Planned:')} ${esc(p.assigned_callsign)}${p.assigned_name ? ' — ' + esc(p.assigned_name) : ''}</div>` : ''}
+          ${p.scheduled_start ? `<div class="text-muted" style="font-size:11px;margin-top:2px">🕐 ${t('Sign-on:')} ${fmt(p.scheduled_start)}</div>` : ''}
         </div>
         <span style="font-size:12px;color:${occupied ? 'var(--lc-green)' : 'var(--text-muted)'};white-space:nowrap">
-          ${occupied ? `🟢 ${esc(p.current_callsign)}${p.current_name ? ' — ' + esc(p.current_name) : ''}` : '⚪ Vacant'}
+          ${occupied ? `🟢 ${esc(p.current_callsign)}${p.current_name ? ' — ' + esc(p.current_name) : ''}` : `⚪ ${t('Vacant')}`}
         </span>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditPositionForm(${p.id})">✏️ Edit</button>
-        <button type="button" class="btn btn-danger btn-sm" onclick="removeTacticalPosition(${p.id})">✕ Remove</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditPositionForm(${p.id})">✏️ ${t('Edit')}</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeTacticalPosition(${p.id})">✕ ${t('Remove')}</button>
       </div>
       <div id="tac-edit-form-${p.id}" style="display:none;margin-top:8px"></div>
     </div>`;
@@ -919,16 +919,16 @@ function renderNetControlStatusCard() {
     <div class="card" style="padding:10px 12px;margin-bottom:12px;border-color:var(--lc-orange)">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:160px">
-          <span class="callsign">🎙 NET CONTROL</span>
+          <span class="callsign">🎙 ${t('NET CONTROL')}</span>
         </div>
         <span style="font-size:12px;color:${occupied ? 'var(--lc-green)' : 'var(--text-muted)'};white-space:nowrap">
-          ${occupied ? `🟢 ${esc(p.current_callsign)}${p.current_name ? ' — ' + esc(p.current_name) : ''}` : '⚪ Vacant'}
+          ${occupied ? `🟢 ${esc(p.current_callsign)}${p.current_name ? ' — ' + esc(p.current_name) : ''}` : `⚪ ${t('Vacant')}`}
         </span>
-        <button type="button" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px" onclick="toggleShiftHistory(${p.id}, 'schedule')">🕐 History</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px" onclick="toggleShiftHistory(${p.id}, 'schedule')">🕐 ${t('History')}</button>
         ${occupied
-          ? `<button type="button" class="btn btn-ghost btn-sm" onclick="toggleSignOnForm(${p.id}, 'schedule')">🔄 Hand Off Net Control</button>
-             <button type="button" class="btn btn-danger btn-sm" onclick="signOffPosition(${p.id})">Sign Off</button>`
-          : `<button type="button" class="btn btn-primary btn-sm" onclick="toggleSignOnForm(${p.id}, 'schedule')">Sign On Net Control</button>`}
+          ? `<button type="button" class="btn btn-ghost btn-sm" onclick="toggleSignOnForm(${p.id}, 'schedule')">🔄 ${t('Hand Off Net Control')}</button>
+             <button type="button" class="btn btn-danger btn-sm" onclick="signOffPosition(${p.id})">${t('Sign Off')}</button>`
+          : `<button type="button" class="btn btn-primary btn-sm" onclick="toggleSignOnForm(${p.id}, 'schedule')">${t('Sign On Net Control')}</button>`}
       </div>
       <div id="tac-signon-form-schedule-${p.id}" style="display:none;margin-top:8px"></div>
       <div id="tac-history-schedule-${p.id}" style="display:none;margin-top:8px;font-size:11px"></div>
@@ -941,7 +941,7 @@ function renderNetControlStatusCard() {
 function renderTacticalAssignments() {
   const listEl = document.getElementById('expected-list');
   if (!tacticalPositions.length) {
-    listEl.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No tactical positions defined yet — add some on the 🗓 Station Schedule tab.</p>';
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No tactical positions defined yet — add some on the 🗓 Station Schedule tab.')}</p>`;
     return;
   }
   listEl.innerHTML = tacticalPositions.map(p => {
@@ -949,7 +949,7 @@ function renderTacticalAssignments() {
     let dueBadge = '';
     if (!occupied && p.scheduled_start) {
       const overdue = new Date(p.scheduled_start) <= new Date();
-      dueBadge = `<span style="font-size:10px;color:${overdue ? 'var(--lc-red)' : 'var(--lc-blue)'};white-space:nowrap">⏰ ${overdue ? 'Due since' : 'Due'} ${fmt(p.scheduled_start)}</span>`;
+      dueBadge = `<span style="font-size:10px;color:${overdue ? 'var(--lc-red)' : 'var(--lc-blue)'};white-space:nowrap">⏰ ${overdue ? t('Due since') : t('Due')} ${fmt(p.scheduled_start)}</span>`;
     }
     return `<div class="exp-row" style="display:block;padding:8px 0;border-bottom:1px solid var(--border)${p.is_net_control ? ';background:rgba(255,153,0,0.06)' : ''}">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -957,18 +957,18 @@ function renderTacticalAssignments() {
         ${p.location ? `<span class="text-muted" style="font-size:11px">📍 ${esc(p.location)}</span>` : ''}
         <span style="flex:1;min-width:140px;font-size:12px;color:${occupied ? 'var(--lc-green)' : 'var(--text-muted)'}">
           ${occupied
-            ? `🟢 ${esc(p.current_callsign)}${p.current_name ? ' — ' + esc(p.current_name) : ''} <span class="text-muted" style="font-size:10px">since ${fmt(p.signed_on_at)}</span>`
-            : '⚪ Vacant'}
+            ? `🟢 ${esc(p.current_callsign)}${p.current_name ? ' — ' + esc(p.current_name) : ''} <span class="text-muted" style="font-size:10px">${t('since')} ${fmt(p.signed_on_at)}</span>`
+            : `⚪ ${t('Vacant')}`}
         </span>
         ${dueBadge}
-        <button type="button" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px" onclick="toggleShiftHistory(${p.id}, 'assign')">🕐 History</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="font-size:10px;padding:1px 6px" onclick="toggleShiftHistory(${p.id}, 'assign')">🕐 ${t('History')}</button>
         ${occupied
-          ? `<button type="button" class="btn btn-ghost btn-sm" onclick="toggleSignOnForm(${p.id}, 'assign')">${p.is_net_control ? '🔄 Hand Off Net Control' : '↻ Sign Off & Replace'}</button>
-             <button type="button" class="btn btn-danger btn-sm" onclick="signOffPosition(${p.id})">Sign Off</button>`
-          : `<button type="button" class="btn btn-primary btn-sm" onclick="toggleSignOnForm(${p.id}, 'assign')">${p.is_net_control ? 'Sign On Net Control' : 'Sign On'}</button>`}
+          ? `<button type="button" class="btn btn-ghost btn-sm" onclick="toggleSignOnForm(${p.id}, 'assign')">${p.is_net_control ? '🔄 ' + t('Hand Off Net Control') : '↻ ' + t('Sign Off & Replace')}</button>
+             <button type="button" class="btn btn-danger btn-sm" onclick="signOffPosition(${p.id})">${t('Sign Off')}</button>`
+          : `<button type="button" class="btn btn-primary btn-sm" onclick="toggleSignOnForm(${p.id}, 'assign')">${p.is_net_control ? t('Sign On Net Control') : t('Sign On')}</button>`}
       </div>
       ${p.is_net_control
-        ? `<div class="text-muted" style="font-size:10px;margin-top:3px">🎙 Net Control is auto-staffed at session start. To hand it to someone else, click <strong>Hand Off Net Control</strong> and enter the incoming operator's callsign — the outgoing operator's shift closes immediately and the change shows up in the duty bar at the top of the screen. (Also available on the 🗓 Station Schedule tab.)</div>`
+        ? `<div class="text-muted" style="font-size:10px;margin-top:3px">🎙 ${t('Net Control is auto-staffed at session start. To hand it to someone else, click')} <strong>${t('Hand Off Net Control')}</strong> ${t("and enter the incoming operator's callsign — the outgoing operator's shift closes immediately and the change shows up in the duty bar at the top of the screen. (Also available on the 🗓 Station Schedule tab.)")}</div>`
         : ''}
       <div id="tac-signon-form-assign-${p.id}" style="display:none;margin-top:8px"></div>
       <div id="tac-history-assign-${p.id}" style="display:none;margin-top:8px;font-size:11px"></div>
@@ -1001,12 +1001,12 @@ function toggleSignOnForm(positionId, scope = 'assign') {
   container.dataset.sourceShiftId = sourceShift ? sourceShift.id : '';
   container.innerHTML = `
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <input class="form-control mono" id="tac-signon-callsign-${scope}-${positionId}" placeholder="Callsign" value="${esc(defaultCallsign)}" style="width:110px;text-transform:uppercase;font-size:12px" />
-      <input class="form-control" id="tac-signon-name-${scope}-${positionId}" placeholder="Name (optional)" value="${esc(defaultName)}" style="width:140px;font-size:12px" />
-      <button class="btn btn-primary btn-sm" onclick="signOnPosition(${positionId}, '${scope}')">Confirm</button>
-      <button class="btn btn-ghost btn-sm" onclick="toggleSignOnForm(${positionId}, '${scope}')">Cancel</button>
+      <input class="form-control mono" id="tac-signon-callsign-${scope}-${positionId}" placeholder="${t('Callsign')}" value="${esc(defaultCallsign)}" style="width:110px;text-transform:uppercase;font-size:12px" />
+      <input class="form-control" id="tac-signon-name-${scope}-${positionId}" placeholder="${t('Name (optional)')}" value="${esc(defaultName)}" style="width:140px;font-size:12px" />
+      <button class="btn btn-primary btn-sm" onclick="signOnPosition(${positionId}, '${scope}')">${t('Confirm')}</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleSignOnForm(${positionId}, '${scope}')">${t('Cancel')}</button>
     </div>
-    ${sourceShift ? `<div class="text-muted" style="font-size:10px;margin-top:4px">Auto-filled from the next scheduled shift (${fmt(sourceShift.scheduled_start)}) — edit if plans changed.</div>` : ''}`;
+    ${sourceShift ? `<div class="text-muted" style="font-size:10px;margin-top:4px">${t('Auto-filled from the next scheduled shift')} (${fmt(sourceShift.scheduled_start)}) — ${t('edit if plans changed.')}</div>` : ''}`;
   document.getElementById(`tac-signon-callsign-${scope}-${positionId}`).focus();
 }
 
@@ -1017,7 +1017,7 @@ async function signOnPosition(positionId, scope = 'assign') {
   const sourceShiftId = container ? container.dataset.sourceShiftId : '';
   const callsign = callsignEl.value.trim().toUpperCase();
   const name = nameEl.value.trim() || null;
-  if (!callsign) return toast('Callsign required', 'error');
+  if (!callsign) return toast(t('Callsign required'), 'error');
   try {
     await apiFetch(`/tactical-positions/${positionId}/sign-on`, {
       method: 'POST',
@@ -1029,17 +1029,17 @@ async function signOnPosition(positionId, scope = 'assign') {
     if (sourceShiftId) {
       try { await apiFetch(`/net-control-shifts/${sourceShiftId}`, { method: 'DELETE' }); } catch {}
     }
-    toast(`${callsign} signed on`, 'success');
+    toast(`${callsign} ${t('signed on')}`, 'success');
     await loadTacticalPositions();
     await loadCheckins();
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function signOffPosition(positionId) {
-  if (!confirm('Sign off the current operator from this position?')) return;
+  if (!confirm(t('Sign off the current operator from this position?'))) return;
   try {
     await apiFetch(`/tactical-positions/${positionId}/sign-off`, { method: 'POST' });
-    toast('Signed off', 'success');
+    toast(t('Signed off'), 'success');
     await loadTacticalPositions();
     await loadCheckins();
   } catch (e) { toast(e.message, 'error'); }
@@ -1050,17 +1050,17 @@ async function toggleShiftHistory(positionId, scope = 'assign') {
   if (!container) return;
   if (container.style.display !== 'none') { container.style.display = 'none'; return; }
   container.style.display = '';
-  container.innerHTML = '<span class="text-muted">Loading…</span>';
+  container.innerHTML = `<span class="text-muted">${t('Loading…')}</span>`;
   try {
     const shifts = await apiFetch(`/tactical-positions/${positionId}/shifts`);
     if (!shifts.length) {
-      container.innerHTML = '<span class="text-muted">No shifts yet.</span>';
+      container.innerHTML = `<span class="text-muted">${t('No shifts yet.')}</span>`;
       return;
     }
     container.innerHTML = shifts.map(s => `
       <div class="text-muted" style="padding:2px 0">
         ${esc(s.callsign)}${s.name ? ' — ' + esc(s.name) : ''}:
-        ${fmt(s.checked_in_at)} → ${s.signed_off_at ? fmt(s.signed_off_at) : '<span style="color:var(--lc-green)">now</span>'}
+        ${fmt(s.checked_in_at)} → ${s.signed_off_at ? fmt(s.signed_off_at) : `<span style="color:var(--lc-green)">${t('now')}</span>`}
       </div>`).join('');
   } catch (e) {
     container.innerHTML = `<span style="color:var(--lc-red)">${esc(e.message)}</span>`;
@@ -1089,31 +1089,31 @@ function toggleEditPositionForm(positionId) {
   container.innerHTML = `
     <div class="form-row">
       <div class="form-group mb-0">
-        <label style="font-size:11px">Location</label>
+        <label style="font-size:11px">${t('Location')}</label>
         <input class="form-control" id="tac-edit-location-${positionId}" value="${esc(p.location || '')}" style="font-size:13px" />
       </div>
       <div class="form-group mb-0">
-        <label style="font-size:11px">Assigned Operator Callsign</label>
+        <label style="font-size:11px">${t('Assigned Operator Callsign')}</label>
         <input class="form-control mono" id="tac-edit-assigned-callsign-${positionId}" value="${esc(p.assigned_callsign || '')}" style="text-transform:uppercase;font-size:13px" />
       </div>
     </div>
     <div class="form-row" style="margin-top:8px">
       <div class="form-group mb-0">
-        <label style="font-size:11px">Assigned Operator Name</label>
+        <label style="font-size:11px">${t('Assigned Operator Name')}</label>
         <input class="form-control" id="tac-edit-assigned-name-${positionId}" value="${esc(p.assigned_name || '')}" style="font-size:13px" />
       </div>
       <div class="form-group mb-0">
-        <label style="font-size:11px">Scheduled Sign-On <span class="text-muted">(this year)</span></label>
+        <label style="font-size:11px">${t('Scheduled Sign-On')} <span class="text-muted">${t('(this year)')}</span></label>
         <div style="display:flex;gap:6px">
-          <select class="form-control" id="tac-edit-month-${positionId}" style="font-size:13px;width:78px"><option value="">Month</option>${monthOpts}</select>
-          <select class="form-control" id="tac-edit-day-${positionId}" style="font-size:13px;width:66px"><option value="">Day</option>${dayOpts}</select>
+          <select class="form-control" id="tac-edit-month-${positionId}" style="font-size:13px;width:78px"><option value="">${t('Month')}</option>${monthOpts}</select>
+          <select class="form-control" id="tac-edit-day-${positionId}" style="font-size:13px;width:66px"><option value="">${t('Day')}</option>${dayOpts}</select>
           <input class="form-control" type="time" id="tac-edit-time-${positionId}" value="${timeVal}" style="font-size:13px;width:110px" />
         </div>
       </div>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button type="button" class="btn btn-primary btn-sm" onclick="savePositionEdit(${positionId})">Save</button>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditPositionForm(${positionId})">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="savePositionEdit(${positionId})">${t('Save')}</button>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEditPositionForm(${positionId})">${t('Cancel')}</button>
     </div>`;
 }
 
@@ -1134,7 +1134,7 @@ async function savePositionEdit(positionId) {
       method: 'PATCH',
       body: JSON.stringify({ location, assigned_callsign, assigned_name, scheduled_start }),
     });
-    toast('Position updated', 'success');
+    toast(t('Position updated'), 'success');
     await loadTacticalPositions();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1165,7 +1165,7 @@ function renderZoneRoster() {
   if (!listEl) return;
   const entries = Object.entries(evacZones); // [callsign, zone]
   if (entries.length === 0) {
-    listEl.innerHTML = '<p class="text-muted" style="font-size:12px;margin:0">No zones recorded yet.</p>';
+    listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No zones recorded yet.')}</p>`;
     return;
   }
   // Group by zone
@@ -1199,7 +1199,7 @@ async function checkInExpected(checkbox, callsign, name) {
       body: JSON.stringify({ callsign, name: name || null, has_traffic, evac_zone })
     });
     pendingTrafficCallsigns.delete(callsign);  // now confirmed in DB, remove from pending
-    toast(`${callsign} checked in`, 'success');
+    toast(`${callsign} ${t('checked in')}`, 'success');
     markRecentCheckin(created.id);
     await loadCheckins();
     renderExpectedList();
@@ -1237,19 +1237,20 @@ function renderTrafficMessages() {
   const countEl = document.getElementById('traffic-log-count');
   countEl.textContent = trafficMessages.length ? `(${trafficMessages.length})` : '';
   if (!trafficMessages.length) {
-    listEl.innerHTML = '<p class="text-muted" style="margin:0;font-size:12px">No messages logged yet.</p>';
+    listEl.innerHTML = `<p class="text-muted" style="margin:0;font-size:12px">${t('No messages logged yet.')}</p>`;
     return;
   }
   const statusColors = { received:'var(--lc-blue)', relayed:'var(--lc-orange)', delivered:'var(--success)', undeliverable:'var(--lc-red)' };
+  const typeLabels = { formal: t('Formal'), informal: t('Informal'), health_welfare: t('Health & Welfare') };
   listEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="border-bottom:1px solid var(--border)">
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">#</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">Msg #</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">Origin</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">Destination</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">Type</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">Status</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">Notes</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Msg #')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Origin')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Destination')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Type')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Status')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Notes')}</th>
       <th></th>
     </tr></thead>
     <tbody>
@@ -1258,14 +1259,14 @@ function renderTrafficMessages() {
       <td style="padding:4px 6px;font-family:monospace">${esc(m.msg_number || '—')}</td>
       <td style="padding:4px 6px"><span class="callsign" style="font-size:11px">${esc(m.origin_callsign)}</span></td>
       <td style="padding:4px 6px">${esc(m.dest_info || '—')}</td>
-      <td style="padding:4px 6px">${esc(m.msg_type.replace('_',' '))}</td>
+      <td style="padding:4px 6px">${esc(typeLabels[m.msg_type] || m.msg_type)}</td>
       <td style="padding:4px 6px">
         <select style="font-size:11px;background:var(--bg);color:${statusColors[m.status]||'inherit'};border:1px solid var(--border);border-radius:4px;padding:2px 4px"
           onchange="updateTrafficStatus(${m.id}, this.value)">
-          <option value="received" ${m.status==='received'?'selected':''}>Received</option>
-          <option value="relayed" ${m.status==='relayed'?'selected':''}>Relayed</option>
-          <option value="delivered" ${m.status==='delivered'?'selected':''}>Delivered</option>
-          <option value="undeliverable" ${m.status==='undeliverable'?'selected':''}>Undeliverable</option>
+          <option value="received" ${m.status==='received'?'selected':''}>${t('Received')}</option>
+          <option value="relayed" ${m.status==='relayed'?'selected':''}>${t('Relayed')}</option>
+          <option value="delivered" ${m.status==='delivered'?'selected':''}>${t('Delivered')}</option>
+          <option value="undeliverable" ${m.status==='undeliverable'?'selected':''}>${t('Undeliverable')}</option>
         </select>
       </td>
       <td style="padding:4px 6px;color:var(--text-muted)">${esc(m.notes || '')}</td>
@@ -1278,7 +1279,7 @@ function renderTrafficMessages() {
 
 async function addTrafficMessage() {
   const origin = document.getElementById('tm-origin').value.trim().toUpperCase();
-  if (!origin) { toast('Origin callsign required', 'error'); return; }
+  if (!origin) { toast(t('Origin callsign required'), 'error'); return; }
   try {
     await apiFetch(`/sessions/${currentSessionId}/traffic-messages`, {
       method: 'POST',
@@ -1294,7 +1295,7 @@ async function addTrafficMessage() {
     document.getElementById('tm-dest').value = '';
     document.getElementById('tm-number').value = '';
     document.getElementById('tm-notes').value = '';
-    toast('Message logged', 'success');
+    toast(t('Message logged'), 'success');
     await loadTrafficMessages();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1307,7 +1308,7 @@ async function updateTrafficStatus(msgId, status) {
 }
 
 async function deleteTrafficMessage(msgId) {
-  if (!confirm('Remove this message?')) return;
+  if (!confirm(t('Remove this message?'))) return;
   try {
     await apiFetch(`/traffic-messages/${msgId}`, { method: 'DELETE' });
     await loadTrafficMessages();
@@ -1349,10 +1350,10 @@ function showRemarkEditor(callsign, current) {
   div.style.cssText = 'position:absolute;top:100%;left:0;z-index:150;margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--surface);border:1px solid var(--lc-orange);border-radius:8px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.5);max-width:min(360px, calc(100vw - 32px))';
   div.innerHTML = `
     <input id="remark-preferred-name-input" class="form-control" style="width:130px;font-size:12px"
-      placeholder="Preferred name" value="${esc((current && current.preferred_name) || '')}" />
+      placeholder="${t('Preferred name')}" value="${esc((current && current.preferred_name) || '')}" />
     <input id="remark-input" class="form-control" style="flex:1;min-width:140px;font-size:12px"
-      placeholder="Notes about this station…" value="${esc((current && current.remark) || '')}" />
-    <button class="btn btn-primary btn-sm" onclick="submitRemark('${esc(callsign)}')">Save</button>
+      placeholder="${t('Notes about this station…')}" value="${esc((current && current.remark) || '')}" />
+    <button class="btn btn-primary btn-sm" onclick="submitRemark('${esc(callsign)}')">${t('Save')}</button>
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('remark-editor').remove()">✕</button>`;
   const lookupInfo = document.getElementById('ci-lookup-info');
   lookupInfo.appendChild(div);
@@ -1365,7 +1366,7 @@ async function submitRemark(callsign) {
   const preferredNameVal = document.getElementById('remark-preferred-name-input')?.value || '';
   try {
     const saved = await saveStationRemark(callsign, remarkVal, preferredNameVal);
-    toast(saved ? 'Saved' : 'Cleared', 'success');
+    toast(saved ? t('Saved') : t('Cleared'), 'success');
     document.getElementById('remark-editor')?.remove();
     // Refresh the remark pill in lookup info
     const pill = document.getElementById('remark-pill');
@@ -1390,10 +1391,10 @@ async function toggleExpectedRemarkEditor(btn, callsign) {
   editor.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
   editor.innerHTML = `
     <input class="form-control exp-pref-input" style="width:120px;font-size:12px"
-      placeholder="Preferred name" value="${esc((current && current.preferred_name) || '')}" />
+      placeholder="${t('Preferred name')}" value="${esc((current && current.preferred_name) || '')}" />
     <input class="form-control exp-remark-input" style="width:140px;font-size:12px"
-      placeholder="Notes" value="${esc((current && current.remark) || '')}" />
-    <button class="btn btn-primary btn-sm" type="button">Save</button>
+      placeholder="${t('Notes')}" value="${esc((current && current.remark) || '')}" />
+    <button class="btn btn-primary btn-sm" type="button">${t('Save')}</button>
     <button class="btn btn-ghost btn-sm" type="button">✕</button>`;
   const prefInput = editor.querySelector('.exp-pref-input');
   const remarkInput = editor.querySelector('.exp-remark-input');
@@ -1401,7 +1402,7 @@ async function toggleExpectedRemarkEditor(btn, callsign) {
   const doSave = async () => {
     try {
       await saveStationRemark(callsign, remarkInput.value, prefInput.value);
-      toast('Saved', 'success');
+      toast(t('Saved'), 'success');
       await loadExpectedStations();
     } catch (e) { toast(e.message, 'error'); }
   };

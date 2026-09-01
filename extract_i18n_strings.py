@@ -4,8 +4,11 @@ UI Translation — Known-Strings Extractor
 ==========================================
 Dev-maintenance script (not a runtime dependency). Regex-scans every
 *.html file and static/js/*.js file for t('...') / t("...") call sites
-(static/js/i18n.js's translation-lookup helper) and writes the deduped
-list of English source strings to static/i18n/known_strings.json.
+and tn(n, '...', '...') call sites (static/js/i18n.js's translation-
+lookup helpers -- tn() is the count-aware sibling of t(), translating
+its singular/plural template arguments as two independent strings) and
+writes the deduped list of English source strings to
+static/i18n/known_strings.json.
 
 That file is used only to seed an admin's "enable a language" bulk
 pre-translation job (routers/translation.py's run_enable_language_job)
@@ -37,6 +40,13 @@ OUTPUT_PATH = ROOT / "static" / "i18n" / "known_strings.json"
 # pre-translation, not the disambiguation context.
 T_CALL_RE = re.compile(r"""\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1""")
 
+# Matches tn(n, '...', '...') — both the singular and plural template
+# arguments (each its own independent t()-style cache key, containing a
+# literal "{n}" placeholder substituted after translation).
+TN_CALL_RE = re.compile(
+    r"""\btn\(\s*[^,]+,\s*(['"])((?:\\.|(?!\1).)*)\1\s*,\s*(['"])((?:\\.|(?!\3).)*)\3"""
+)
+
 # Matches data-i18n="..." / data-i18n-placeholder="..." / data-i18n-title="..."
 # -- the static-HTML equivalent of a t() call site (static/js/i18n.js's
 # translatePage() applies t() to each of these at runtime).
@@ -50,6 +60,9 @@ def _unescape(s: str) -> str:
 def extract_from_file(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     found = [_unescape(m.group(2)) for m in T_CALL_RE.finditer(text)]
+    for m in TN_CALL_RE.finditer(text):
+        found.append(_unescape(m.group(2)))
+        found.append(_unescape(m.group(4)))
     # data-i18n="..." values are raw HTML source -- the browser HTML-decodes
     # attribute values (&amp; -> &, etc.) before .dataset.i18n ever sees
     # them, and that decoded form is what actually becomes the t() cache
