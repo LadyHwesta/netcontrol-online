@@ -133,6 +133,8 @@
   "Move Net",
   "REASSIGN NET OWNER",
   "Changes who owns a net. The new owner must already be an approved member of the net's organization.",
+  "Powered by",
+  "Open Source (GPLv3)",
   "Help & Operating Guide",
   "📖 Guide",
   "📋 Changelog",

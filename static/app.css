@@ -473,6 +473,27 @@
     #auth-footer .auth-donate-desc { max-width: 420px; margin-left: auto; margin-right: auto; }
     #auth-footer .auth-donate-btns { justify-content: center; }
 
+    /* Logged-in app footer (issue follow-up) -- distinct from #auth-footer
+       above (pre-login donate box, hidden once logged in). Per-org branding
+       can fully replace the header's own name/logo/tagline now, so this
+       stays put at the bottom of every authenticated page as a quiet,
+       permanent credit that the instance itself runs on NetControl Online.
+       Sits as a sibling right after each page's <main>, inside the same
+       #app{flex-direction:column} used everywhere -- <main>'s own flex:1
+       already pushes it to the bottom of the viewport on a short page (the
+       same sticky-footer technique #auth-footer above uses via
+       margin-top:auto), and below the fold on a tall one, with no extra
+       CSS needed here for either case. */
+    #app-footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 14px 20px;
+      border-top: 1px solid var(--hairline);
+    }
+    #app-footer a { color: var(--lc-blue); text-decoration: none; }
+    #app-footer a:hover { text-decoration: underline; }
+
     /* Donate box (heading/desc/btns are reused inside #auth-footer, see above) */
     .auth-donate-heading {
       font-size: 11px; font-weight: 700; text-transform: uppercase;
