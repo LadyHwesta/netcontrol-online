@@ -180,7 +180,7 @@ async def public_incidents(org: Optional[str] = None, db: AsyncSession = Depends
             "station_count": station_count or 0,
             "zones": [
                 {
-                    "name": f"{incident.title} — {z.name or z.external_id}",
+                    "name": f"{incident.title} — {(z.name or '').strip() or z.external_id}",
                     "status": z.status,
                     "county": z.county,
                     "geometry": z.geometry,

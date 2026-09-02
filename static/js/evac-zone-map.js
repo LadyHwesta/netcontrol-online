@@ -54,7 +54,7 @@ function updateEvacZoneMap(containerId, boundaries) {
 
   const layer = L.geoJSON(valid.map(b => ({
     type: 'Feature',
-    properties: { name: b.name || b.external_id, status: b.status, county: b.county },
+    properties: { name: (b.name || '').trim() || b.external_id, status: b.status, county: b.county },
     geometry: b.geometry,
   })), {
     style: f => ({ color: _evacZoneColor(f.properties.status), weight: 2, fillOpacity: 0.25 }),

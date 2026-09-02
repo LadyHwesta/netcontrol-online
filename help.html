@@ -81,6 +81,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fix: Blank Zone Names Showing Only "Normal" (v2.41.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Bug fix: 13 of Sonoma County's own 332 zones (all in Healdsburg) have a blank name in the source data — they showed up in the zone picker/map as nothing but their status ("Normal"), instead of something useful. Real boundary descriptions ("North of City Limits, East of Badger Park, ...") were sitting right next to the blank field the whole time and are now used as a fallback, for both the Sonoma County and City of Santa Rosa sources. Re-sync a net's zones to pick this up.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Searchable Zone Picker on Incidents (v2.41.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The <strong>Affected Zones</strong> picker on the incident create/edit form (v2.41.0) now has a search box — a net with hundreds of synced zones (a county's full catalog can easily run into the hundreds) was a long scroll to find one. A selected zone stays selected even while filtered out of view, and a running count shows how many are currently selected.</li>

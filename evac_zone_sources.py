@@ -75,6 +75,20 @@ class UnsupportedSourceError(Exception):
     registered source."""
 
 
+def _boundary_description(props: dict) -> Optional[str]:
+    """Falls back to a short boundary description built from
+    Description_1..4 (a common field on both the Sonoma County and City
+    of Santa Rosa layers -- structured "North of X" / "East of Y" style
+    lines) when a zone's own short name/summary field is blank. Confirmed
+    live: 13 of Sonoma County's 332 zones (all in Healdsburg) have a
+    blank Summary but real boundary text sitting right in these fields,
+    previously discarded entirely -- found from a user noticing several
+    zones in the picker showed nothing but their status ("Normal")."""
+    parts = [props.get(f"Description_{i}") for i in range(1, 5)]
+    parts = [p.strip() for p in parts if p and p.strip()]
+    return ", ".join(parts) or None
+
+
 def _parse_source_date(value) -> Optional[datetime]:
     """ArcGIS date fields come back as either epoch-milliseconds (raw
     f=json) or an ISO string (observed with f=geojson, which is what this
@@ -169,12 +183,15 @@ async def fetch_sonoma_county_gov(county: Optional[str]) -> list[dict]:
     to apply; `county` is accepted only for a consistent registry
     signature. ZoneNumber (e.g. "SO-C01") is a stable per-zone code used
     as external_id; Summary is the short human-readable label ("Southeast
-    City of Sonoma") used as name -- Description is a much longer prose
-    boundary description, not stored here. No last-edited timestamp field
-    exists on this layer (unlike data_ca_gov's EDIT_DATE)."""
+    City of Sonoma") used as name when it's actually populated -- falls
+    back to _boundary_description() when it's blank (confirmed live: true
+    for 13 of these 332 zones, all in Healdsburg). Description itself is
+    the same text as HTML (a <ul> of the four Description_N lines), not
+    stored here. No last-edited timestamp field exists on this layer
+    (unlike data_ca_gov's EDIT_DATE)."""
     params = {
         "where": "1=1",
-        "outFields": "Jurisdiction,ZoneNumber,zone_status,Summary",
+        "outFields": "Jurisdiction,ZoneNumber,zone_status,Summary,Description_1,Description_2,Description_3,Description_4",
         "f": "geojson",
         "returnGeometry": "true",
     }
@@ -190,9 +207,10 @@ async def fetch_sonoma_county_gov(county: Optional[str]) -> list[dict]:
         external_id = props.get("ZoneNumber")
         if not geometry or not external_id:
             continue
+        summary = (props.get("Summary") or "").strip()
         zones.append({
             "external_id": external_id,
-            "name": props.get("Summary"),
+            "name": summary or _boundary_description(props),
             "county": props.get("Jurisdiction"),
             "status": props.get("zone_status"),
             "geometry": geometry,
@@ -223,14 +241,15 @@ async def fetch_santa_rosa_ca_gov(county: Optional[str]) -> list[dict]:
     service, already scoped to one jurisdiction, so `county` is accepted
     only for a consistent registry signature. ZoneNumber (e.g.
     "SRS-Southeast2") is the stable per-zone code used as external_id;
-    ShortName ("Southeast2") is the short display label used as name --
-    matches how a zone is actually referred to locally. Zone_Status was
-    observed null on every row live (unlike Sonoma County's own explicit
-    "Normal"), so status is stored as whatever the source reports,
-    including None. No last-edited timestamp field exists on this layer."""
+    ShortName ("Southeast2") is the short display label used as name when
+    populated, else _boundary_description() (this layer carries the same
+    Description_1..4 fields as Sonoma County's, confirmed live). Zone_Status
+    was observed null on every row live (unlike Sonoma County's own
+    explicit "Normal"), so status is stored as whatever the source
+    reports, including None. No last-edited timestamp field exists here."""
     params = {
         "where": "1=1",
-        "outFields": "Jurisdiction,ZoneNumber,Zone_Status,ShortName",
+        "outFields": "Jurisdiction,ZoneNumber,Zone_Status,ShortName,Description_1,Description_2,Description_3,Description_4",
         "f": "geojson",
         "returnGeometry": "true",
     }
@@ -246,9 +265,10 @@ async def fetch_santa_rosa_ca_gov(county: Optional[str]) -> list[dict]:
         external_id = props.get("ZoneNumber")
         if not geometry or not external_id:
             continue
+        short_name = (props.get("ShortName") or "").strip()
         zones.append({
             "external_id": external_id,
-            "name": props.get("ShortName"),
+            "name": short_name or _boundary_description(props),
             "county": props.get("Jurisdiction"),
             "status": props.get("Zone_Status"),
             "geometry": geometry,

@@ -107,7 +107,7 @@ function renderIncidentZoneCheckboxes(selectedIds) {
   // a checked box that scrolls out of a filtered view stays checked,
   // since the row is only hidden (display:none), never removed from the DOM.
   el.innerHTML = currentIncidentZoneBoundaries.map(z => {
-    const label = z.name || z.external_id;
+    const label = (z.name || '').trim() || z.external_id;
     const searchText = `${label} ${z.county || ''} ${z.status || ''}`.toLowerCase();
     return `
     <label class="incident-zone-row" data-search="${esc(searchText)}" style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer">

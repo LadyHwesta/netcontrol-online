@@ -211,6 +211,43 @@ class TestFetchSonomaCountyGov:
         zones = await evac_zone_sources.fetch_sonoma_county_gov(None)
         assert zones == []
 
+    async def test_blank_summary_falls_back_to_boundary_description(self, mock_ca_fetch):
+        """Confirmed live: 13 of Sonoma County's 332 zones (all in
+        Healdsburg) have a blank (whitespace-only) Summary but real
+        boundary text in Description_1..4 -- previously discarded
+        entirely, showing up in the picker as an unhelpful blank/bare
+        status ("Normal"). A user noticed and reported this directly."""
+        mock_ca_fetch.sonoma_response = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {
+                    "Jurisdiction": "City of Healdsburg", "ZoneNumber": "HE-1", "zone_status": "Normal",
+                    "Summary": " ",
+                    "Description_1": "North of City Limits", "Description_2": "East of City Limits",
+                    "Description_3": "South of City Limits", "Description_4": "West of Hwy 101",
+                },
+                "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]},
+            }],
+        }
+        zones = await evac_zone_sources.fetch_sonoma_county_gov(None)
+        assert zones[0]["name"] == "North of City Limits, East of City Limits, South of City Limits, West of Hwy 101"
+
+    async def test_populated_summary_wins_over_boundary_description(self, mock_ca_fetch):
+        mock_ca_fetch.sonoma_response = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {
+                    "Jurisdiction": "City of Sonoma", "ZoneNumber": "SO-C01", "zone_status": "Normal",
+                    "Summary": "Southeast City of Sonoma", "Description_1": "Some boundary text",
+                },
+                "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]},
+            }],
+        }
+        zones = await evac_zone_sources.fetch_sonoma_county_gov(None)
+        assert zones[0]["name"] == "Southeast City of Sonoma"
+
 
 class TestFetchSantaRosaCaGov:
     async def test_parses_features_into_normalized_dicts(self, mock_ca_fetch):
@@ -228,6 +265,23 @@ class TestFetchSantaRosaCaGov:
         }
         zones = await evac_zone_sources.fetch_santa_rosa_ca_gov(None)
         assert zones == []
+
+    async def test_blank_short_name_falls_back_to_boundary_description(self, mock_ca_fetch):
+        mock_ca_fetch.santa_rosa_response = {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {
+                    "Jurisdiction": "City of Santa Rosa", "ZoneNumber": "SRS-X1", "Zone_Status": None,
+                    "ShortName": "  ",
+                    "Description_1": "East of Highway 101", "Description_2": "North of Fountaingrove Pkwy",
+                    "Description_3": None, "Description_4": None,
+                },
+                "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]},
+            }],
+        }
+        zones = await evac_zone_sources.fetch_santa_rosa_ca_gov(None)
+        assert zones[0]["name"] == "East of Highway 101, North of Fountaingrove Pkwy"
 
 
 class TestSelectSourceForState:

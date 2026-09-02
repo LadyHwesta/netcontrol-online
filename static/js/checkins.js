@@ -1166,7 +1166,7 @@ function populateKnownZonesList() {
   // (issue #27) -- the free-text input itself is unchanged, this only
   // widens what's offered/autocompleted.
   const fromRoster = Object.values(evacZones);
-  const fromBoundaries = evacZoneBoundaries.map(b => b.name || b.external_id).filter(Boolean);
+  const fromBoundaries = evacZoneBoundaries.map(b => (b.name || '').trim() || b.external_id).filter(Boolean);
   const distinctZones = [...new Set([...fromRoster, ...fromBoundaries])].sort();
   dl.innerHTML = distinctZones.map(z => `<option value="${esc(z)}">`).join('');
 }
