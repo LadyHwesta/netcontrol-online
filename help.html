@@ -79,6 +79,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Push Notifications for Upcoming Shifts (v2.37.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <strong>🔔 Notifications</strong> card on the Account page — turn on real browser/OS push notifications alongside the existing email reminders. You'll get a notification shortly before your Net Control or Broadcaster shift starts, even if the app isn't open. A <strong>Send Test Notification</strong> button shows up once you've enabled it, so you can confirm it's working right away.</li>
+              <li>During an ARES/ACES <strong>activation</strong>, whoever's up next in the Net Control rotation now gets a push alert shortly before their shift starts too — a first for that rotation, which previously had no reminder of any kind. It's matched by callsign against your account, so it only works if the rotation entry's callsign matches yours.</li>
+              <li>Both use the same net-level reminder toggle and lead time (Admin → Nets) as the existing email reminders — nothing new to configure per net.</li>
+              <li>Requires the server operator to set up push notifications (see README's <strong>Web Push Notifications</strong> section) — if it's not configured, the Notifications card just doesn't appear.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Organization Switcher on Every Page (v2.36.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Belong to more than one organization? The switcher at the top of the sidebar now shows up on every page (Admin, Account, Help, Report), not just Net Control — it was accidentally left off the other four when the sidebar panel was introduced.</li>

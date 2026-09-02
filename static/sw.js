@@ -56,7 +56,7 @@
 // silently ungated by app-shell caching and unavailable offline. Bumping a
 // shared file's version anywhere means bumping it in this list AND in every
 // one of the five precached pages' own tags, all to the same number.
-const CACHE_NAME = 'netcontrol-online-shell-v84';
+const CACHE_NAME = 'netcontrol-online-shell-v85';
 
 const PRECACHE_URLS = [
   '/',
@@ -84,6 +84,7 @@ const PRECACHE_URLS = [
   '/static/js/admin.js?v=44',
   '/static/js/schedules.js?v=24',
   '/static/js/tokens.js?v=27',
+  '/static/js/push.js?v=1',
   '/static/js/dmr.js?v=21',
   '/static/js/aprs.js?v=40',
   '/static/js/aprs-map.js?v=41',
@@ -152,4 +153,37 @@ self.addEventListener('sync', event => {
   if (event.tag === 'sync-checkins') {
     event.waitUntil(flushCheckinQueue());
   }
+});
+
+// ── Web push notifications (issue follow-up) ──────────────────────────────
+// Payloads are always small reminder JSON ({title, body, url}) sent by
+// send_reminders.py / POST /push/test — no rich actions needed here.
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: 'NetControl Online', body: event.data ? event.data.text() : '' };
+  }
+  const title = data.title || 'NetControl Online';
+  const options = {
+    body: data.body || '',
+    icon: '/static/icons/icon-192.png',
+    badge: '/static/icons/icon-192.png',
+    data: { url: data.url || '/' },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes(url) && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });

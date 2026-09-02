@@ -170,6 +170,44 @@ def app_base_url(monkeypatch):
     monkeypatch.setattr(helpers, "APP_BASE_URL", "http://testserver")
 
 
+# ── Web push notifications ──────────────────────────────────────────────────
+
+@pytest.fixture
+def vapid_configured(monkeypatch):
+    """Makes _vapid_configured() return True, for tests exercising
+    push-gated code paths. Pair with sent_pushes so no real network call is
+    attempted. Patches both routers.helpers AND send_reminders -- the latter
+    holds its own separate VAPID_* module constants (same duplication as
+    send_email(), see smtp_configured's docstring above), so patching only
+    one leaves the other module's vapid_configured()/send_web_push() still
+    reading the real (unset) env value."""
+    import send_reminders
+    from routers import helpers
+    for module in (helpers, send_reminders):
+        monkeypatch.setattr(module, "VAPID_PUBLIC_KEY", "test-public-key")
+        monkeypatch.setattr(module, "VAPID_PRIVATE_KEY", "test-private-key")
+        monkeypatch.setattr(module, "VAPID_CONTACT_EMAIL", "admin@example.com")
+
+
+@pytest.fixture
+def sent_pushes(monkeypatch):
+    """Intercepts pywebpush.webpush() and records each call instead of
+    hitting a real push service. routers/helpers.py's _send_web_push() (and
+    send_reminders.py's own copy) both do `from pywebpush import webpush`
+    lazily, inside the function, at call time -- so this patches the real
+    pywebpush module's attribute directly (not routers.helpers, which never
+    holds a module-level reference to it) and is observed by both."""
+    import pywebpush
+    calls = []
+
+    def fake_webpush(**kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr(pywebpush, "webpush", fake_webpush)
+    return calls
+
+
 @pytest.fixture
 def sent_emails(monkeypatch):
     """Intercepts send_email() and records each call instead of hitting the

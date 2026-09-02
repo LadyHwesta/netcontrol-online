@@ -31,3 +31,9 @@ argostranslate==1.11.0
 # lazily, when that env var is actually set. See README's "Running with
 # multiple workers" section.
 redis==5.2.1
+
+# Only needed if you set VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY -- safe to
+# remove otherwise; the app imports pywebpush lazily and only when that
+# code path actually runs (sending a web push notification). See README's
+# "Web Push Notifications" section.
+pywebpush==2.5.0

@@ -366,6 +366,16 @@ class NetControlShift(Base):
     name = Column(String(100), nullable=True)
     scheduled_start = Column(UTCDateTime, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    # Push-notification tracking (issue follow-up) -- mirrors
+    # NetControlSignup.reminder_sent_at exactly (set once, never cleared, so
+    # a 5-minute cron is safe to re-run without double-sending). Push-only:
+    # there's no email column here (never has been -- this table is always
+    # free-text callsign/name, no user_id to resolve an address from) and no
+    # existing email path for "your rotation shift is starting soon" to
+    # extend. send_reminders.py sets this regardless of whether the
+    # callsign matched a registered user, so an unmatched one isn't
+    # rechecked every run forever.
+    reminder_sent_at = Column(UTCDateTime, nullable=True)
 
     session = relationship("NetSession", back_populates="net_control_shifts")
 
@@ -743,3 +753,30 @@ class OrgEnabledLanguage(Base):
 
     def __repr__(self):
         return f"<OrgEnabledLanguage org_id={self.org_id} code={self.code}>"
+
+
+class PushSubscription(Base):
+    """One browser/device's Web Push subscription for a user (issue
+    follow-up) -- powers a second, app-native channel alongside the
+    existing email reminders (send_reminders.py) for "you're Net Control/
+    Broadcaster soon" and, during an activation, "your rotation shift is
+    starting soon". One row per browser+origin subscription, not a single
+    boolean on User -- a user enabling notifications on two devices gets
+    two rows, and both get pushed; unlike the single instance-wide admin
+    notify-email toggle, there's no one canonical "on/off" per user, only
+    per subscription. endpoint is globally unique per subscription, so
+    re-subscribing the same browser (POST /push/subscribe) upserts by it
+    rather than creating a duplicate row."""
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(String(500), unique=True, nullable=False)
+    p256dh = Column(String(255), nullable=False)
+    auth = Column(String(255), nullable=False)
+    user_agent = Column(String(255), nullable=True)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    last_used_at = Column(UTCDateTime, nullable=True)  # bumped on a successful send; informational only
+
+    def __repr__(self):
+        return f"<PushSubscription user_id={self.user_id}>"

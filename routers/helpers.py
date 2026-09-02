@@ -7,6 +7,7 @@ done for the main.py split for the full single-vs-shared breakdown).
 """
 
 import hashlib
+import json
 import logging
 import os
 import pathlib
@@ -23,7 +24,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Checkin, Net, NetSession, NetShare, Organization, OrganizationMembership, StationRemark, SystemSetting, TacticalPosition, User, utcnow
+from models import Checkin, Net, NetSession, NetShare, Organization, OrganizationMembership, PushSubscription, StationRemark, SystemSetting, TacticalPosition, User, utcnow
 from routers.schemas import NetOut
 
 # ---------------------------------------------------------------------------
@@ -153,6 +154,69 @@ def send_email(
     except Exception as exc:
         _email_log.warning("Failed to send email to %s: %s", to, exc)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Web push notifications (issue follow-up) — a second, app-native channel
+# alongside the email reminders above, for "you're Net Control/Broadcaster
+# soon" and, during an activation, "your rotation shift is starting soon".
+# Opt-in, same "leave blank to disable" convention as SMTP/ALTCHA: with the
+# three VAPID_* settings unset, GET /push/vapid-public-key 404s, the Account
+# page's Notifications card hides itself, and send_reminders.py's own copy
+# of _send_web_push (it never imports anything under routers/, see that
+# file) silently skips the push half of each reminder.
+# ---------------------------------------------------------------------------
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_CONTACT_EMAIL = os.getenv("VAPID_CONTACT_EMAIL", "")
+
+_push_log = logging.getLogger("ham_net_tracker.push")
+
+
+def _vapid_configured() -> bool:
+    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and VAPID_CONTACT_EMAIL)
+
+
+async def _send_web_push(db: AsyncSession, user_id: int, title: str, body: str, url: str = "/") -> int:
+    """Sends a push notification to every subscription this user has (one
+    per browser/device — see PushSubscription's docstring). Best-effort:
+    never raises. A subscription pywebpush reports as gone (404/410 — the
+    browser revoked it, or the user cleared site data) is deleted rather
+    than logged as a failure, since that's expected steady-state cleanup,
+    not an error. Returns how many sends actually succeeded, mainly so
+    POST /push/test can tell the caller "you have no active subscriptions"
+    apart from "all of them failed"."""
+    if not _vapid_configured():
+        return 0
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        _push_log.error("VAPID_* is set but the pywebpush package isn't installed — pip install pywebpush")
+        return 0
+
+    subs = (await db.execute(select(PushSubscription).filter(PushSubscription.user_id == user_id))).scalars().all()
+    payload = json.dumps({"title": title, "body": body, "url": url})
+    sent = 0
+    for sub in subs:
+        try:
+            webpush(
+                subscription_info={"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": f"mailto:{VAPID_CONTACT_EMAIL}"},
+            )
+            sub.last_used_at = utcnow()
+            sent += 1
+        except WebPushException as exc:
+            status = getattr(exc.response, "status_code", None)
+            if status in (404, 410):
+                await db.delete(sub)
+            else:
+                _push_log.warning("Push send failed for user %s: %s", user_id, exc)
+        except Exception as exc:
+            _push_log.warning("Push send failed for user %s: %s", user_id, exc)
+    await db.commit()
+    return sent
 
 
 # ---------------------------------------------------------------------------

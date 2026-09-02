@@ -144,6 +144,22 @@
           </div>
         </div>
 
+        <div class="card" id="push-card" style="max-width:600px;margin-bottom:16px;display:none">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="🔔 NOTIFICATIONS">🔔 NOTIFICATIONS</h3>
+          <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)" data-i18n="Get a browser notification before your Net Control or Broadcaster shifts, and — during an ARES/ACES activation — when your Net Control rotation shift is coming up. Works even when this app isn't open, as long as your browser is running.">
+            Get a browser notification before your Net Control or Broadcaster shifts, and — during an ARES/ACES
+            activation — when your Net Control rotation shift is coming up. Works even when this app isn't open,
+            as long as your browser is running.
+          </p>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+              <input type="checkbox" id="push-toggle" style="width:auto" onchange="togglePushNotifications(this.checked)" />
+              <span data-i18n="Enable push notifications">Enable push notifications</span>
+            </label>
+            <button class="btn btn-ghost btn-sm" id="push-test-btn" style="display:none" onclick="testPushNotification()" data-i18n="Send Test Notification">Send Test Notification</button>
+          </div>
+        </div>
+
         <div class="card" style="max-width:600px;margin-bottom:16px">
           <p style="margin:0 0 12px;font-size:13px;color:var(--text-muted)">
             <span data-i18n="API tokens let scripts (like the DMR relay) authenticate without storing your password. Each token starts with">API tokens let scripts (like the DMR relay) authenticate without storing your password.
@@ -188,6 +204,7 @@
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/vendor/cropperjs/cropper.min.js?v=1"></script>
   <script src="/static/js/tokens.js?v=27"></script>
+  <script src="/static/js/push.js?v=1"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {

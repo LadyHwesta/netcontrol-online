@@ -612,6 +612,20 @@ MIGRATIONS = [
     # ── Invite-only organizations (issue follow-up) ──
     ("organizations: registration_open column",
      "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS registration_open BOOLEAN NOT NULL DEFAULT TRUE"),
+
+    # ── Web push notifications (issue follow-up) ──
+    ("table: push_subscriptions",
+     """CREATE TABLE IF NOT EXISTS push_subscriptions (
+         id SERIAL PRIMARY KEY,
+         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+         endpoint VARCHAR(500) UNIQUE NOT NULL,
+         p256dh VARCHAR(255) NOT NULL,
+         auth VARCHAR(255) NOT NULL,
+         user_agent VARCHAR(255),
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         last_used_at TIMESTAMPTZ)"""),
+    ("net_control_shifts: reminder_sent_at column",
+     "ALTER TABLE net_control_shifts ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ"),
 ]
 
 # ---------------------------------------------------------------------------

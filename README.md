@@ -463,6 +463,32 @@ python3 /opt/netcontrol/send_reminders.py
 
 It's safe to run every few minutes — each signup is only ever reminded once, tracked via a `reminder_sent_at` timestamp set the first time its reminder window is caught, so overlapping cron runs don't double-send. Uses the same `SMTP_*` settings in `.env` as the rest of the app; reminders are silently skipped (logged, not sent) if SMTP isn't configured.
 
+## Web Push Notifications
+
+A second, app-native channel alongside the email reminders above — real browser/OS notifications, reaching a user even when the app isn't open (as long as their browser is running). Two occasions:
+
+- **The same signup reminder email covers** — anyone signed up as Net Control or Broadcaster gets a push too, using the exact same **Reminder Emails**/lead-time setting on the net's Edit form. No separate toggle for push; it's on whenever email reminders are.
+- **Net Control rotation shift changes during an ARES/ACES activation** — push-only, since there's no signup email address for this occasion. Whoever's up next in the rotation queue gets a push shortly before their shift starts, matched to their account by callsign (a queued shift is always free-text callsign/name, same as the rotation itself already is — if the callsign doesn't match a registered account, there's simply no one to push to, same as today).
+
+Users opt in themselves from **⚙️ Account** — a **Notifications** card with an **Enable push notifications** checkbox (hidden entirely if the server hasn't set up push at all, or the browser doesn't support it) and a **Send Test Notification** button to confirm it's working right away, without waiting for a real reminder.
+
+Setup (one time, server-side):
+
+```bash
+pip install pywebpush
+python3 -c "
+from py_vapid import Vapid01
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+import base64
+v = Vapid01(); v.generate_keys()
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b'=').decode()
+print('VAPID_PUBLIC_KEY=' + b64(v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)))
+print('VAPID_PRIVATE_KEY=' + b64(v.private_key.private_numbers().private_value.to_bytes(32, 'big')))
+"
+```
+
+Paste the two printed lines into `.env`, plus `VAPID_CONTACT_EMAIL` (a `mailto:` address the browser push service can reach you at — required by the Web Push protocol, never shown to users). No app restart needed beyond picking up the new `.env` values; existing `send_reminders.py` cron setup automatically starts sending push alongside email once these are set. Leave all three unset to disable entirely — the Account page's Notifications card hides itself and nothing else changes.
+
 ## Digital Voice Integration
 
 Net owners can configure digital voice last-heard data in the net's Edit form, under **📻 Digital Voice Integration**. Covers **DMR, D-Star, YSF (Yaesu Fusion), NXDN, P25, and M17** — pick a **Mode**, then a source: **WPSD** or **Pi-Star** hotspot (any mode), or **BrandMeister** (DMR-only network API, by talk group). A WPSD/Pi-Star hotspot's last-heard feed reports whichever mode(s) it actually hears, tagged per-entry, so switching Mode on an already-configured hotspot just changes what's shown — no reconfiguration of the hotspot itself needed.

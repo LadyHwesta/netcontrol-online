@@ -32,7 +32,7 @@ from routers.helpers import STATIC_DIR, UPLOADS_DIR, _get_setting, _public_base_
 
 from routers import (
     admin, aprs, auth, callsign_lookup, checkins, digital_voice, evac_zones,
-    expected_stations, history, nets, orgs, public, schedules, sessions,
+    expected_stations, history, nets, orgs, public, push, schedules, sessions,
     support, tactical, traffic, translation,
 )
 
@@ -67,7 +67,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.36.1", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.37.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -102,6 +102,7 @@ app.include_router(admin.router)
 app.include_router(public.router)
 app.include_router(support.router)
 app.include_router(translation.router)
+app.include_router(push.router)
 
 
 # ---------------------------------------------------------------------------
