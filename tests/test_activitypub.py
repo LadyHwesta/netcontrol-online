@@ -156,8 +156,12 @@ class TestOrgActivityPubAdmin:
         assert resp.status_code == 200
         assert resp.json() == {"enabled": False, "handle": None, "actor_url": None, "follower_count": 0}
 
-    def test_enable_requires_app_base_url(self, client, admin_headers, net):
-        # activitypub_app_base_url fixture deliberately NOT used here
+    def test_enable_requires_app_base_url(self, client, admin_headers, net, monkeypatch):
+        # Force the unset state explicitly -- on a real deployment
+        # APP_BASE_URL is typically already configured (for email links),
+        # so leaving this to ambient environment (no fixture applied) isn't
+        # actually unset there, and this assertion would wrongly fail.
+        monkeypatch.setattr(activitypub_delivery, "APP_BASE_URL", "")
         resp = client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": True}, headers=admin_headers)
         assert resp.status_code == 400
 
