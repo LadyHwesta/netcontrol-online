@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=24">
+  <link rel="stylesheet" href="/static/app.css?v=25">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
@@ -72,6 +72,14 @@
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Matrix Theme Recolored (v2.34.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The Matrix theme now uses the reference "Matrix Code Green" palette throughout: a near-black background, a legible mid-green for body text, a dark green for card/panel surfaces, and the bright neon green reserved for thin lines (borders, dividers) instead of covering big blocks of the UI. The header, active nav item, primary buttons, table headers, and the login screen's title bar are now a dark green fill with bright green text/outline rather than solid neon.</li>
+              <li>Every text/background combination was checked against WCAG contrast minimums and adjusted where needed — nothing in the new palette should read as harder to read than before.</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Profile Photo Now Saves Immediately (v2.33.1)</div>

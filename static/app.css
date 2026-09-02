@@ -138,14 +138,32 @@
     }
 
     [data-theme="matrix"] {
-      /* Matrix — green-on-black terminal, with an old-amber-monitor gold for
-         contrast and a magenta "glitch" accent standing in for purple/tags. */
+      /* Matrix — CRT-phosphor green terminal, retuned to the reference
+         "Matrix Code Green" palette (schemecolor.com/matrix-code-green.php):
+         #0D0208 background, #008F11 body text, #003B00 for panel/card
+         surfaces, #00FF41 reserved for thin lines (borders/hairlines) and
+         a handful of already-bright small accents that predate this
+         palette (success/warn/danger buttons, tag colors) and stay put,
+         since darkening THOSE would fail contrast against their own text.
+         --lc-orange itself stays bright, since it doubles as ordinary
+         heading/label TEXT color throughout the app (card titles, the
+         callsign display, tab underlines) and needs to read against a
+         dark page -- only the handful of selectors below that actually
+         fill a large area with it (header band, active nav, primary
+         button, table header, auth bar, check-in row header) are
+         overridden to the darker #003B00 UI-element color instead, each
+         verified for contrast against its own text below.
+         Every text/background pairing here was checked against WCAG's
+         contrast formula (see the theme's PR/commit message for the
+         numbers): body text on bg 4.80:1, on surface 4.69:1, on surface2
+         4.60:1 -- all clear AA's 4.5:1 floor; the darkened UI elements'
+         bright-green text sits at 9.46:1 against their #003B00 fill. */
       --lc-orange: #00FF41; --lc-gold: #FFD700; --lc-tan: #8AFF9E; --lc-blue: #00FFD1;
       --lc-purple: #FF2AFF; --lc-red: #FF2222; --lc-green: #00FF41;
-      --bg: #000000; --surface: #030A03; --surface2: #0A1A0A; --border: #1A3D1A;
+      --bg: #0D0208; --surface: #0C0807; --surface2: #0A0D06; --border: #00FF41;
       --accent-hover: #39FF6E; --success: #00FF41;
-      --text: #DFFFE0; --muted: #4DBE6E; --radius: 2px;
-      --text-muted: #4DBE6E; --lc-border: #1A3D1A; --lc-muted: #4DBE6E;
+      --text: #008F11; --muted: #008F11; --radius: 2px;
+      --text-muted: #008F11; --lc-border: #00FF41; --lc-muted: #008F11;
       --on-accent: #000000;
       --overlay-weak: rgba(0,255,65,.06); --overlay-med: rgba(0,255,65,.10);
       --overlay-strong: rgba(0,255,65,.16); --hairline: rgba(0,255,65,.12);
@@ -153,6 +171,43 @@
       --badge-purple-bg: #2a0526;
       --accent-tint: rgba(0,255,65,.16);
     }
+    /* The structural LCARS bars (header band, active nav item, primary
+       button, table header row, auth-screen bar, check-in row header) fill
+       with #003B00 -- the reference palette's "other UI elements" color --
+       instead of the bright accent, with #00FF41 text/border for
+       definition (9.46:1 contrast; a thin bright-green edge since the
+       dark fill alone barely separates from the near-black page, ~1.6:1).
+       Can't be done by just changing --lc-orange/--on-accent globally:
+       --lc-orange is also plain heading/label text elsewhere (unaffected,
+       stays bright), and --on-accent is shared with --lc-green/--lc-gold
+       fills (btn-success/btn-warn) that are still bright and still need
+       dark text -- so both stay put and only these specific fills/their
+       own text are overridden together. */
+    [data-theme="matrix"] .header-lcars,
+    [data-theme="matrix"] #sidebar::before,
+    [data-theme="matrix"] .sidebar-btn.active,
+    [data-theme="matrix"] .btn-primary,
+    [data-theme="matrix"] .tbl th,
+    [data-theme="matrix"] .auth-lcars-bar,
+    [data-theme="matrix"] .checkin-row-header {
+      background: #003B00;
+      border: 1px solid #00FF41;
+    }
+    [data-theme="matrix"] header h1,
+    [data-theme="matrix"] header h1 span,
+    [data-theme="matrix"] .sidebar-btn.active,
+    [data-theme="matrix"] .btn-primary,
+    [data-theme="matrix"] .tbl th,
+    [data-theme="matrix"] .auth-lcars-bar,
+    [data-theme="matrix"] .checkin-row-header {
+      color: #00FF41;
+    }
+    /* .btn-primary's hover state swaps its background to --lc-gold
+       (unchanged, still bright) -- the override's bright-green text above
+       would be near-invisible on that light gold (~1:1), so restore dark
+       text there, matching how the still-bright success/warn buttons
+       already pair dark text with a bright fill. */
+    [data-theme="matrix"] .btn-primary:hover:not(:disabled) { color: #000000; }
 
     [data-theme="earth"] {
       /* Earth Tones — warm terracotta/ochre/sage, a calmer palette than the
