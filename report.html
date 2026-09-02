@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=27">
+  <link rel="stylesheet" href="/static/app.css?v=28">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
@@ -16,9 +16,11 @@
 </head>
 <body>
 <div id="toast"></div>
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div id="app">
   <header>
     <div class="header-lcars">
+      <button id="menu-btn" onclick="toggleSidebar()" aria-label="Toggle menu" style="background:none;border:none;cursor:pointer;color:#000;font-size:20px;padding:2px 4px;line-height:1">☰</button>
       <img id="header-logo" src="/logo" alt="" style="max-height:36px;max-width:120px;display:none;border-radius:4px;object-fit:contain"
         onerror="this.style.display='none'" onload="this.style.display=''" />
       <span id="header-antenna" style="font-size:18px"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" width="18" height="18" style="display:block;border-radius:22%;vertical-align:middle" alt=""></span>
@@ -27,31 +29,33 @@
         <div id="header-tagline" style="display:none;font-size:11px;color:rgba(0,0,0,0.6);font-weight:600;letter-spacing:.04em;margin-top:-2px"></div>
       </div>
     </div>
-    <div id="header-user">
-      <strong id="header-callsign-short"></strong>
-      <select id="theme-select" class="btn btn-ghost btn-sm" onchange="saveTheme(this.value)" title="Theme">
-        <option value="lcars">LCARS</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-        <option value="high-contrast">High Contrast</option>
-        <option value="pink">Pink</option>
-        <option value="purple">Purple</option>
-        <option value="blue">Blue</option>
-        <option value="matrix">Matrix</option>
-        <option value="earth">Earth</option>
-        <option value="system">System</option>
-      </select>
-      <select id="lang-select" class="lang-select btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
-        <option value="en">English</option>
-      </select>
-      <a id="i18n-credit" class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
-        style="display:none;font-size:10px;color:var(--text-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
-      <button class="btn btn-ghost btn-sm" onclick="logout()" data-i18n="Logout">Logout</button>
-    </div>
+    <div id="org-banner" style="display:none"></div>
   </header>
-  <div id="org-banner" style="display:none;background:rgba(255,153,0,0.12);border-bottom:1px solid rgba(255,153,0,0.35);padding:10px 20px;font-size:13px;color:var(--text);white-space:pre-wrap;text-align:center"></div>
   <main>
     <nav id="sidebar">
+      <div id="sidebar-top">
+        <div id="sidebar-user-info">
+          <span data-i18n="Signed in as">Signed in as</span> <strong id="sidebar-callsign"></strong>
+        </div>
+        <select id="theme-select" class="btn btn-ghost btn-sm" onchange="saveTheme(this.value)" title="Theme">
+          <option value="lcars">LCARS</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="high-contrast">High Contrast</option>
+          <option value="pink">Pink</option>
+          <option value="purple">Purple</option>
+          <option value="blue">Blue</option>
+          <option value="matrix">Matrix</option>
+          <option value="earth">Earth</option>
+          <option value="system">System</option>
+        </select>
+        <select id="lang-select" class="lang-select btn btn-ghost btn-sm" onchange="saveLang(this.value)" title="Language" style="display:none">
+          <option value="en">English</option>
+        </select>
+        <a id="i18n-credit" class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+          style="display:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
+        <button class="btn btn-ghost btn-sm" id="sidebar-logout-btn" onclick="logout()"><span class="sb-icon">🚪</span><span class="sb-label" data-i18n="Logout">Logout</span></button>
+      </div>
       <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
       <a class="sidebar-btn" href="/" data-i18n="📻 Net Control">📻 Net Control</a>
       <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none" data-i18n="🔑 Admin">🔑 Admin</a>
@@ -101,8 +105,8 @@
   <script>document.getElementById('app-footer-year').textContent = new Date().getFullYear();</script>
 </div>
   <script src="/static/js/state.js?v=24"></script>
-  <script src="/static/js/utils.js?v=21"></script>
-  <script src="/static/js/auth.js?v=33"></script>
+  <script src="/static/js/utils.js?v=22"></script>
+  <script src="/static/js/auth.js?v=34"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
@@ -115,7 +119,7 @@
       catch { window.location.href = '/'; return; }
 
       syncThemeFromUser(currentUser);
-      const cs = document.getElementById('header-callsign-short');
+      const cs = document.getElementById('sidebar-callsign');
       if (cs) cs.textContent = currentUser.callsign;
       if (currentUser.is_admin) {
         const navAdmin = document.getElementById('nav-admin');

@@ -41,12 +41,13 @@ function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
   const open = sidebar.classList.toggle('open');
-  overlay.classList.toggle('show', open);
+  if (overlay) overlay.classList.toggle('show', open);
 }
 
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('show');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (overlay) overlay.classList.remove('show');
 }
 
 // Pressing Enter while focused in any of the given input element IDs

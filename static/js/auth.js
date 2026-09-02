@@ -335,10 +335,7 @@ async function enterApp() {
   syncThemeFromUser(currentUser);
   document.getElementById('auth-page').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  document.getElementById('header-callsign').textContent = currentUser.callsign;
-  // Mobile: show just the callsign badge in the header
-  const shortEl = document.getElementById('header-callsign-short');
-  if (shortEl) shortEl.textContent = currentUser.callsign;
+  document.getElementById('sidebar-callsign').textContent = currentUser.callsign;
   updateOfflineBanner();
   await loadBranding();
   loadOrgBanner();       // fire-and-forget; non-blocking

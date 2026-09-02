@@ -16,11 +16,9 @@ async function saveProfile() {
     document.getElementById('profile-email').value = currentUser.email || '';
     document.getElementById('profile-callsign').value = currentUser.callsign || '';
     document.getElementById('profile-phone').value = currentUser.phone || '';
-    // Callsign/name changed -- header shows them immediately, no reload needed.
-    const cs = document.getElementById('header-callsign');
+    // Callsign/name changed -- sidebar shows it immediately, no reload needed.
+    const cs = document.getElementById('sidebar-callsign');
     if (cs) cs.textContent = currentUser.callsign;
-    const csShort = document.getElementById('header-callsign-short');
-    if (csShort) csShort.textContent = currentUser.callsign;
 
     if (emailChanged && !currentUser.email_verified) {
       toast(t("Profile saved — check your new email to verify it. You'll need to confirm it before logging in again."));

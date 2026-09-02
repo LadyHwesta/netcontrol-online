@@ -56,7 +56,7 @@
 // silently ungated by app-shell caching and unavailable offline. Bumping a
 // shared file's version anywhere means bumping it in this list AND in every
 // one of the five precached pages' own tags, all to the same number.
-const CACHE_NAME = 'netcontrol-online-shell-v82';
+const CACHE_NAME = 'netcontrol-online-shell-v83';
 
 const PRECACHE_URLS = [
   '/',
@@ -65,14 +65,14 @@ const PRECACHE_URLS = [
   '/tokens',
   '/report',
   '/static/offline.html',
-  '/static/app.css?v=27',
+  '/static/app.css?v=28',
   '/static/vendor/leaflet/leaflet.css?v=1',
   '/static/vendor/cropperjs/cropper.min.css?v=1',
   '/static/vendor/cropperjs/cropper.min.js?v=1',
   '/static/js/state.js?v=24',
   '/static/js/i18n.js?v=4',
-  '/static/js/utils.js?v=21',
-  '/static/js/auth.js?v=33',
+  '/static/js/utils.js?v=22',
+  '/static/js/auth.js?v=34',
   '/static/js/theme.js?v=1',
   '/static/js/views.js?v=19',
   '/static/js/branding.js?v=25',
@@ -83,7 +83,7 @@ const PRECACHE_URLS = [
   '/static/js/history.js?v=23',
   '/static/js/admin.js?v=44',
   '/static/js/schedules.js?v=24',
-  '/static/js/tokens.js?v=26',
+  '/static/js/tokens.js?v=27',
   '/static/js/dmr.js?v=21',
   '/static/js/aprs.js?v=40',
   '/static/js/aprs-map.js?v=41',

@@ -184,7 +184,7 @@
        dark text -- so both stay put and only these specific fills/their
        own text are overridden together. */
     [data-theme="matrix"] .header-lcars,
-    [data-theme="matrix"] #sidebar::before,
+    [data-theme="matrix"] #sidebar-top,
     [data-theme="matrix"] .sidebar-btn.active,
     [data-theme="matrix"] .btn-primary,
     [data-theme="matrix"] .tbl th,
@@ -195,6 +195,8 @@
     }
     [data-theme="matrix"] header h1,
     [data-theme="matrix"] header h1 span,
+    [data-theme="matrix"] #sidebar-user-info,
+    [data-theme="matrix"] #sidebar-top .i18n-credit,
     [data-theme="matrix"] .sidebar-btn.active,
     [data-theme="matrix"] .btn-primary,
     [data-theme="matrix"] .tbl th,
@@ -274,13 +276,20 @@
     }
     header h1 { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: var(--on-accent); }
     header h1 span { color: var(--on-accent); }
-    #header-user {
-      margin-left: auto; display: flex; align-items: center; gap: 10px;
-      padding: 0 16px;
-      color: var(--lc-blue); font-size: 11px;
-      text-transform: uppercase; letter-spacing: .5px;
+    /* Org-admin-set banner (issue follow-up) -- moved into the header row
+       itself, next to the logo, now that the header's right side is free
+       of the per-user controls that used to live in #header-user (moved to
+       #sidebar-top below). <header>'s own align-items:stretch already
+       grows the whole row to fit a multi-line message, no extra rule
+       needed for that. */
+    #org-banner {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--overlay-weak);
+      border-left: 1px solid var(--border);
+      padding: 8px 20px;
+      font-size: 13px; color: var(--text); white-space: pre-wrap; text-align: center;
     }
-    #header-user strong { color: var(--lc-orange); }
 
     main { display: flex; flex: 1; }
 
@@ -292,14 +301,37 @@
       padding: 0;
       display: flex; flex-direction: column;
     }
-    /* Top LCARS endcap */
-    #sidebar::before {
-      content: ''; display: block;
-      height: 64px; flex-shrink: 0;
+    /* Top LCARS endcap -- a real element (previously a content-less
+       ::before) now holding the signed-in-as/org-switcher/theme/language/
+       logout controls moved out of the header (issue follow-up). */
+    #sidebar-top {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 14px 14px 16px;
       background: var(--lc-orange);
       border-radius: 0 0 28px 0;
       margin-bottom: 10px;
     }
+    #sidebar-user-info {
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px;
+      color: var(--on-accent);
+    }
+    #sidebar-user-info strong { display: block; font-size: 15px; letter-spacing: 1px; margin-top: 2px; }
+    #sidebar-top select, #sidebar-top .btn { width: 100%; }
+    #sidebar-top .i18n-credit { color: var(--on-accent); opacity: .8; text-align: center; font-size: 10px; }
+    /* Collapsed sidebar (see below): only the logout button (icon-only,
+       via the same .sb-icon/.sb-label pattern nav buttons already use)
+       stays reachable without expanding -- theme/language are infrequent
+       enough to be worth one extra click, but signing out shouldn't be. */
+    #sidebar.collapsed #sidebar-top {
+      align-items: center; padding: 10px 4px; border-radius: 0 0 12px 0;
+    }
+    #sidebar.collapsed #sidebar-user-info,
+    #sidebar.collapsed #org-switcher,
+    #sidebar.collapsed #theme-select,
+    #sidebar.collapsed .lang-select,
+    #sidebar.collapsed .i18n-credit { display: none !important; }
+    #sidebar.collapsed #sidebar-logout-btn { width: auto; padding: 8px; }
     /* Bottom LCARS endcap */
     #sidebar::after {
       content: ''; display: block;
@@ -377,7 +409,6 @@
     }
     #sidebar.collapsed .sb-icon { margin-right: 0; font-size: 16px; }
     #sidebar.collapsed #sidebar-collapse-btn { font-size: 13px; }
-    #sidebar.collapsed::before { border-radius: 0 0 12px 0; }
 
     /* ===== CONTENT ===== */
     /* No overflow set here — #app/main use min-height, not a hard height, so the page
@@ -802,6 +833,20 @@
       #sidebar.open { transform: translateX(0); }
       .header-lcars { min-width: unset; border-radius: 0; }
 
+      /* Hamburger toggle -- the sidebar is an off-canvas drawer at this
+         width (issue follow-up: now doubles as the only way to reach the
+         theme/language/logout controls in #sidebar-top on mobile, so this
+         actually needs to be visible -- previously true only of index.html,
+         and even there this rule to actually show the button was missing). */
+      #menu-btn { display: block; }
+
+      /* A banner message drops to its own full-width row below the logo
+         rather than squeezing into the same row (issue follow-up: the
+         banner moved inline into the header, which has much less width to
+         share on mobile). */
+      header { flex-wrap: wrap; }
+      #org-banner { flex-basis: 100%; border-left: none; border-top: 1px solid var(--border); }
+
       /* Content fills full width */
       #content { padding: 14px; }
 
@@ -874,12 +919,6 @@
         max-width: 160px;
       }
       #header-tagline { display: none; }
-
-      /* Header user section: don't shrink below its content */
-      #header-user { flex-shrink: 0; padding: 0 8px; gap: 6px; }
-
-      /* On very small screens hide "Signed in as" text, keep callsign + logout */
-      #header-signed-in-text { display: none; }
 
       /* Larger tap targets for buttons */
       .btn { min-height: 36px; }
