@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Report / Request — NetControl Online</title>
+  <title>Incidents — NetControl Online</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/app.css?v=28">
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=1">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
@@ -69,43 +70,89 @@
       <a class="sidebar-btn" href="/incident-map" target="_blank" data-i18n="🚨 Public Incident Map ↗">🚨 Public Incident Map ↗</a>
     </nav>
     <div id="content">
-        <h2 class="section-title" data-i18n="Report a Problem / Submit a Request">Report a Problem / Submit a Request</h2>
-        <div class="card" style="max-width:560px">
-          <p style="margin:0 0 16px;font-size:13px;color:var(--text-muted)" data-i18n="Use this form to report a bug, request an enhancement, ask a question, or send any other message to the NetControl Online administrator. Your name and email will be included so we can follow up with you.">
-            Use this form to report a bug, request an enhancement, ask a question, or send any other message to the NetControl Online administrator. Your name and email will be included so we can follow up with you.
-          </p>
-          <div class="form-group">
-            <label data-i18n="Request Type">Request Type</label>
-            <select class="form-control" id="report-type">
-              <option value="Bug Report" data-i18n="🐛 Bug / Problem Report">🐛 Bug / Problem Report</option>
-              <option value="Enhancement Request" data-i18n="✨ Enhancement Request">✨ Enhancement Request</option>
-              <option value="Question" data-i18n="❓ Question">❓ Question</option>
-              <option value="Other" data-i18n="💬 Other">💬 Other</option>
-            </select>
+      <h2 class="section-title" data-i18n="🚨 Incidents">🚨 Incidents</h2>
+      <p style="font-size:12px;color:var(--text-muted);margin:0 0 16px;max-width:700px" data-i18n="Track an incident that doesn't need a full net activation — select which of a net's synced evacuation zones are affected, scan for potentially affected stations, and check them off as contacted.">
+        Track an incident that doesn't need a full net activation — select which of a net's synced evacuation zones are affected, scan for potentially affected stations, and check them off as contacted.
+      </p>
+
+      <div class="card" style="max-width:900px;margin-bottom:16px">
+        <div class="form-group" style="margin:0;max-width:360px">
+          <label data-i18n="Net">Net</label>
+          <select class="form-control" id="incident-net-select" onchange="onIncidentNetChange()"></select>
+        </div>
+      </div>
+
+      <div id="incident-list-section" style="display:none">
+        <div class="card" style="max-width:900px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3 style="margin:0;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="INCIDENTS">INCIDENTS</h3>
+            <button class="btn btn-primary btn-sm" onclick="showNewIncidentForm()" data-i18n="+ New Incident">+ New Incident</button>
           </div>
-          <div class="form-group">
-            <label data-i18n="Subject *">Subject *</label>
-            <input class="form-control" id="report-subject" placeholder="Brief summary of your report" maxlength="200" data-i18n-placeholder="Brief summary of your report" />
-          </div>
-          <div class="form-group">
-            <label data-i18n="Details *">Details *</label>
-            <textarea class="form-control" id="report-body" rows="6" placeholder="Describe the problem or request in as much detail as possible. For bugs, include what you were doing when it happened and what you expected vs. what occurred." data-i18n-placeholder="Describe the problem or request in as much detail as possible. For bugs, include what you were doing when it happened and what you expected vs. what occurred."></textarea>
-          </div>
-          <div id="report-status" style="display:none;padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:12px"></div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-primary" onclick="submitReport()" data-i18n="Send">Send</button>
-            <button class="btn btn-ghost" onclick="clearReport()" data-i18n="Clear">Clear</button>
+          <div id="incident-list">
+            <p class="text-muted" style="font-size:12px;margin:0" data-i18n="Loading…">Loading…</p>
           </div>
         </div>
       </div>
+
+      <!-- Create/edit incident form -->
+      <div class="card" id="incident-form-card" style="display:none;max-width:900px;margin-bottom:16px">
+        <h3 id="incident-form-heading" style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="NEW INCIDENT">NEW INCIDENT</h3>
+        <div class="form-group">
+          <label data-i18n="Title">Title</label>
+          <input class="form-control" id="incident-title" placeholder="Highway 12 brush fire" data-i18n-placeholder="Highway 12 brush fire" />
+        </div>
+        <div class="form-group">
+          <label data-i18n="Description">Description</label>
+          <textarea class="form-control" id="incident-description" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label data-i18n="Affected Zones">Affected Zones</label>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px" data-i18n="Only zones already synced for this net (Zone Roster panel on the live check-in screen) can be selected. Sync there first if the list below is empty.">Only zones already synced for this net (Zone Roster panel on the live check-in screen) can be selected. Sync there first if the list below is empty.</div>
+          <div id="incident-zone-checkboxes" style="max-height:200px;overflow-y:auto;border:1px solid var(--lc-border);border-radius:6px;padding:8px">
+            <p class="text-muted" style="font-size:12px;margin:0" data-i18n="No synced zones for this net yet.">No synced zones for this net yet.</p>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveIncident()" data-i18n="Save">Save</button>
+        <button class="btn btn-ghost btn-sm" onclick="cancelIncidentForm()" data-i18n="Cancel">Cancel</button>
+      </div>
+
+      <!-- Incident detail -->
+      <div class="card" id="incident-detail-card" style="display:none;max-width:900px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 id="incident-detail-title" style="margin:0;font-size:16px"></h3>
+            <p id="incident-detail-description" style="margin:6px 0 0;font-size:13px;color:var(--text-muted)"></p>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="editIncident()" data-i18n="Edit">Edit</button>
+            <button class="btn btn-ghost btn-sm" id="incident-status-btn" onclick="toggleIncidentStatus()"></button>
+            <button class="btn btn-danger btn-sm" onclick="deleteIncidentConfirm()" data-i18n="Delete">Delete</button>
+          </div>
+        </div>
+
+        <div id="incident-map-container" style="height:280px;margin:14px 0;border-radius:8px;overflow:hidden;display:none"></div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin:14px 0;padding-top:14px;border-top:1px solid var(--lc-border)">
+          <button class="btn btn-ghost btn-sm" id="incident-scan-btn" onclick="scanIncidentNow()" data-i18n="🔄 Scan for Affected Stations">🔄 Scan for Affected Stations</button>
+          <span id="incident-scan-status" style="font-size:12px;color:var(--text-muted)"></span>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <input class="form-control" id="incident-add-callsign" placeholder="Callsign" data-i18n-placeholder="Callsign" style="width:140px;font-size:13px" />
+          <input class="form-control" id="incident-add-name" placeholder="Name (optional)" data-i18n-placeholder="Name (optional)" style="flex:1;min-width:140px;font-size:13px" />
+          <button class="btn btn-ghost btn-sm" onclick="addIncidentStation()" data-i18n="+ Add">+ Add</button>
+        </div>
+
+        <div id="incident-stations-list">
+          <p class="text-muted" style="font-size:12px;margin:0" data-i18n="No stations yet — scan or add one manually.">No stations yet — scan or add one manually.</p>
+        </div>
+      </div>
     </div>
+    <footer id="app-footer" style="grid-column:1/-1;text-align:center;font-size:11px;color:var(--text-muted);padding:16px;border-top:1px solid var(--lc-border)">
+      <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a>
+      &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="Open Source (GPLv3)">Open Source (GPLv3)</a>
+    </footer>
   </main>
-  <footer id="app-footer">
-    <span data-i18n="Powered by">Powered by</span> <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a>
-    &bull; &copy; <span id="app-footer-year"></span> NetControl Online
-    &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="Open Source (GPLv3)">Open Source (GPLv3)</a>
-  </footer>
-  <script>document.getElementById('app-footer-year').textContent = new Date().getFullYear();</script>
 </div>
   <script src="/static/js/state.js?v=24"></script>
   <script src="/static/js/utils.js?v=22"></script>
@@ -113,7 +160,9 @@
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
-  <script src="/static/js/report.js?v=21"></script>
+  <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
+  <script src="/static/js/evac-zone-map.js?v=1"></script>
+  <script src="/static/js/incidents.js?v=1"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {
@@ -124,11 +173,11 @@
       syncThemeFromUser(currentUser);
       const cs = document.getElementById('sidebar-callsign');
       if (cs) cs.textContent = currentUser.callsign;
-      loadOrgSwitcher();   // fire-and-forget; non-blocking -- populates #org-switcher and nav-admin visibility (issue follow-up: the switcher was previously only on the Nets page, and this page's own nav-admin check only covered super admins, not org-scoped ones)
+      loadOrgSwitcher();   // fire-and-forget; non-blocking
       await loadBranding();
       loadOrgBanner();   // fire-and-forget; non-blocking
       syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
-
+      await loadIncidentNets();
     }
     initPage();
   </script>

@@ -632,6 +632,21 @@ Both are matched from the same **State**/**Region** fields on the net's Edit for
 
 **Your county/state isn't covered, or a zone is missing?** Open a GitHub issue with your zone's name and jurisdiction (city/county/state) — [see #29](https://github.com/LadyHwesta/netcontrol-online/issues/29) for the intake path. Each new source needs its GIS service hand-verified (URL, field names, and whether it's the full catalog or active-incidents-only) the same way California, Sonoma County, and Santa Rosa already were.
 
+## Incident Reporting (issue #28)
+
+Tracks an incident that doesn't need a full net activation — a localized fire, flooding, a road closure — without spinning up a `NetSession` at all. Lives under the new **🚨 Incidents** sidebar link.
+
+**Affected area** is one or more of a net's already-synced real evacuation zone boundaries (see Evacuation Zone Data above), selected when creating or editing an incident — never a freehand-drawn shape, so the geometry is always real, current, government-sourced data. Sync a net's zones first (Zone Roster panel on the live check-in screen) if the zone picker is empty.
+
+**"🔄 Scan for Affected Stations"** looks for potentially affected stations using two signals, since there's no reliable persisted "where is this station right now" data anywhere in this app otherwise:
+
+- **Zone report** — the free-text zone name a station reported at check-in (Zone Roster's own per-callsign roster) matched against the incident's selected zone(s). Works for any net with check-in history, no coordinates needed.
+- **Position** — real point-in-polygon matching against each callsign's most recent manually-reported GPS position (`PATCH /checkins/{id}/position`), searched across the whole organization's check-in history from the last 14 days — not just the currently-open session. Live APRS positions are **not** matched in this version — they're only available while a session happens to be open, which an incident that doesn't need a full activation often won't have.
+
+A scan never overwrites or removes a station you've already added or edited — re-scanning as new check-ins come in is always safe. Stations can also be added or removed by hand. Each station has a status (`Not Contacted` → `Attempted` → `Contacted` → `Confirmed Safe` / `Needs Assistance`) and a free-text notes field for their situation, both editable independently — this is the "mini net" checklist.
+
+**Public vs. backend split**: the public **🚨 Public Incident Map** (`/incident-map`, same org-slug convention as `/live` and `/directory`) shows every active incident's affected area on a map plus a station **count** — never a callsign, never contact info. The authenticated `/incidents` page is where the actual station list, status, and notes live.
+
 ## UI Translation (argos-translate)
 
 Optional, off by default. Translates the app's own UI into other languages using [Argos Translate](https://github.com/argosopentech/argos-translate), an offline neural machine translation library — no third-party API, no data leaving the server.

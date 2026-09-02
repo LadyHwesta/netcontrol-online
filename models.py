@@ -230,6 +230,7 @@ class Net(Base):
     schedules = relationship("NetSchedule", back_populates="net", cascade="all, delete-orphan")
     evac_zones = relationship("EvacZone", back_populates="net", cascade="all, delete-orphan")
     evac_zone_boundaries = relationship("EvacZoneBoundary", back_populates="net", cascade="all, delete-orphan")
+    incidents = relationship("Incident", back_populates="net", cascade="all, delete-orphan")
     shares = relationship("NetShare", back_populates="net", cascade="all, delete-orphan")
     dmr_config = relationship("DmrConfig", back_populates="net", uselist=False, cascade="all, delete-orphan")
     aprs_config = relationship("AprsConfig", back_populates="net", uselist=False, cascade="all, delete-orphan")
@@ -506,6 +507,95 @@ class EvacZoneBoundary(Base):
 
     def __repr__(self):
         return f"<EvacZoneBoundary net_id={self.net_id} source={self.source} external_id={self.external_id}>"
+
+
+class Incident(Base):
+    """An incident that doesn't require a full net activation (issue #28)
+    -- e.g. a localized fire or flooding, tracked without spinning up a
+    NetSession at all. Its affected area is one or more of the net's own
+    already-synced EvacZoneBoundary rows (issue #27), selected via
+    IncidentZone below -- never a freehand-drawn shape, so the geometry
+    is always real, current, government-sourced data. Belongs to a Net,
+    same as EvacZoneBoundary/TacticalPosition/EvacZone, not a separate
+    org-level entity -- reuses this app's existing net-scoped
+    access-control (_get_editable_net) rather than a parallel system."""
+    __tablename__ = "incidents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="active")   # active | resolved
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    resolved_at = Column(UTCDateTime, nullable=True)
+
+    net = relationship("Net", back_populates="incidents")
+    zones = relationship("IncidentZone", back_populates="incident", cascade="all, delete-orphan")
+    stations = relationship("IncidentStation", back_populates="incident", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Incident id={self.id} title={self.title!r} status={self.status}>"
+
+
+class IncidentZone(Base):
+    """One evacuation zone boundary selected as part of an incident's
+    affected area (issue #28) -- a join table since a real incident (a
+    growing fire, say) often spans more than one zone as it develops."""
+    __tablename__ = "incident_zones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
+    evac_zone_boundary_id = Column(Integer, ForeignKey("evac_zone_boundaries.id", ondelete="CASCADE"), nullable=False)
+
+    incident = relationship("Incident", back_populates="zones")
+    evac_zone_boundary = relationship("EvacZoneBoundary")
+
+    __table_args__ = (
+        UniqueConstraint("incident_id", "evac_zone_boundary_id", name="uq_incident_zone_incident_boundary"),
+    )
+
+    def __repr__(self):
+        return f"<IncidentZone incident_id={self.incident_id} evac_zone_boundary_id={self.evac_zone_boundary_id}>"
+
+
+class IncidentStation(Base):
+    """A station potentially affected by an incident (issue #28) -- the
+    "mini net" roster: checked off as contacted, with notes on their
+    situation. Populated by incident_matching.scan_incident() (add-only,
+    never overwrites an operator's edits on re-scan) from two signals --
+    match_reason records which: "zone_report" (EvacZone's free-text
+    per-callsign roster matched one of the incident's zone names/ids --
+    the only signal that needs no coordinates at all) or "position" (this
+    callsign's most recent Checkin.lat/lon, anywhere in the org within
+    the recency window, fell inside one of the zone polygons) -- or
+    "manual" for a station an operator added by hand. status is a small
+    enum + notes (modeled on TrafficMessage.status/.notes, not
+    Checkin.traffic_called's plain boolean) since "notes about their
+    situation" implies more than a single contacted/not bit."""
+    __tablename__ = "incident_stations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
+    callsign = Column(String(12), nullable=False)
+    name = Column(String(100), nullable=True)             # best-effort, from recent Checkin history
+    match_reason = Column(String(20), nullable=False)     # "zone_report" | "position" | "manual"
+    status = Column(String(20), nullable=False, default="not_contacted")
+    # not_contacted -> attempted -> contacted -> confirmed_safe | needs_assistance
+    notes = Column(Text, nullable=True)
+    last_position_lat = Column(Float, nullable=True)      # snapshot for the map, only set if matched by position
+    last_position_lon = Column(Float, nullable=True)
+    added_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    updated_at = Column(UTCDateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    incident = relationship("Incident", back_populates="stations")
+
+    __table_args__ = (
+        UniqueConstraint("incident_id", "callsign", name="uq_incident_station_incident_callsign"),
+    )
+
+    def __repr__(self):
+        return f"<IncidentStation incident_id={self.incident_id} callsign={self.callsign} status={self.status}>"
 
 
 class TrafficMessage(Base):

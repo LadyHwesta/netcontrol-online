@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title id="seo-title">Incidents — NetControl Online</title>
+  <meta id="seo-description" name="description" content="See active incidents and their affected areas, with a count of potentially affected stations." />
+  <link id="seo-canonical" rel="canonical" href="/incident-map" />
+  <meta id="seo-og-type" property="og:type" content="website" />
+  <meta id="seo-og-title" property="og:title" content="Incidents — NetControl Online" />
+  <meta id="seo-og-description" property="og:description" content="See active incidents and their affected areas, with a count of potentially affected stations." />
+  <meta id="seo-og-url" property="og:url" content="/incident-map" />
+  <meta id="seo-og-image" property="og:image" content="/static/icons/icon-512.png" />
+  <meta name="robots" content="noindex, follow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=1">
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <script>(function(){var t=localStorage.getItem('nt_theme');if(t)document.documentElement.dataset.theme=t;var l=localStorage.getItem('nt_lang');if(l&&l!=='en')document.documentElement.lang=l;})();</script>
+  <style>
+    /* Same LCARS-inspired palette/shape as public.html -- kept as a direct
+       copy rather than a shared stylesheet, matching this app's existing
+       convention of each standalone public page carrying its own inline
+       styles (public.html, directory.html). */
+    :root {
+      --lc-bg:      #0a0a1a;
+      --lc-surface: #111128;
+      --lc-border:  #2a2a4a;
+      --lc-orange:  #ff9900;
+      --lc-blue:    #0099ff;
+      --lc-red:     #ff3333;
+      --lc-green:   #00cc66;
+      --lc-text:    #e8e8f0;
+      --lc-muted:   #888899;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --lc-bg:      #FAFAF8;
+        --lc-surface: #FFFFFF;
+        --lc-border:  #D8D8D4;
+        --lc-orange:  #C97400;
+        --lc-blue:    #3355CC;
+        --lc-red:     #C82F16;
+        --lc-green:   #1F8F52;
+        --lc-text:    #1A1A1A;
+        --lc-muted:   #56606E;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--lc-bg); color: var(--lc-text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+    header { background: var(--lc-surface); border-bottom: 3px solid var(--lc-orange); padding: 14px 24px; display: flex; align-items: center; gap: 14px; }
+    header h1 { font-size: 20px; font-weight: 700; letter-spacing: .06em; color: var(--lc-orange); }
+    header h1 span { color: var(--lc-blue); }
+    .header-sub { margin-left: auto; font-size: 12px; color: var(--lc-muted); text-align: right; line-height: 1.5; }
+    main { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+    .card { background: var(--lc-surface); border: 1px solid var(--lc-border); border-radius: 10px; padding: 18px 22px; margin-bottom: 16px; }
+    .section-title { font-size: 13px; font-weight: 700; letter-spacing: .1em; color: var(--lc-orange); text-transform: uppercase; margin-bottom: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--lc-border); }
+    .net-name { font-size: 17px; font-weight: 700; color: var(--lc-text); margin-bottom: 6px; }
+    .net-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--lc-muted); }
+    .net-meta strong { color: var(--lc-text); }
+    .badge { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 9px; vertical-align: middle; }
+    .badge-count { background: var(--lc-blue); color: #000; }
+    .badge-active { background: var(--lc-red); color: #fff; }
+    .empty { text-align: center; padding: 48px 20px; color: var(--lc-muted); }
+    .empty .icon { font-size: 48px; margin-bottom: 16px; }
+    .empty p { font-size: 14px; line-height: 1.6; }
+    .refresh-bar { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--lc-muted); margin-bottom: 20px; }
+    .refresh-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lc-green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+    footer { text-align: center; font-size: 11px; color: var(--lc-muted); padding: 20px; border-top: 1px solid var(--lc-border); margin-top: 40px; }
+    footer a { color: var(--lc-blue); text-decoration: none; }
+    .lang-select { background: var(--lc-surface); border: 1px solid var(--lc-border); color: var(--lc-text); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: inherit; }
+  </style>
+</head>
+<body>
+
+<div id="lang-corner" style="position:fixed;top:14px;right:14px;z-index:20;display:flex;align-items:center;gap:8px">
+  <a class="i18n-credit" href="https://github.com/argosopentech/argos-translate" target="_blank" rel="noopener"
+    style="display:none;font-size:10px;color:var(--lc-muted);text-decoration:none" title="This page's translation is machine-generated">🌐 via Argos Translate</a>
+  <select class="lang-select" onchange="saveLang(this.value)" title="Language" style="display:none">
+    <option value="en">English</option>
+  </select>
+</div>
+
+<header>
+  <img id="header-logo" src="/logo" alt="" style="max-height:40px;max-width:140px;display:none;border-radius:4px;object-fit:contain"
+    onerror="this.style.display='none'" onload="this.style.display=''" />
+  <span id="header-antenna" style="font-size:24px">🚨</span>
+  <div>
+    <h1 id="header-title"><span>NetControl Online</span> — Incidents</h1>
+    <div id="header-tagline" style="display:none;font-size:11px;color:rgba(0,0,0,0.6);font-weight:600;letter-spacing:.04em;margin-top:-2px"></div>
+  </div>
+  <div class="header-sub">
+    <span data-i18n="Public view">Public view</span> &bull; <span data-i18n="Auto-updates every 30 seconds">Auto-updates every 30 seconds</span><br>
+    <span id="clock" style="font-family:monospace"></span>
+  </div>
+</header>
+
+<main>
+  <div id="view-picker">
+    <div class="section-title" data-i18n="Choose an Organization">Choose an Organization</div>
+    <div id="orgs-container"></div>
+  </div>
+
+  <div id="view-incidents" style="display:none">
+    <div class="section-title" data-i18n="Active Incidents">Active Incidents</div>
+    <div class="refresh-bar">
+      <div class="refresh-dot"></div>
+      <span id="refresh-status" data-i18n="Loading…">Loading…</span>
+    </div>
+    <div class="card" id="map-card" style="display:none">
+      <div id="incident-map-container" style="height:360px;border-radius:8px;overflow:hidden"></div>
+    </div>
+    <div id="incidents-container"></div>
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">NetControl Online</a> &bull; <a href="/" data-i18n="Operator Login">Operator Login</a><br>
+  &copy; <span id="footer-year"></span> NetControl Online &bull; <a href="https://github.com/LadyHwesta/netcontrol-online/blob/main/LICENSE" target="_blank" rel="noopener" data-i18n="Open Source (GPLv3)">Open Source (GPLv3)</a>
+</footer>
+<script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
+
+<script src="/static/js/state.js?v=24"></script>
+<script src="/static/js/utils.js?v=22"></script>
+<script src="/static/js/i18n.js?v=4"></script>
+<script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
+<script src="/static/js/evac-zone-map.js?v=1"></script>
+<script>
+  let incidentsInterval = null;
+
+  // ── Clock ────────────────────────────────────────────
+  function tickClock() {
+    const now = new Date();
+    const local = now.toLocaleTimeString();
+    const utc   = now.toUTCString().match(/\d{2}:\d{2}:\d{2}/)[0];
+    document.getElementById('clock').textContent = `${local}  /  ${utc}Z`;
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Same org-slug-in-path convention as /live/{slug}, /directory/{slug}.
+  function orgSlugFromPath() {
+    const parts = location.pathname.split('/').filter(Boolean); // ["incident-map", "<slug>"]
+    return parts.length > 1 ? decodeURIComponent(parts[1]) : null;
+  }
+
+  async function loadOrgPicker() {
+    const el = document.getElementById('orgs-container');
+    try {
+      const orgs = await fetch('/public/organizations').then(r => r.json());
+      if (!orgs.length) {
+        el.innerHTML = `<div class="empty"><div class="icon">🚨</div><p>${t('No organizations to show yet.')}</p></div>`;
+        return;
+      }
+      el.innerHTML = orgs.map(o => `
+        <a class="card" style="display:block;text-decoration:none;color:inherit" href="/incident-map/${encodeURIComponent(o.slug)}">
+          <div class="net-name">${esc(o.name)}</div>
+        </a>`).join('');
+    } catch {
+      el.innerHTML = `<div class="empty"><p>${t("Couldn't load organizations — try refreshing.")}</p></div>`;
+    }
+  }
+
+  async function loadIncidents() {
+    const slug = orgSlugFromPath();
+    try {
+      const incidents = await fetch('/public/incidents?org=' + encodeURIComponent(slug)).then(r => r.json());
+      renderIncidents(incidents);
+      const now = new Date().toLocaleTimeString();
+      document.getElementById('refresh-status').textContent = t('Last updated {time} — refreshes every 30s').replace('{time}', now);
+    } catch {
+      document.getElementById('refresh-status').textContent = t('Error loading — retrying…');
+    }
+  }
+
+  function renderIncidents(incidents) {
+    const mapCard = document.getElementById('map-card');
+    const allZones = incidents.flatMap(i => i.zones);
+    if (allZones.length) {
+      mapCard.style.display = '';
+      initEvacZoneMap('incident-map-container', allZones);
+      setTimeout(() => invalidateEvacZoneMapSize('incident-map-container'), 0);
+    } else {
+      mapCard.style.display = 'none';
+    }
+
+    const el = document.getElementById('incidents-container');
+    if (!incidents.length) {
+      el.innerHTML = `
+        <div class="empty">
+          <div class="icon">✅</div>
+          <p>${t('No active incidents right now.')}</p>
+        </div>`;
+      return;
+    }
+    el.innerHTML = incidents.map(i => `
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div class="net-name">
+              ${esc(i.title)}
+              <span class="badge badge-active" style="margin-left:6px">${t('ACTIVE')}</span>
+            </div>
+            ${i.description ? `<div style="font-size:13px;color:var(--lc-muted);margin-top:6px">${esc(i.description)}</div>` : ''}
+            <div class="net-meta" style="margin-top:8px">
+              <span>📻 ${esc(i.net_name)}</span>
+            </div>
+          </div>
+          <div style="text-align:center;padding-top:2px">
+            <span class="badge badge-count" style="font-size:16px;padding:4px 14px">${i.station_count}</span>
+            <div style="font-size:11px;color:var(--lc-muted);margin-top:3px" data-i18n="potentially affected">potentially affected</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function startPolling() {
+    clearInterval(incidentsInterval);
+    loadIncidents();
+    incidentsInterval = setInterval(loadIncidents, 30000);
+  }
+
+  const slug = orgSlugFromPath();
+  if (!slug) {
+    document.getElementById('view-picker').style.display = '';
+    document.getElementById('view-incidents').style.display = 'none';
+    loadOrgPicker();
+  } else {
+    document.getElementById('view-picker').style.display = 'none';
+    document.getElementById('view-incidents').style.display = '';
+    startPolling();
+  }
+</script>
+</body>
+</html>

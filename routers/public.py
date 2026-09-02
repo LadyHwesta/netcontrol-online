@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import Checkin, Net, NetSchedule, NetSession, Organization, User
+from models import Checkin, EvacZoneBoundary, Incident, IncidentStation, IncidentZone, Net, NetSchedule, NetSession, Organization, User
 from routers.aprs import _public_aprs_positions
 from routers.helpers import STATIC_DIR
 from routers.orgs import _org_to_out
@@ -59,6 +59,28 @@ def _inject_seo_meta(html_content: str, *, title: str, description: str, canonic
     for old, new in replacements.items():
         html_content = html_content.replace(old, new)
     return html_content
+
+
+@router.get("/incident-map", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/incident-map/{org_slug}", response_class=HTMLResponse, include_in_schema=False)
+async def public_incident_map_page(request: Request, org_slug: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Serve the public incident map page (issue #28) -- same org_slug/
+    SEO-injection/bare-path-shows-a-picker convention as /live above.
+    A separate top-level route from the authenticated /incidents page
+    (routers/incidents.py), not a shared path -- one is public, the
+    other requires auth, and this app doesn't overload one route for both."""
+    content = (_PROJECT_ROOT / "incident-map.html").read_text()
+    if org_slug:
+        org = (await db.execute(select(Organization).filter(Organization.slug == org_slug))).scalar_one_or_none()
+        if org:
+            content = _inject_seo_meta(
+                content,
+                title=f"Incidents — {org.name}",
+                description=f"See active incidents and their affected areas for {org.name}, with a count of potentially affected stations.",
+                canonical_path=f"/incident-map/{org_slug}",
+                request=request,
+            )
+    return HTMLResponse(content)
 
 
 @router.get("/live", response_class=HTMLResponse, include_in_schema=False)
@@ -114,6 +136,57 @@ async def public_active_sessions(org: Optional[str] = None, db: AsyncSession = D
             "aprs_positions": aprs_positions,
             "aprs_source": aprs_source,   # "aprs_fi" | "relay" | None -- required aprs.fi credit on the map
             **await _duty_labels_for_session(net, s, db),
+        })
+    return result
+
+
+@router.get("/public/incidents")
+async def public_incidents(org: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Active incidents for one org (issue #28) -- affected-area geometry
+    and a station COUNT only, never the station list or any contact
+    info, which stays authenticated-only (routers/incidents.py). No auth
+    required, same org-slug convention as /public/active. Each zone is
+    returned already shaped for evac-zone-map.js's existing
+    initEvacZoneMap()/updateEvacZoneMap() (name/status/county/geometry) --
+    that module is reused as-is, per its own header comment written when
+    it was built for exactly this in issue #27. `status` on each zone is
+    the zone's own real evacuation status (order/warning/...), not the
+    incident's active/resolved status, so the map colors by actual
+    current severity."""
+    org_row = (await db.execute(select(Organization).filter(Organization.slug == (org or "default")))).scalar_one_or_none()
+    if not org_row:
+        return []
+    rows = (await db.execute(
+        select(Incident, Net.name)
+        .join(Net, Net.id == Incident.net_id)
+        .filter(Net.org_id == org_row.id, Incident.status == "active")
+        .order_by(Incident.created_at.desc())
+    )).all()
+    result = []
+    for incident, net_name in rows:
+        zones = (await db.execute(
+            select(EvacZoneBoundary)
+            .join(IncidentZone, IncidentZone.evac_zone_boundary_id == EvacZoneBoundary.id)
+            .filter(IncidentZone.incident_id == incident.id)
+        )).scalars().all()
+        station_count = (await db.execute(
+            select(func.count(IncidentStation.id)).filter(IncidentStation.incident_id == incident.id)
+        )).scalar()
+        result.append({
+            "id": incident.id,
+            "title": incident.title,
+            "description": incident.description,
+            "net_name": net_name,
+            "station_count": station_count or 0,
+            "zones": [
+                {
+                    "name": f"{incident.title} — {z.name or z.external_id}",
+                    "status": z.status,
+                    "county": z.county,
+                    "geometry": z.geometry,
+                }
+                for z in zones
+            ],
         })
     return result
 

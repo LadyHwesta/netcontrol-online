@@ -669,6 +669,38 @@ MIGRATIONS = [
          source_updated_at TIMESTAMPTZ,
          synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
          UNIQUE (net_id, source, external_id))"""),
+
+    # ── Incident reporting (issue #28) ──
+    ("table: incidents",
+     """CREATE TABLE IF NOT EXISTS incidents (
+         id SERIAL PRIMARY KEY,
+         net_id INTEGER NOT NULL REFERENCES nets(id) ON DELETE CASCADE,
+         title VARCHAR(200) NOT NULL,
+         description TEXT,
+         status VARCHAR(20) NOT NULL DEFAULT 'active',
+         created_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         resolved_at TIMESTAMPTZ)"""),
+    ("table: incident_zones",
+     """CREATE TABLE IF NOT EXISTS incident_zones (
+         id SERIAL PRIMARY KEY,
+         incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+         evac_zone_boundary_id INTEGER NOT NULL REFERENCES evac_zone_boundaries(id) ON DELETE CASCADE,
+         UNIQUE (incident_id, evac_zone_boundary_id))"""),
+    ("table: incident_stations",
+     """CREATE TABLE IF NOT EXISTS incident_stations (
+         id SERIAL PRIMARY KEY,
+         incident_id INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+         callsign VARCHAR(12) NOT NULL,
+         name VARCHAR(100),
+         match_reason VARCHAR(20) NOT NULL,
+         status VARCHAR(20) NOT NULL DEFAULT 'not_contacted',
+         notes TEXT,
+         last_position_lat DOUBLE PRECISION,
+         last_position_lon DOUBLE PRECISION,
+         added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         UNIQUE (incident_id, callsign))"""),
 ]
 
 # ---------------------------------------------------------------------------

@@ -60,11 +60,13 @@
       <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
       <a class="sidebar-btn" href="/" data-i18n="📻 Net Control">📻 Net Control</a>
       <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none" data-i18n="🔑 Admin">🔑 Admin</a>
+      <a class="sidebar-btn" href="/incidents" data-i18n="🚨 Incidents">🚨 Incidents</a>
       <a class="sidebar-btn" href="/tokens" data-i18n="⚙️ Account">⚙️ Account</a>
       <a class="sidebar-btn" href="/help" data-i18n="❓ Help">❓ Help</a>
       <a class="sidebar-btn" href="/report" data-i18n="🐛 Report / Request">🐛 Report / Request</a>
       <a class="sidebar-btn" href="/live" target="_blank" data-i18n="📡 Live Public Page ↗">📡 Live Public Page ↗</a>
       <a class="sidebar-btn" href="/directory" target="_blank" data-i18n="📖 Net Directory ↗">📖 Net Directory ↗</a>
+      <a class="sidebar-btn" href="/incident-map" target="_blank" data-i18n="🚨 Public Incident Map ↗">🚨 Public Incident Map ↗</a>
     </nav>
     <div id="content">
         <h2 class="section-title" data-i18n="Help &amp; Operating Guide">Help &amp; Operating Guide</h2>
@@ -77,6 +79,16 @@
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Incident Reporting (v2.41.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <strong>🚨 Incidents</strong> page — track an incident that doesn't need a full net activation, without starting a live session at all. Pick which of a net's already-synced evacuation zones are affected, then <strong>🔄 Scan for Affected Stations</strong> to find who might be affected, using both the zone name they reported at check-in and their most recent manually-reported GPS position (checked against the real zone boundary, not just a rough guess).</li>
+              <li>Each potentially affected station gets a status (Not Contacted → Attempted → Contacted → Confirmed Safe / Needs Assistance) and a notes field — check them off as you reach them, with notes on their situation. Stations can also be added or removed by hand. Re-scanning never overwrites what you've already entered.</li>
+              <li>New public <strong>🚨 Public Incident Map</strong> page (<code>/incident-map</code>) — shows every active incident's affected area on a map with a count of potentially affected stations. No callsigns, no contact info — the actual station list only ever shows on the authenticated Incidents page.</li>
+              <li>See README's <strong>Incident Reporting</strong> section for the full details on how stations get matched, and its limits (no live APRS matching yet — see the Evacuation Zone Data section above it for the same "on-demand, not automatic" reasoning).</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — City of Santa Rosa Evacuation Zones Added (v2.40.1)</div>

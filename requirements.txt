@@ -14,6 +14,14 @@ httpx==0.28.1
 # imported directly too -- activitypub_signing.py's RSA keypair generation
 # and HTTP Signature signing/verification for Fediverse participation.
 cryptography==50.0.1
+# Real point-in-polygon geometry (issue #28's incident-affected-station
+# matching against real evacuation zone polygons from issue #27) -- a core
+# dependency, not lazily imported like the optional integrations below:
+# GeoJSON Polygon/MultiPolygon geometry from real government sources can
+# have interior holes and multiple rings, and this result decides who gets
+# contacted about a possible evacuation, so hand-rolling the algorithm was
+# judged the wrong call here. Pulls in numpy.
+shapely==2.1.2
 slowapi==0.1.9
 # Only needed if you set CAPTCHA_PROVIDER=altcha — safe to remove this line
 # if you're using turnstile/recaptcha or no bot protection at all; the app
