@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Profile Photo Now Saves Immediately (v2.33.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Confirming a photo crop in Account → Profile now saves it to your account right away — the same as Recrop and Remove Photo already did — instead of waiting behind the separate <strong>Save Profile</strong> button below it, which made it look like the photo hadn't been saved at all.</li>
+              <li>Fixed a bug where a real uploaded profile photo could vanish after a deploy — the test suite was cleaning up its own test photos from the live server's actual uploads folder instead of an isolated one.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-01 — Crop Your Profile Photo; Bigger Avatar on the Live Page (v2.33.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>⚙️ Account → Profile's photo upload now opens a <strong>crop/reposition</strong> step before saving — drag to reposition, drag a corner to resize, always a square (matching the circular avatar it's shown as everywhere). A new <strong>✂️ Recrop</strong> button lets you re-adjust an already-uploaded photo's framing at any time, without picking a new file.</li>

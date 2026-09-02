@@ -22,24 +22,6 @@ async function saveProfile() {
     const csShort = document.getElementById('header-callsign-short');
     if (csShort) csShort.textContent = currentUser.callsign;
 
-    // Upload the cropped photo, if one was confirmed in the crop modal, as
-    // a second step -- same two-step shape as branding.js's saveBranding()
-    // (text fields via one call, logo/photo via a separate multipart POST).
-    // _pendingPhotoBlob (not the raw <input type=file>) is always what a
-    // confirmed crop produces -- see confirmPhotoCrop() below.
-    if (_pendingPhotoBlob) {
-      const fd = new FormData();
-      fd.append('file', _pendingPhotoBlob, 'profile-photo.jpg');
-      await fetch('/auth/photo', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token },
-        body: fd,
-      }).then(r => { if (!r.ok) throw new Error(t('Photo upload failed')); });
-      _pendingPhotoBlob = null;
-      document.getElementById('profile-photo-file').value = '';
-      document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
-    }
-
     if (emailChanged && !currentUser.email_verified) {
       toast(t("Profile saved — check your new email to verify it. You'll need to confirm it before logging in again."));
     } else {
@@ -50,11 +32,13 @@ async function saveProfile() {
 
 // ---- Photo crop/reposition (issue follow-up) --------------------------
 // Every photo, whether freshly picked or an existing one being adjusted,
-// goes through the same square Cropper.js modal before it's ever staged
-// for upload -- _pendingPhotoBlob is the one thing saveProfile() actually
-// sends, never the raw <input type=file> contents directly.
+// goes through the same square Cropper.js modal, and confirming a crop
+// uploads it immediately (below) -- it does NOT wait for the separate
+// "Save Profile" button. Matches Recrop/Delete Photo, which have always
+// taken effect immediately -- a photo change previously staged itself
+// behind Save Profile while the rest of this card acted instantly, which
+// read as though the photo hadn't been saved at all (issue follow-up).
 let _cropper = null;
-let _pendingPhotoBlob = null;
 
 function previewProfilePhoto(input) {
   const file = input.files[0];
@@ -100,12 +84,22 @@ function cancelPhotoCrop() {
 function confirmPhotoCrop() {
   if (!_cropper) return;
   const canvas = _cropper.getCroppedCanvas({ width: 500, height: 500, imageSmoothingQuality: 'high' });
-  canvas.toBlob(blob => {
-    _pendingPhotoBlob = blob;
-    document.getElementById('profile-photo-preview').src = URL.createObjectURL(blob);
+  canvas.toBlob(async blob => {
     document.getElementById('photo-crop-modal').style.display = 'none';
     _cropper.destroy();
     _cropper = null;
+    document.getElementById('profile-photo-file').value = '';
+    const fd = new FormData();
+    fd.append('file', blob, 'profile-photo.jpg');
+    try {
+      await fetch('/auth/photo', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd,
+      }).then(r => { if (!r.ok) throw new Error(t('Photo upload failed')); });
+      document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
+      toast(t('Photo saved'));
+    } catch (e) { toast(e.message, 'error'); }
   }, 'image/jpeg', 0.92);
 }
 
@@ -113,7 +107,6 @@ async function deleteProfilePhoto() {
   if (!confirm(t('Remove your profile photo?'))) return;
   try {
     await apiFetch('/auth/photo', { method: 'DELETE' });
-    _pendingPhotoBlob = null;
     toast(t('Photo removed'));
     document.getElementById('profile-photo-preview').src = `/users/${currentUser.id}/photo?` + Date.now();
   } catch (e) { toast(e.message, 'error'); }

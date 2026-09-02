@@ -89,8 +89,8 @@
               </div>
               <button class="btn btn-primary" onclick="saveProfile()" data-i18n="Save Profile">Save Profile</button>
             </div>
-            <div style="min-width:140px">
-              <label style="display:block;margin-bottom:6px"><span data-i18n="Photo">Photo</span> <span class="text-muted" style="font-size:11px" data-i18n="(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster)">(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster)</span></label>
+            <div style="min-width:140px;padding-left:16px;border-left:1px solid var(--border)">
+              <label style="display:block;margin-bottom:6px"><span data-i18n="Photo">Photo</span> <span class="text-muted" style="font-size:11px" data-i18n="(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster — saved immediately, no need to click Save Profile)">(PNG, JPG, GIF, or WebP — shown on the public live page when you're Net Control or the assigned broadcaster — saved immediately, no need to click Save Profile)</span></label>
               <img id="profile-photo-preview" style="display:none;width:100px;height:100px;object-fit:cover;border-radius:50%;margin-bottom:8px;border:1px solid var(--border)"
                 onerror="this.style.display='none';document.getElementById('profile-photo-delete-btn').style.display='none';document.getElementById('profile-photo-recrop-btn').style.display='none'"
                 onload="this.style.display='';document.getElementById('profile-photo-delete-btn').style.display='';document.getElementById('profile-photo-recrop-btn').style.display=''" />
@@ -182,7 +182,7 @@
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/vendor/cropperjs/cropper.min.js?v=1"></script>
-  <script src="/static/js/tokens.js?v=25"></script>
+  <script src="/static/js/tokens.js?v=26"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {

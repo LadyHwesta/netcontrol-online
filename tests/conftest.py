@@ -25,6 +25,8 @@ Strategy
 """
 
 import os
+import pathlib
+import shutil
 import sys
 import tempfile
 
@@ -72,7 +74,21 @@ from models import Base  # noqa: E402
 from database import engine, SessionLocal  # noqa: E402
 from main import app, limiter  # noqa: E402
 from helpers import register, login, auth  # noqa: E402, F401
-from routers.helpers import UPLOADS_DIR  # noqa: E402
+import routers.helpers as helpers  # noqa: E402
+
+# Redirect all org-logo / user-photo file storage to an isolated temp
+# directory for the whole test run. routers/orgs.py, routers/auth.py, and
+# routers/helpers.py's own functions all resolve `helpers.UPLOADS_DIR` at
+# call time rather than importing a frozen copy of it, so reassigning the
+# module attribute here -- before any test/request runs -- is enough to
+# keep every test's file writes off this checkout's real uploads/ dir.
+# Without this, running the suite (e.g. deploy.sh's automatic
+# `pytest tests/ -q` on every deploy to a testing-branch instance) wipes
+# any real org logo or user profile photo sitting in the live uploads/
+# directory via clean_tables' glob cleanup below -- caught after exactly
+# that happened to a user's freshly-uploaded profile photo on a deploy.
+_UPLOADS_TEST_DIR = pathlib.Path(tempfile.mkdtemp(prefix="netcontrol_test_uploads_"))
+helpers.UPLOADS_DIR = _UPLOADS_TEST_DIR
 
 # Disable rate limiting so tests can call auth endpoints without hitting caps.
 limiter.enabled = False
@@ -83,7 +99,7 @@ limiter.enabled = False
 @pytest.fixture(scope="session", autouse=True)
 async def setup_database():
     """Create all tables once for the entire test session; remove the temp
-    DB file afterward."""
+    DB file (and the isolated uploads/ dir set up above) afterward."""
     if os.path.exists(_DB_PATH):
         os.remove(_DB_PATH)
     async with engine.begin() as conn:
@@ -92,6 +108,7 @@ async def setup_database():
     await engine.dispose()
     if os.path.exists(_DB_PATH):
         os.remove(_DB_PATH)
+    shutil.rmtree(_UPLOADS_TEST_DIR, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)
@@ -102,18 +119,17 @@ async def clean_tables():
     DB rows above, files on disk aren't reset by anything else, and org/user
     ids get reused across tests (rows are wiped, not the autoincrement
     sequence), so a leftover file from one test's id=1 would otherwise leak
-    into the next test that happens to get the same id. Deliberately scoped
-    to ONLY these two specific patterns, never the bare instance-wide
-    logo.* -- this repo's own uploads/ dir can hold a real, git-tracked logo
-    file that a blind cleanup would wrongly delete (hit exactly this while
-    developing this fixture)."""
+    into the next test that happens to get the same id. This only ever
+    touches the isolated temp dir set up above -- never this checkout's real
+    uploads/ dir -- but is still scoped to these two specific patterns
+    (never a bare logo.*) as a second layer of safety."""
     yield
     async with SessionLocal() as db:
         for table in reversed(Base.metadata.sorted_tables):
             await db.execute(table.delete())
         await db.commit()
     for pattern in ("org_*_logo.*", "user_*_photo.*"):
-        for f in UPLOADS_DIR.glob(pattern):
+        for f in helpers.UPLOADS_DIR.glob(pattern):
             f.unlink(missing_ok=True)
 
 
