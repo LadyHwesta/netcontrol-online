@@ -396,6 +396,7 @@ def _slugify(text: str) -> str:
 
 async def _get_or_create_org(
     org_slug: Optional[str], org_name: Optional[str], org_website_url: Optional[str], db: AsyncSession,
+    *, block_invite_only: bool = False,
 ) -> tuple[Organization, bool]:
     """Multi-tenancy (issue #1) join-or-create: resolves the org for a slug,
     creating it if it doesn't exist yet. Returns (org, created) — the caller
@@ -407,10 +408,20 @@ async def _get_or_create_org(
     requests to join it. A real "create a new org" request (org_slug or
     org_name given) requires a website URL so a super admin reviewing it has
     something to verify it against; the bare default-org bootstrap path does
-    not, since nothing about it was actually requested by the caller."""
+    not, since nothing about it was actually requested by the caller.
+
+    block_invite_only (issue follow-up): when True, resolving to an
+    EXISTING org with registration_open=False raises 403 instead of
+    returning it. Passed by the two genuinely self-service join paths
+    (routers/auth.py's register(), routers/orgs.py's join_org()) — never by
+    the admin-authenticated callers (routers/admin.py's admin_create_user()
+    founding a brand new org on a super admin's behalf), for which joining
+    a member into an invite-only org directly is the intended way in."""
     slug = org_slug or (_slugify(org_name) if org_name else "default")
     org = (await db.execute(select(Organization).filter(Organization.slug == slug))).scalar_one_or_none()
     if org:
+        if block_invite_only and not org.registration_open:
+            raise HTTPException(403, "This organization isn't accepting new registrations — contact an admin for an invite.")
         return org, False
     website = (org_website_url or "").strip()
     if org_slug or org_name:

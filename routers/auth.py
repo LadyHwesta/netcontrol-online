@@ -194,7 +194,7 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
     # IN (is_active) now always needs a super admin's sign-off, since an org
     # founder approving themselves would be no approval at all — except the
     # instance's literal first-ever user, who has no one else to ask.
-    org, org_created = await _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db)
+    org, org_created = await _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db, block_invite_only=True)
     membership_approved = is_first_user or org_created
     user_is_active = is_first_user
 

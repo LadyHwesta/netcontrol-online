@@ -113,6 +113,15 @@ class Organization(Base):
     # a public-facing setting -- see routers/orgs.py's dedicated
     # GET/PUT /orgs/{id}/aprs-key for the org-admin-only read/write path.
     aprs_fi_api_key = Column(String(100), nullable=True)
+    # Org-admin-set (issue follow-up): False hides this org from the public
+    # "join an existing organization" picker at registration (GET /orgs,
+    # routers/orgs.py's list_orgs) AND blocks self-registration into it
+    # outright (_get_or_create_org in routers/helpers.py rejects a matching
+    # org_slug), making it effectively invite-only -- the org's own admin
+    # still has a working path in via Admin's "Add Operator" (creates the
+    # account directly, approved immediately), which is entirely unaffected
+    # since it never goes through the public registration endpoint.
+    registration_open = Column(Boolean, nullable=False, default=True)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
     memberships = relationship("OrganizationMembership", back_populates="org", cascade="all, delete-orphan")

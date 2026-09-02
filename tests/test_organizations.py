@@ -381,6 +381,109 @@ class TestOrgEditing:
         assert resp.json()["tagline"] is None
 
 
+class TestInviteOnlyOrgs:
+    """Organization.registration_open (issue follow-up) — an org admin can
+    hide their org from the "join an existing organization" picker at
+    registration and block self-registration into it outright, making it
+    invite-only. The org's own admin still has a working way to add people
+    via Admin's "Add Operator" (POST /admin/users or /orgs/{id}/users),
+    which never goes through the public registration endpoint."""
+
+    def test_new_org_defaults_to_registration_open(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        mine = client.get("/orgs/mine", headers=auth(token)).json()
+        assert mine[0]["registration_open"] is True
+
+    def test_org_admin_can_close_registration(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+
+        resp = client.patch(f"/orgs/{org_id}", json={
+            "name": "Owner Org", "registration_open": False,
+        }, headers=auth(token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["registration_open"] is False
+
+        # Persisted
+        mine = client.get("/orgs/mine", headers=auth(token)).json()
+        assert mine[0]["registration_open"] is False
+
+    def test_closed_org_excluded_from_filtered_picker_but_not_unfiltered_list(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+        client.patch(f"/orgs/{org_id}", json={"name": "Owner Org", "registration_open": False}, headers=auth(token))
+
+        # The public registration picker (?registration_open=true) excludes it
+        picker = client.get("/orgs?registration_open=true").json()
+        assert not any(o["id"] == org_id for o in picker)
+
+        # But the plain, unfiltered /orgs (used by admin-authenticated
+        # pickers -- Add Operator, Reassign, and this org admin's own
+        # edit-form lookup) still includes it -- otherwise there'd be no
+        # way back in, including for the admin to ever re-open it.
+        unfiltered = client.get("/orgs").json()
+        assert any(o["id"] == org_id for o in unfiltered)
+
+    def test_self_registration_blocked_for_invite_only_org(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")  # founds "default"
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+        client.patch(f"/orgs/{org_id}", json={"name": "Owner Org", "registration_open": False}, headers=auth(token))
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2BLOCKED", "name": "Blocked", "email": "blocked@example.com",
+            "password": "testpass123", "org_slug": "default",
+        })
+        assert resp.status_code == 403
+        # No account was created
+        assert not client.post("/auth/login", data={"username": "W2BLOCKED", "password": "testpass123"}).json().get("access_token")
+
+    def test_join_org_endpoint_blocked_for_invite_only_org(self, client):
+        """POST /orgs/join -- an already-logged-in user requesting to join a
+        SECOND org -- is the other genuinely self-service join path and must
+        be blocked the same way registration is."""
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "org-a", "Org A")
+        org_a_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        client.patch(f"/orgs/{org_a_id}", json={"name": "Org A", "registration_open": False}, headers=auth(owner_token))
+
+        # super_token is already active -- avoids also needing to get a
+        # second, unrelated registrant approved just to have a valid token.
+        resp = client.post("/orgs/join", json={"org_slug": "org-a"}, headers=auth(super_token))
+        assert resp.status_code == 403
+
+    def test_admin_can_still_add_operator_to_invite_only_org(self, client, smtp_configured, sent_emails, app_base_url):
+        """The intended way in: Admin > Add Operator, unaffected since it
+        never goes through the public registration endpoint."""
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "org-a", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        client.patch(f"/orgs/{org_id}", json={"name": "Org A", "registration_open": False}, headers=auth(owner_token))
+
+        resp = client.post(f"/orgs/{org_id}/users", headers=auth(owner_token), json={
+            "callsign": "W2INVITED", "name": "Invited", "email": "invited@example.com",
+        })
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["is_active"] is True
+
+    def test_reopening_registration_restores_self_service_join(self, client):
+        register(client, "W1OWN", "Owner", "owner@example.com")
+        token = login(client, "W1OWN")
+        org_id = client.get("/auth/me", headers=auth(token)).json()["current_org_id"]
+        client.patch(f"/orgs/{org_id}", json={"name": "Owner Org", "registration_open": False}, headers=auth(token))
+        client.patch(f"/orgs/{org_id}", json={"name": "Owner Org", "registration_open": True}, headers=auth(token))
+
+        assert any(o["id"] == org_id for o in client.get("/orgs?registration_open=true").json())
+        resp = client.post("/auth/register", json={
+            "callsign": "W2NOWBLOCKED", "name": "Now Fine", "email": "nowfine@example.com",
+            "password": "testpass123", "org_slug": "default",
+        })
+        assert resp.status_code == 201
+
+
 class TestOrgLogo:
     """POST/DELETE/GET /orgs/{id}/logo -- per-org branding (issue follow-up),
     the org-scoped counterpart to the instance-wide POST/DELETE

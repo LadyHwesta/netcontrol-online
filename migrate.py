@@ -608,6 +608,10 @@ MIGRATIONS = [
     # ── Self-service account fields (issue follow-up) ──
     ("users: phone column",
      "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)"),
+
+    # ── Invite-only organizations (issue follow-up) ──
+    ("organizations: registration_open column",
+     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS registration_open BOOLEAN NOT NULL DEFAULT TRUE"),
 ]
 
 # ---------------------------------------------------------------------------

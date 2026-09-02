@@ -56,7 +56,10 @@ async function loadRegOrgPicker() {
   const select = document.getElementById('reg-org-select');
   if (select.dataset.loaded) return;
   try {
-    const orgs = await apiFetch('/orgs');
+    // ?registration_open=true (issue follow-up) -- excludes any org an
+    // admin has marked invite-only; self-registering into one is blocked
+    // server-side too, so showing it here would just be a dead end.
+    const orgs = await apiFetch('/orgs?registration_open=true');
     select.innerHTML = orgs.map(o => `<option value="${o.slug}">${esc(o.name)}</option>`).join('');
     select.dataset.loaded = '1';
   } catch { /* leave empty — join is a no-op if this fails, create still works */ }

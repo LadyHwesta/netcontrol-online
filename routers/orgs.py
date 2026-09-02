@@ -33,7 +33,8 @@ def _org_to_out(org: Organization, cls=OrganizationOut, **extra) -> Organization
     return cls(
         id=org.id, name=org.name, slug=org.slug, website_url=org.website_url,
         banner_message=org.banner_message, tagline=org.tagline,
-        has_logo=_org_logo_file(org.id) is not None, **extra,
+        has_logo=_org_logo_file(org.id) is not None,
+        registration_open=org.registration_open, **extra,
     )
 
 
@@ -74,19 +75,34 @@ async def require_org_admin(org_id: int, current_user: User = Depends(get_curren
 
 
 @router.get("/orgs", response_model=list[OrganizationOut])
-async def list_orgs(db: AsyncSession = Depends(get_db)):
+async def list_orgs(registration_open: Optional[bool] = None, db: AsyncSession = Depends(get_db)):
     """Organizations that actually have someone who could approve a join
-    request — name+slug only — powers the "join an existing organization"
-    picker at registration. No auth required: same trust level as
+    request — name+slug only. No auth required: same trust level as
     callsign/name being visible in the registration form itself, and an
     org's existence isn't sensitive. Excludes an org with no approved admin
     (e.g. its founder was rejected/deleted before anyone else joined) —
     await _delete_orphaned_orgs() cleans those up outright, but this filter is a
     second line of defense against ever listing a dead-end org (issue #1
-    follow-up)."""
-    orgs = (
-        (await db.execute(select(Organization).join(OrganizationMembership, OrganizationMembership.org_id == Organization.id).filter(OrganizationMembership.role == "admin", OrganizationMembership.approved == True).distinct().order_by(Organization.name))).scalars().all()
+    follow-up).
+
+    This one endpoint has two different audiences, so the invite-only
+    filter (issue follow-up) is opt-in via ?registration_open=true rather
+    than baked in: the public "join an existing organization" picker at
+    registration (routers/helpers.py's loadRegOrgPicker()) passes it, since
+    self-registration into an invite-only org is separately blocked
+    server-side anyway (_get_or_create_org) and showing it there would just
+    be a dead end. But three *authenticated admin* call sites also reuse
+    this same endpoint to list every org regardless (the org-edit form
+    finding the admin's own org, a super admin's "add operator"/"reassign"
+    org pickers) -- those must keep seeing invite-only orgs, since Add
+    Operator is the intended way *into* one, and an org admin has to be
+    able to find their own now-hidden org to ever flip this back off."""
+    query = select(Organization).join(OrganizationMembership, OrganizationMembership.org_id == Organization.id).filter(
+        OrganizationMembership.role == "admin", OrganizationMembership.approved == True,
     )
+    if registration_open is not None:
+        query = query.filter(Organization.registration_open == registration_open)
+    orgs = (await db.execute(query.distinct().order_by(Organization.name))).scalars().all()
     return [_org_to_out(org) for org in orgs]
 
 
@@ -108,6 +124,7 @@ class OrganizationUpdate(BaseModel):
     website_url: Optional[str] = None
     banner_message: Optional[str] = None
     tagline: Optional[str] = None
+    registration_open: bool = True
 
 
 @router.patch("/orgs/{org_id}", response_model=OrganizationOut)
@@ -133,6 +150,7 @@ async def update_org(org_id: int, data: OrganizationUpdate, admin: User = Depend
     org.website_url = website or None
     org.banner_message = (data.banner_message or "").strip() or None
     org.tagline = (data.tagline or "").strip() or None
+    org.registration_open = data.registration_open
     await db.commit()
     await db.refresh(org)
     return _org_to_out(org)
@@ -326,7 +344,7 @@ async def join_org(data: OrgJoinRequest, current_user: User = Depends(get_curren
     self-approved) — the caller being active elsewhere doesn't make them a
     trustworthy org founder; a super admin still needs to sign off via the
     existing /admin/users/{id}/approve (issue #1 follow-up)."""
-    org, org_created = await _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db)
+    org, org_created = await _get_or_create_org(data.org_slug, data.org_name, data.org_website_url, db, block_invite_only=True)
     existing = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org.id, OrganizationMembership.user_id == current_user.id,
     ))).scalar_one_or_none()

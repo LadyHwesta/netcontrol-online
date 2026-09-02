@@ -46,6 +46,7 @@ class OrganizationOut(BaseModel):
     banner_message: Optional[str] = None   # org-admin-set, shown at the top of every page to this org's members
     tagline: Optional[str] = None          # org-admin-set per-org branding (issue follow-up)
     has_logo: bool = False                 # computed, not a column -- see routers/helpers.py's _org_logo_file()
+    registration_open: bool = True         # False = invite-only (issue follow-up); see models.py's Organization
 
     model_config = {"from_attributes": True}
 

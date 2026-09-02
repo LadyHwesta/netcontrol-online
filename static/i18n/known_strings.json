@@ -32,6 +32,8 @@
   "aprs.fi API Key",
   "(shared by every net in your org using aprs.fi as its APRS source — free key from",
   "Leave blank to disable aprs.fi lookups org-wide",
+  "Open to registration",
+  "Unchecked hides this organization from the \"join an existing organization\" list at registration, and blocks self-registration into it outright — invite-only, via Add Operator below.",
   "Save Organization",
   "ADD OPERATOR",
   "Create an account directly — useful for seeding an organization with existing operators. They're approved immediately and receive an email with a link to set their own password.",

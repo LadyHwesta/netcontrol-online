@@ -17,6 +17,7 @@ async function loadOrgEditForm() {
     document.getElementById('org-edit-website').value = org.website_url || '';
     document.getElementById('org-edit-tagline').value = org.tagline || '';
     document.getElementById('org-edit-banner').value = org.banner_message || '';
+    document.getElementById('org-edit-registration-open').checked = org.registration_open;
     document.getElementById('org-edit-name').dataset.orgId = org.id;
     const deleteBtn = document.getElementById('org-edit-logo-delete-btn');
     const preview = document.getElementById('org-edit-logo-preview');
@@ -63,10 +64,11 @@ async function saveOrgEdit() {
   const tagline = document.getElementById('org-edit-tagline').value.trim();
   const bannerMessage = document.getElementById('org-edit-banner').value.trim();
   const aprsKey = document.getElementById('org-edit-aprs-key').value.trim();
+  const registrationOpen = document.getElementById('org-edit-registration-open').checked;
   try {
     await apiFetch(`/orgs/${orgId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ name, website_url: websiteUrl || null, banner_message: bannerMessage || null, tagline: tagline || null }),
+      body: JSON.stringify({ name, website_url: websiteUrl || null, banner_message: bannerMessage || null, tagline: tagline || null, registration_open: registrationOpen }),
     });
     await apiFetch(`/orgs/${orgId}/aprs-key`, {
       method: 'PUT',
