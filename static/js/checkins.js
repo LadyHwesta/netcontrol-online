@@ -1162,8 +1162,52 @@ async function savePositionEdit(positionId) {
 function populateKnownZonesList() {
   const dl = document.getElementById('known-zones-list');
   if (!dl) return;
-  const distinctZones = [...new Set(Object.values(evacZones))].sort();
+  // Merges previously-typed zone names with the synced boundary catalog
+  // (issue #27) -- the free-text input itself is unchanged, this only
+  // widens what's offered/autocompleted.
+  const fromRoster = Object.values(evacZones);
+  const fromBoundaries = evacZoneBoundaries.map(b => b.name || b.external_id).filter(Boolean);
+  const distinctZones = [...new Set([...fromRoster, ...fromBoundaries])].sort();
   dl.innerHTML = distinctZones.map(z => `<option value="${esc(z)}">`).join('');
+}
+
+// ── Zone boundaries synced from an external GIS API (issue #27) ──────
+function renderEvacZoneSyncStatus() {
+  const countEl = document.getElementById('evac-zone-sync-count');
+  const syncedEl = document.getElementById('evac-zone-synced-at');
+  if (!countEl || !syncedEl) return;
+  if (evacZoneBoundaries.length === 0) {
+    countEl.textContent = '';
+    syncedEl.textContent = '';
+    return;
+  }
+  countEl.textContent = tn(evacZoneBoundaries.length, '{n} zone', '{n} zones');
+  const latest = evacZoneBoundaries.reduce((max, b) => (b.synced_at > max ? b.synced_at : max), evacZoneBoundaries[0].synced_at);
+  syncedEl.textContent = `${t('Last synced:')} ${new Date(latest).toLocaleString()}`;
+}
+
+function renderEvacZoneMap() {
+  const container = document.getElementById('evac-zone-map-container');
+  if (!container) return;
+  container.style.display = evacZoneBoundaries.length ? '' : 'none';
+  if (evacZoneBoundaries.length) initEvacZoneMap('evac-zone-map-container', evacZoneBoundaries);
+}
+
+async function syncEvacZoneBoundaries() {
+  const btn = document.getElementById('evac-zone-sync-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const result = await apiFetch(`/nets/${currentNetId}/evac-zone-sync`, { method: 'POST' });
+    evacZoneBoundaries = await apiFetch(`/nets/${currentNetId}/evac-zone-boundaries`);
+    populateKnownZonesList();
+    renderEvacZoneSyncStatus();
+    renderEvacZoneMap();
+    toast(tn(result.count, 'Synced {n} evacuation zone', 'Synced {n} evacuation zones'), 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function toggleZoneRoster() {
@@ -1172,6 +1216,14 @@ function toggleZoneRoster() {
   const open = body.style.display === 'none';
   body.style.display = open ? '' : 'none';
   icon.textContent = open ? '▼' : '▶';
+  if (open) {
+    // Lazily init the map only once the panel is actually visible --
+    // Leaflet needs a non-zero-size, visible container to measure
+    // correctly, which a display:none body doesn't provide (same
+    // deferred-init shape as toggleAprsMapPanel in aprs.js).
+    renderEvacZoneMap();
+    setTimeout(() => invalidateEvacZoneMapSize('evac-zone-map-container'), 0);
+  }
 }
 
 function callsignSuffix(cs) {

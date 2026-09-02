@@ -4,7 +4,7 @@ SQLAlchemy models for NetControl Online
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Date, Time, Float, ForeignKey, Text, Boolean, UniqueConstraint, TypeDecorator
+    Column, Integer, String, DateTime, Date, Time, Float, ForeignKey, Text, Boolean, UniqueConstraint, TypeDecorator, JSON
 )
 from sqlalchemy.orm import relationship, declarative_base
 
@@ -225,6 +225,7 @@ class Net(Base):
     sessions = relationship("NetSession", back_populates="net", cascade="all, delete-orphan")
     schedules = relationship("NetSchedule", back_populates="net", cascade="all, delete-orphan")
     evac_zones = relationship("EvacZone", back_populates="net", cascade="all, delete-orphan")
+    evac_zone_boundaries = relationship("EvacZoneBoundary", back_populates="net", cascade="all, delete-orphan")
     shares = relationship("NetShare", back_populates="net", cascade="all, delete-orphan")
     dmr_config = relationship("DmrConfig", back_populates="net", uselist=False, cascade="all, delete-orphan")
     aprs_config = relationship("AprsConfig", back_populates="net", uselist=False, cascade="all, delete-orphan")
@@ -467,6 +468,40 @@ class EvacZone(Base):
 
     def __repr__(self):
         return f"<EvacZone callsign={self.callsign} zone={self.zone}>"
+
+
+class EvacZoneBoundary(Base):
+    """A real evacuation zone polygon synced from an external government
+    GIS API (issue #27) -- the authoritative zone catalog for a net's
+    area, distinct from EvacZone above (a per-callsign free-text roster
+    of what an operator typed at check-in time). Synced on demand (POST
+    /nets/{id}/evac-zone-sync in routers/evac_zones.py), not on a
+    schedule -- the source data (e.g. California's data.ca.gov) updates
+    every ~5 minutes during an active incident, so a cron-based sync
+    would be stale exactly when it matters. Each sync replaces every row
+    for (net_id, source) in one transaction -- see
+    evac_zone_sources.sync_net_evac_zones()."""
+    __tablename__ = "evac_zone_boundaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String(30), nullable=False)             # e.g. "data_ca_gov" -- which adapter produced this row
+    external_id = Column(String(100), nullable=False)       # the source's own zone ID (e.g. ZONE_ID)
+    name = Column(String(200), nullable=True)                # zone name, when the source provides one
+    county = Column(String(100), nullable=True)
+    status = Column(String(50), nullable=True)                # "Evacuation Order" | "Evacuation Warning" | ...
+    geometry = Column(JSON, nullable=False)                    # GeoJSON Polygon/MultiPolygon geometry object
+    source_updated_at = Column(UTCDateTime, nullable=True)     # the source's own last-edited timestamp, if given
+    synced_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    net = relationship("Net", back_populates="evac_zone_boundaries")
+
+    __table_args__ = (
+        UniqueConstraint("net_id", "source", "external_id", name="uq_evac_zone_boundary_net_source_external_id"),
+    )
+
+    def __repr__(self):
+        return f"<EvacZoneBoundary net_id={self.net_id} source={self.source} external_id={self.external_id}>"
 
 
 class TrafficMessage(Base):

@@ -33,11 +33,14 @@ async function openNet(netId) {
 
   // Load evac zones for this net
   evacZones = {};
+  evacZoneBoundaries = [];
   if (currentNetIsAres) {
     try {
       const zones = await apiFetch(`/nets/${netId}/evac-zones`);
       zones.forEach(z => { evacZones[z.callsign] = z.zone; });
+      evacZoneBoundaries = await apiFetch(`/nets/${netId}/evac-zone-boundaries`).catch(() => []);
       populateKnownZonesList();
+      renderEvacZoneSyncStatus();
     } catch {}
   }
   document.getElementById('nav-history').style.display = '';

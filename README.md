@@ -617,6 +617,16 @@ bantime  = 600
 
 Create the log directory first: `sudo mkdir -p /var/log/nettracker && sudo chown netcontrol: /var/log/nettracker`
 
+## Evacuation Zone Data (issue #27)
+
+ARES/ACES nets track which evacuation zone each checked-in station reported (Zone Roster panel, per-callsign free text) — that keeps working exactly as before. On top of it, a net can now sync the *actual* current zone boundaries from an external government GIS API, so operators pick from a real, authoritative list instead of only whatever's been typed before, and the zone map shows the real shape of each zone.
+
+Currently supports **California** ([data.ca.gov's evacuation aggregation layer](https://data.ca.gov/dataset/california-evacuation-aggregation-layer)) — a public ArcGIS FeatureServer, no API key needed. Set the net's **State** field to `CA` (or `California`) on its Edit form; its **Region** field, if set (e.g. `San Luis Obispo`), filters the sync to that county instead of the whole state.
+
+Sync is **on-demand only, not automatic** — click **🔄 Sync Evacuation Zones** in the Zone Roster panel on the live check-in screen. The source updates roughly every 5 minutes during an active incident, so a scheduled/cron sync would routinely be stale right when it matters most; a manual sync always pulls the current data at the moment you need it. Each sync replaces the net's stored zones outright (retired/merged zones simply disappear).
+
+**Adding another state**: `evac_zone_sources.py` holds a small registry (`SOURCES`) of one function per data source — write a `fetch_*` function for the new state's API (its own field names baked in, since these vary by state) and register it, alongside an entry in `STATE_ALIASES` mapping the net's **State** field to it. No schema or router changes needed.
+
 ## UI Translation (argos-translate)
 
 Optional, off by default. Translates the app's own UI into other languages using [Argos Translate](https://github.com/argosopentech/argos-translate), an offline neural machine translation library — no third-party API, no data leaving the server.

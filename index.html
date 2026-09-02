@@ -1188,6 +1188,15 @@
                 <div id="zone-roster-list" style="max-height:240px;overflow-y:auto;font-size:13px">
                   <p class="text-muted" style="margin:0;font-size:12px" data-i18n="Loading…">Loading…</p>
                 </div>
+                <!-- Zone boundaries synced from an external GIS API (issue #27) --
+                     supplements the free-text roster above with real, current
+                     zone polygons; the roster itself is untouched. -->
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--lc-border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-muted)">
+                  <button class="btn btn-ghost btn-sm" id="evac-zone-sync-btn" style="font-size:11px;padding:1px 8px" onclick="syncEvacZoneBoundaries()" data-i18n="🔄 Sync Evacuation Zones">🔄 Sync Evacuation Zones</button>
+                  <span id="evac-zone-sync-count"></span>
+                  <span id="evac-zone-synced-at"></span>
+                </div>
+                <div id="evac-zone-map-container" style="height:280px;display:none;margin-top:8px;border-radius:6px;overflow:hidden"></div>
               </div>
             </div>
 
@@ -1506,8 +1515,8 @@
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/js/report.js?v=21"></script>
   <script src="/static/js/nets.js?v=34"></script>
-  <script src="/static/js/sessions.js?v=33"></script>
-  <script src="/static/js/checkins.js?v=41"></script>
+  <script src="/static/js/sessions.js?v=34"></script>
+  <script src="/static/js/checkins.js?v=42"></script>
   <script src="/static/js/history.js?v=23"></script>
   <script src="/static/js/admin.js?v=45"></script>
   <script src="/static/js/schedules.js?v=24"></script>
@@ -1516,6 +1525,7 @@
   <script src="/static/js/aprs.js?v=40"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
   <script src="/static/js/aprs-map.js?v=41"></script>
+  <script src="/static/js/evac-zone-map.js?v=1"></script>
   <script src="/static/js/app.js?v=27"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 </body>

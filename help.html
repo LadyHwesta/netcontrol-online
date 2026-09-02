@@ -79,6 +79,16 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Real Evacuation Zone Boundaries (v2.39.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>ARES/ACES nets can now sync <strong>real evacuation zone boundaries</strong> from an external GIS API — currently California's data.ca.gov — instead of relying only on hand-typed zone names. Set the net's <strong>State</strong> field to <code>CA</code> (Edit form), then click <strong>🔄 Sync Evacuation Zones</strong> in the live check-in screen's Zone Roster panel.</li>
+              <li>Synced zones show as real, current polygons on a new map in that same panel, color-coded by status (order/warning/shelter-in-place), and their names now show up as suggestions when typing a station's zone at check-in — the existing free-text field itself is unchanged.</li>
+              <li>Sync is manual, not automatic — the source updates roughly every 5 minutes during an active incident, so a scheduled sync would routinely be stale right when it matters. Each sync pulls the current data at that moment.</li>
+              <li>See README's <strong>Evacuation Zone Data</strong> section, including how to add another state's data source.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Push Failures Are Now Logged (v2.38.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Bug fix: a push subscription pywebpush reports as gone (HTTP 404/410) was silently removed with no log line at all — expected cleanup for a subscription that's genuinely gone stale, but it meant a subscription that failed immediately after being created (a real misconfiguration) looked identical in the logs to never having subscribed in the first place. Now logged at INFO.</li>

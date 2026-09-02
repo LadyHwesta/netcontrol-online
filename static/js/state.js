@@ -33,4 +33,5 @@ let editNetId = null;
 let allUsers = [];   // for sharing UI — populated when opening edit form
 let shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [] };
 let evacZones = {};   // callsign → zone, loaded from /nets/{id}/evac-zones
+let evacZoneBoundaries = [];   // synced zone polygons (issue #27), from /nets/{id}/evac-zone-boundaries
 let currentNetScript = null;   // raw (unrendered) net.script text for the open net

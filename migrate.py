@@ -654,6 +654,21 @@ MIGRATIONS = [
          kind VARCHAR(10) NOT NULL,
          content_html TEXT NOT NULL,
          published_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""),
+
+    # ── Evacuation zone boundaries synced from external GIS APIs (issue #27) ──
+    ("table: evac_zone_boundaries",
+     """CREATE TABLE IF NOT EXISTS evac_zone_boundaries (
+         id SERIAL PRIMARY KEY,
+         net_id INTEGER NOT NULL REFERENCES nets(id) ON DELETE CASCADE,
+         source VARCHAR(30) NOT NULL,
+         external_id VARCHAR(100) NOT NULL,
+         name VARCHAR(200),
+         county VARCHAR(100),
+         status VARCHAR(50),
+         geometry JSONB NOT NULL,
+         source_updated_at TIMESTAMPTZ,
+         synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         UNIQUE (net_id, source, external_id))"""),
 ]
 
 # ---------------------------------------------------------------------------
