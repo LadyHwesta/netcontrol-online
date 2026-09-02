@@ -37,6 +37,7 @@
         <div id="sidebar-user-info">
           <span data-i18n="Signed in as">Signed in as</span> <strong id="sidebar-callsign"></strong>
         </div>
+        <select id="org-switcher" class="btn btn-ghost btn-sm" onchange="switchCurrentOrg(this.value)" title="Organization" style="display:none"></select>
         <select id="theme-select" class="btn btn-ghost btn-sm" onchange="saveTheme(this.value)" title="Theme">
           <option value="lcars">LCARS</option>
           <option value="dark">Dark</option>
@@ -546,7 +547,7 @@
 </div>
 <script src="/static/js/state.js?v=24"></script>
 <script src="/static/js/utils.js?v=22"></script>
-<script src="/static/js/auth.js?v=34"></script>
+<script src="/static/js/auth.js?v=35"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/js/branding.js?v=25"></script>
@@ -589,6 +590,7 @@
     if (cs) cs.textContent = currentUser.callsign;
     const navAdmin = document.getElementById('nav-admin');
     if (navAdmin) navAdmin.style.display = '';
+    loadOrgSwitcher();   // fire-and-forget; non-blocking -- populates #org-switcher (issue follow-up: previously only on the Nets page)
     await loadBranding();
       loadOrgBanner();   // fire-and-forget; non-blocking
     syncLangFromUser(currentUser);   // fire-and-forget; non-blocking

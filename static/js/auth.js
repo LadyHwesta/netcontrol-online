@@ -383,10 +383,22 @@ async function switchCurrentOrg(orgId) {
   try {
     currentUser = await apiFetch('/auth/current-org', { method: 'PATCH', body: JSON.stringify({ org_id: Number(orgId) }) });
     toast('Switched organization', 'success');
-    loadOrgSwitcher();   // re-derive nav-admin visibility for the new org
-    loadOrgBanner();     // re-applies branding + banner message for the new org
-    await loadNets();
-    showView('nets');
+    // #org-switcher now lives on all 5 pages (issue follow-up -- it used to
+    // be on the Nets page only), but loadNets()/showView() (nets.js/
+    // views.js) are index.html-only -- calling them unconditionally would
+    // throw on the other four. Refreshing in place only makes sense where
+    // there's a net list to refresh anyway; everywhere else, a reload is
+    // both simplest and correct, since that page's own init already
+    // re-derives branding/nav-admin/its own content for the new org from
+    // scratch on load.
+    if (typeof loadNets === 'function' && typeof showView === 'function') {
+      loadOrgSwitcher();   // re-derive nav-admin visibility for the new org
+      loadOrgBanner();     // re-applies branding + banner message for the new org
+      await loadNets();
+      showView('nets');
+    } else {
+      location.reload();
+    }
   } catch (e) {
     toast(e.message, 'error');
     loadOrgSwitcher();   // revert the dropdown to the actual current org
