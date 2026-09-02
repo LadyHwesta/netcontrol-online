@@ -209,6 +209,25 @@
        already pair dark text with a bright fill. */
     [data-theme="matrix"] .btn-primary:hover:not(:disabled) { color: #000000; }
 
+    /* The (non-active) sidebar nav buttons default to a solid --lc-blue
+       fill -- fine as a small text/link color (kept as-is, unchanged,
+       everywhere else it's used: the footer, badges, muted labels...) but
+       far too loud as a big button fill for this theme (issue follow-up).
+       Swapped to a dark panel fill with --lc-blue for the label text
+       instead -- keeps the color the request specifically liked, just as
+       text rather than a block; a thin green edge (this theme's "thin
+       lines" motif) gives the button definition against the sidebar,
+       which otherwise barely separates in luminance from this fill. */
+    [data-theme="matrix"] .sidebar-btn:not(.active) {
+      background: var(--surface2);
+      color: var(--lc-blue);
+      border: 1px solid #0F2A1A;
+    }
+    [data-theme="matrix"] .sidebar-btn:not(.active):hover {
+      background: #061D04;
+      border-color: #00FF41;
+    }
+
     [data-theme="earth"] {
       /* Earth Tones — warm terracotta/ochre/sage, a calmer palette than the
          other four but still leaning into real color instead of neutral gray. */
