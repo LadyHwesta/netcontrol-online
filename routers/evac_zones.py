@@ -129,7 +129,11 @@ async def sync_evac_zones(net_id: int, current_user: User = Depends(get_current_
     try:
         count = await evac_zone_sources.sync_net_evac_zones(net, db)
     except evac_zone_sources.UnsupportedSourceError:
-        raise HTTPException(400, f"No evacuation zone data source is available for state '{net.state or '(not set)'}' yet")
+        raise HTTPException(
+            400,
+            f"No evacuation zone data source is available for state '{net.state or '(not set)'}' "
+            f"or region '{net.region or '(not set)'}' yet",
+        )
     except Exception as exc:
         raise HTTPException(502, f"Failed to fetch evacuation zone data: {exc}")
     return EvacZoneSyncOut(count=count, synced_at=datetime.now(timezone.utc))

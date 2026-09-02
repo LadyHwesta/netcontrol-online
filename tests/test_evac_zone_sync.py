@@ -1,14 +1,18 @@
 """
 Tests for evacuation zone boundary syncing from external GIS APIs (issue #27):
-  - evac_zone_sources.py: fetch_data_ca_gov() parsing, select_source_for_state(),
-    sync_net_evac_zones() replace-on-resync behavior.
+  - evac_zone_sources.py: fetch_data_ca_gov()/fetch_sonoma_county_gov()
+    parsing, select_source_for_state()/select_source_for_county(),
+    sync_net_evac_zones() multi-source + replace-on-resync behavior.
   - routers/evac_zones.py: POST /nets/{id}/evac-zone-sync,
     GET /nets/{id}/evac-zone-boundaries.
 
-The fixture data below mirrors the real data.ca.gov ArcGIS FeatureServer's
-actual field shapes, confirmed by querying it live while planning this
-feature (ZONE_NAME is frequently null in practice; ZONE_ID is always
-populated).
+The fixture data below mirrors each real ArcGIS FeatureServer's actual
+field shapes, confirmed by querying both live while building this feature
+(data.ca.gov's ZONE_NAME is frequently null in practice, ZONE_ID always
+populated; Sonoma County's own catalog carries a zone_status of "Normal"
+on every zone outside an active incident, unlike the statewide feed which
+never contains a "Normal" row at all -- see evac_zone_sources.py's module
+docstring for why both exist).
 """
 
 import httpx
@@ -38,6 +42,22 @@ SAMPLE_FEATURE_COLLECTION = {
     ],
 }
 
+SAMPLE_SONOMA_COLLECTION = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {"Jurisdiction": "City of Sonoma", "ZoneNumber": "SO-C01", "zone_status": "Normal", "Summary": "Southeast City of Sonoma"},
+            "geometry": {"type": "Polygon", "coordinates": [[[-122.5, 38.2], [-122.5, 38.3], [-122.4, 38.3], [-122.4, 38.2], [-122.5, 38.2]]]},
+        },
+        {
+            "type": "Feature",
+            "properties": {"Jurisdiction": "City of Rohnert Park", "ZoneNumber": "RP-001", "zone_status": "Normal", "Summary": "Northwest Rohnert Park"},
+            "geometry": {"type": "Polygon", "coordinates": [[[-122.7, 38.3], [-122.7, 38.4], [-122.6, 38.4], [-122.6, 38.3], [-122.7, 38.3]]]},
+        },
+    ],
+}
+
 
 class CallList(list):
     """Plain list can't take arbitrary attributes -- subclass so a
@@ -48,18 +68,25 @@ class CallList(list):
 
 @pytest.fixture
 def mock_ca_fetch(monkeypatch):
-    """Monkeypatches httpx.AsyncClient so fetch_data_ca_gov never hits the
-    real network -- records each request's params and returns
-    `.response` (swappable mid-test for a resync scenario)."""
+    """Monkeypatches httpx.AsyncClient so neither fetch_data_ca_gov nor
+    fetch_sonoma_county_gov ever hits the real network -- records each
+    request's params and routes the response by URL, so a single fixture
+    covers a net that syncs from both sources at once. `.response`/
+    `.sonoma_response` are swappable mid-test (e.g. for a resync
+    scenario)."""
     calls = CallList()
     calls.response = SAMPLE_FEATURE_COLLECTION
+    calls.sonoma_response = SAMPLE_SONOMA_COLLECTION
 
     class FakeResponse:
+        def __init__(self, data):
+            self._data = data
+
         def raise_for_status(self):
             pass
 
         def json(self):
-            return calls.response
+            return self._data
 
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):
@@ -73,7 +100,9 @@ def mock_ca_fetch(monkeypatch):
 
         async def get(self, url, params=None):
             calls.append({"url": url, "params": params})
-            return FakeResponse()
+            if url == evac_zone_sources.SONOMA_FEATURE_SERVER_QUERY_URL:
+                return FakeResponse(calls.sonoma_response)
+            return FakeResponse(calls.response)
 
     monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
     return calls
@@ -137,6 +166,32 @@ class TestFetchDataCaGov:
         assert zones == []
 
 
+class TestFetchSonomaCountyGov:
+    async def test_parses_features_into_normalized_dicts(self, mock_ca_fetch):
+        zones = await evac_zone_sources.fetch_sonoma_county_gov(None)
+        assert len(zones) == 2
+        assert zones[0]["external_id"] == "SO-C01"
+        assert zones[0]["name"] == "Southeast City of Sonoma"
+        assert zones[0]["county"] == "City of Sonoma"
+        assert zones[0]["status"] == "Normal"   # confirmed live: the whole catalog, not an active-only feed
+        assert zones[0]["geometry"]["type"] == "Polygon"
+
+    async def test_no_county_filter_applied(self, mock_ca_fetch):
+        """Unlike fetch_data_ca_gov, this service is already scoped to
+        Sonoma -- the county argument is accepted (registry signature
+        consistency) but never used to filter."""
+        await evac_zone_sources.fetch_sonoma_county_gov("anything at all")
+        assert mock_ca_fetch[0]["params"]["where"] == "1=1"
+
+    async def test_features_missing_zone_number_are_skipped(self, mock_ca_fetch):
+        mock_ca_fetch.sonoma_response = {
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature", "properties": {"ZoneNumber": None}, "geometry": {"type": "Polygon", "coordinates": []}}],
+        }
+        zones = await evac_zone_sources.fetch_sonoma_county_gov(None)
+        assert zones == []
+
+
 class TestSelectSourceForState:
     def test_matches_ca_case_insensitively(self):
         assert evac_zone_sources.select_source_for_state("ca") == "data_ca_gov"
@@ -147,6 +202,18 @@ class TestSelectSourceForState:
         assert evac_zone_sources.select_source_for_state("WA") is None
         assert evac_zone_sources.select_source_for_state(None) is None
         assert evac_zone_sources.select_source_for_state("") is None
+
+
+class TestSelectSourceForCounty:
+    def test_matches_sonoma_with_or_without_county_suffix(self):
+        assert evac_zone_sources.select_source_for_county("Sonoma") == "sonoma_county_gov"
+        assert evac_zone_sources.select_source_for_county("Sonoma County") == "sonoma_county_gov"
+        assert evac_zone_sources.select_source_for_county("sonoma county") == "sonoma_county_gov"
+
+    def test_no_match_for_unsupported_or_missing_region(self):
+        assert evac_zone_sources.select_source_for_county("Marin") is None
+        assert evac_zone_sources.select_source_for_county(None) is None
+        assert evac_zone_sources.select_source_for_county("") is None
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +239,36 @@ class TestSyncEndpoint:
         n = client.post("/nets", json={"name": "No State Net", "is_ares": True}, headers=admin_headers).json()
         resp = client.post(f"/nets/{n['id']}/evac-zone-sync", headers=admin_headers)
         assert resp.status_code == 400
+
+    def test_county_source_works_even_with_unsupported_state(self, client, admin_headers, mock_ca_fetch):
+        """A net whose State doesn't match any state-level source can
+        still sync purely from a county-level source -- the two match
+        independently."""
+        n = client.post("/nets", json={
+            "name": "Sonoma-only Net", "is_ares": True, "state": "OR", "region": "Sonoma County",
+        }, headers=admin_headers).json()
+        resp = client.post(f"/nets/{n['id']}/evac-zone-sync", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["count"] == 2
+
+        boundaries = client.get(f"/nets/{n['id']}/evac-zone-boundaries", headers=admin_headers).json()
+        assert {b["source"] for b in boundaries} == {"sonoma_county_gov"}
+
+    def test_syncs_both_state_and_county_sources_at_once(self, client, admin_headers, mock_ca_fetch):
+        """A CA net whose Region also matches a registered county source
+        pulls from both -- the statewide active-incidents feed AND the
+        county's full catalog, coexisting via the (net_id, source,
+        external_id) uniqueness EvacZoneBoundary was designed for."""
+        n = client.post("/nets", json={
+            "name": "Sonoma ARES Net", "is_ares": True, "state": "CA", "region": "Sonoma County",
+        }, headers=admin_headers).json()
+        resp = client.post(f"/nets/{n['id']}/evac-zone-sync", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["count"] == 4   # 2 from data_ca_gov + 2 from sonoma_county_gov
+
+        boundaries = client.get(f"/nets/{n['id']}/evac-zone-boundaries", headers=admin_headers).json()
+        assert len(boundaries) == 4
+        assert {b["source"] for b in boundaries} == {"data_ca_gov", "sonoma_county_gov"}
 
     def test_successful_sync_creates_boundaries(self, client, admin_headers, mock_ca_fetch):
         n = _ca_net(client, admin_headers)
