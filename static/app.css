@@ -27,7 +27,7 @@
       --on-accent:      #000000;
       --overlay-weak:   rgba(255,255,255,.06);
       --overlay-med:    rgba(255,255,255,.10);
-      --overlay-strong: rgba(255,255,255,.14);
+      --overlay-strong: rgba(255,255,255,.36);
       --hairline:       rgba(255,255,255,.08);
       /* Tinted badge fills */
       --badge-green-bg:  #002a1a;
@@ -46,7 +46,7 @@
       --text-muted: #A0A8B8; --lc-border: #333333; --lc-muted: #A0A8B8;
       --on-accent: #0A0A0A;
       --overlay-weak: rgba(255,255,255,.05); --overlay-med: rgba(255,255,255,.09);
-      --overlay-strong: rgba(255,255,255,.13); --hairline: rgba(255,255,255,.08);
+      --overlay-strong: rgba(255,255,255,.36); --hairline: rgba(255,255,255,.08);
       --badge-green-bg: #0f2318; --badge-blue-bg: #1a2035; --badge-orange-bg: #2b1f0f;
       --badge-purple-bg: #241a33;
       --accent-tint: rgba(232,152,61,.15);
@@ -61,7 +61,7 @@
       --text-muted: #56606E; --lc-border: #D8D8D4; --lc-muted: #56606E;
       --on-accent: #FFFFFF;
       --overlay-weak: rgba(0,0,0,.04); --overlay-med: rgba(0,0,0,.07);
-      --overlay-strong: rgba(0,0,0,.11); --hairline: rgba(0,0,0,.10);
+      --overlay-strong: rgba(0,0,0,.45); --hairline: rgba(0,0,0,.10);
       --badge-green-bg: #e3f5ea; --badge-blue-bg: #e6ebfa; --badge-orange-bg: #fbeadd;
       --badge-purple-bg: #f1e6fa;
       --accent-tint: rgba(201,116,0,.12);
@@ -79,7 +79,7 @@
       --badge-green-bg: #0A0A0A; --badge-blue-bg: #0A0A0A; --badge-orange-bg: #0A0A0A;
       --badge-purple-bg: #0A0A0A;
       --accent-tint: rgba(255,176,0,.20);
-      --overlay-strong: rgba(255,255,255,.32); --hairline: rgba(255,255,255,.35);
+      --overlay-strong: rgba(255,255,255,.40); --hairline: rgba(255,255,255,.35);
     }
 
     /* ── Fun/colorful themes (issue follow-up) — same token contract as every
@@ -99,7 +99,7 @@
       --text-muted: #E8A0C8; --lc-border: #4D1A3D; --lc-muted: #E8A0C8;
       --on-accent: #1A0714;
       --overlay-weak: rgba(255,255,255,.06); --overlay-med: rgba(255,255,255,.10);
-      --overlay-strong: rgba(255,255,255,.15); --hairline: rgba(255,255,255,.10);
+      --overlay-strong: rgba(255,255,255,.36); --hairline: rgba(255,255,255,.10);
       --badge-green-bg: #0d2e24; --badge-blue-bg: #0d2b33; --badge-orange-bg: #3d0f28;
       --badge-purple-bg: #2e1030;
       --accent-tint: rgba(255,46,147,.18);
@@ -115,7 +115,7 @@
       --text-muted: #B39DDB; --lc-border: #34275A; --lc-muted: #B39DDB;
       --on-accent: #14091F;
       --overlay-weak: rgba(255,255,255,.06); --overlay-med: rgba(255,255,255,.10);
-      --overlay-strong: rgba(255,255,255,.15); --hairline: rgba(255,255,255,.09);
+      --overlay-strong: rgba(255,255,255,.36); --hairline: rgba(255,255,255,.09);
       --badge-green-bg: #0f2b27; --badge-blue-bg: #191540; --badge-orange-bg: #2a1440;
       --badge-purple-bg: #241247;
       --accent-tint: rgba(168,85,247,.18);
@@ -131,7 +131,7 @@
       --text-muted: #7FB3E0; --lc-border: #1E3A5F; --lc-muted: #7FB3E0;
       --on-accent: #041018;
       --overlay-weak: rgba(255,255,255,.06); --overlay-med: rgba(255,255,255,.10);
-      --overlay-strong: rgba(255,255,255,.15); --hairline: rgba(255,255,255,.09);
+      --overlay-strong: rgba(255,255,255,.36); --hairline: rgba(255,255,255,.09);
       --badge-green-bg: #072a20; --badge-blue-bg: #101b3f; --badge-orange-bg: #0c2847;
       --badge-purple-bg: #1c1440;
       --accent-tint: rgba(46,158,255,.18);
@@ -166,7 +166,7 @@
       --text-muted: #008F11; --lc-border: #00FF41; --lc-muted: #008F11;
       --on-accent: #000000;
       --overlay-weak: rgba(0,255,65,.06); --overlay-med: rgba(0,255,65,.10);
-      --overlay-strong: rgba(0,255,65,.16); --hairline: rgba(0,255,65,.12);
+      --overlay-strong: rgba(0,255,65,.43); --hairline: rgba(0,255,65,.12);
       --badge-green-bg: #05230f; --badge-blue-bg: #04241f; --badge-orange-bg: #052a12;
       --badge-purple-bg: #2a0526;
       --accent-tint: rgba(0,255,65,.16);
@@ -239,7 +239,7 @@
       --text-muted: #B8A489; --lc-border: #4A3A2C; --lc-muted: #B8A489;
       --on-accent: #1A1410;
       --overlay-weak: rgba(255,245,230,.06); --overlay-med: rgba(255,245,230,.10);
-      --overlay-strong: rgba(255,245,230,.14); --hairline: rgba(255,245,230,.10);
+      --overlay-strong: rgba(255,245,230,.37); --hairline: rgba(255,245,230,.10);
       --badge-green-bg: #26301a; --badge-blue-bg: #1c2b26; --badge-orange-bg: #33200f;
       --badge-purple-bg: #2c1c22;
       --accent-tint: rgba(193,101,47,.18);
@@ -435,6 +435,13 @@
       font-family: inherit;
     }
     .form-control:focus { border-bottom-color: var(--lc-gold); background: var(--surface2); }
+    /* Placeholder text (issue follow-up) -- every theme's --overlay-strong
+       was tuned (in each [data-theme] block above) to put this around
+       3.3:1 contrast against --surface, roughly doubling what it was
+       (previously ~1.3-1.6:1 on every dark theme -- essentially invisible,
+       since a low-alpha white/accent overlay barely lifts off an
+       already-dark surface) while staying visibly dimmer than real typed
+       --text, which is what a placeholder is supposed to look like. */
     .form-control::placeholder { color: var(--overlay-strong); }
     select.form-control { cursor: pointer; }
     /* The native time/date picker icon (Chrome/Safari's calendar-picker-indicator)
