@@ -93,7 +93,7 @@ That's the core loop. Everything else — sharing, scheduling, ARES activations,
 ## What's next?
 
 - **Brand it** — Admin → Branding: organization name, tagline, logo.
-- **Add your team** — Admin → Operators → **Add Operator** creates an account directly (they get an email to set their own password), or have them self-register and approve them from the same page.
+- **Add your team** — Admin → Organization → **Add Operator** creates an account directly (they get an email to set their own password), or have them self-register and approve them from the same page.
 - **List a net publicly** — check **List in Public Net Directory** on a net's Edit form; it shows up at `/directory` with no login required.
 - **Turn on email** — fill in `SMTP_*` in `.env` so approvals, reminders, and notifications actually send.
 - **Turn on bot protection** — set `CAPTCHA_PROVIDER` in `.env` (Turnstile, reCAPTCHA, or the self-contained ALTCHA — see `.env.example`).
