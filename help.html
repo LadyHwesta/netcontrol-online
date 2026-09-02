@@ -74,6 +74,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Organization Tab Renamed; Slow Query Text Explained (v2.35.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Admin's <strong>Operators</strong> tab is now called <strong>Organization</strong> — it's always held more than just the operator list (Your Organization's settings, Add Operator, and the pending/member tables).</li>
+              <li>DB Stats → Slowest Queries showing <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">&lt;insufficient privilege&gt;</code> for every row now explains why instead of just showing it: your database role can see the call counts/timings but needs the <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">pg_read_all_stats</code> role to read the actual query text. See the README's "Database Stats (Admin)" section for the one-line <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">GRANT</code> to fix it.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Placeholder Text Brightened on Dark Themes (v2.35.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Empty form fields' example/hint text (e.g. "555-123-4567") was nearly invisible on every dark theme — Dark, LCARS, Pink, Purple, Blue, Matrix, Earth, and High Contrast — roughly doubled in contrast so it's actually legible. Light theme had the same issue and got the same fix.</li>

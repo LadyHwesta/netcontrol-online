@@ -164,6 +164,17 @@ sudo systemctl restart postgresql
 
 # 3. Enable the extension in this app's own database (once).
 sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements;"
+
+# 4. If the app connects as its own, non-superuser role (recommended --
+#    and the common case, since a superuser role for the app itself is a
+#    bad idea) rather than the postgres superuser, that role also needs
+#    permission to actually READ the query *text* of statements it looks
+#    up here -- without this, the panel populates but every row's query
+#    column shows the literal text "<insufficient privilege>" instead
+#    (call counts/timings are unaffected either way; only the query text
+#    itself is gated). Grant it once, using your app's actual role name
+#    from DATABASE_URL:
+sudo -u postgres psql -d ham_net_tracker -c "GRANT pg_read_all_stats TO your_app_db_role;"
 ```
 
 Use your actual database name from `DATABASE_URL` in `.env` if it's not `ham_net_tracker`. Once enabled, the Slow Queries panel starts populating immediately — no app restart or `migrate.py` run needed, it reads `pg_stat_statements` directly.

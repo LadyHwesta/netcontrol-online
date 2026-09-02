@@ -499,6 +499,28 @@ async def admin_db_stats(admin: User = Depends(require_admin), db: AsyncSession 
                 )
                 for r in slow_rows
             ]
+            # Postgres itself redacts the query TEXT (never the numeric
+            # calls/timing columns above, which stay visible regardless) to
+            # this exact literal string for any row not owned by the
+            # current role, unless it's a superuser or holds pg_read_all_stats
+            # (issue follow-up -- every row showed this with no explanation
+            # at all, since the query above succeeds and returns real rows,
+            # just with unreadable text; the extension-not-installed branch
+            # below already has a clear note, this didn't). Most likely
+            # cause on a deployment that (correctly) runs the app as a
+            # scoped-down, non-superuser role: migrate.py or initial setup
+            # ran as a broader/owner role, so pg_stat_statements' recorded
+            # userid for these rows doesn't match the app's own connecting
+            # role. The numeric columns are still genuinely useful even
+            # with the query text redacted, so the rows are kept, not
+            # dropped -- this just explains what the reader is looking at.
+            if any(q.query == "<insufficient privilege>" for q in slow_queries):
+                slow_queries_note = (
+                    "Query text is redacted (“<insufficient privilege>”) because this "
+                    "database role can't view statements it didn't itself run -- grant it the "
+                    "pg_read_all_stats role: `GRANT pg_read_all_stats TO <your_app_db_role>;` "
+                    "(run once, as a superuser). Call counts/timings above are accurate regardless."
+                )
         except Exception as exc:
             await db.rollback()  # the failed statement leaves the transaction unusable otherwise
             # SQLAlchemy's asyncpg adapter wraps the real driver error in its
