@@ -12,8 +12,10 @@ from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import activitypub_delivery
+import activitypub_signing
 from database import get_db
-from models import Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrgEnabledLanguage, SystemSetting, User
+from models import ActivityPubFollower, Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrgEnabledLanguage, SystemSetting, User
 from routers import helpers
 from routers.deps import get_current_user
 from routers.helpers import _get_or_create_org, _net_to_out, _org_logo_file
@@ -185,6 +187,64 @@ async def update_org_aprs_key(org_id: int, data: OrgAprsKeyUpdate, admin: User =
     org.aprs_fi_api_key = (data.aprs_fi_api_key or "").strip() or None
     await db.commit()
     return OrgAprsKeyOut(aprs_fi_api_key=org.aprs_fi_api_key)
+
+
+# ---------------------------------------------------------------------------
+# Fediverse participation (issue follow-up) — org-admin enable/disable +
+# status. The actual public-facing ActivityPub protocol endpoints (actor
+# document, WebFinger, inbox, ...) live in routers/activitypub.py instead,
+# since those must be reachable with no auth at all; this pair is the only
+# ActivityPub-related surface that needs an org admin logged in.
+# ---------------------------------------------------------------------------
+
+class OrgActivityPubOut(BaseModel):
+    enabled: bool
+    handle: Optional[str] = None
+    actor_url: Optional[str] = None
+    follower_count: int = 0
+
+
+class OrgActivityPubUpdate(BaseModel):
+    enabled: bool
+
+
+@router.get("/orgs/{org_id}/activitypub", response_model=OrgActivityPubOut)
+async def get_org_activitypub(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    if not org.activitypub_enabled:
+        return OrgActivityPubOut(enabled=False)
+    follower_count = (await db.execute(
+        select(func.count(ActivityPubFollower.id)).filter(ActivityPubFollower.org_id == org.id)
+    )).scalar()
+    return OrgActivityPubOut(
+        enabled=True,
+        handle=activitypub_delivery.build_handle(org),
+        actor_url=activitypub_delivery.build_actor_id(org),
+        follower_count=follower_count,
+    )
+
+
+@router.put("/orgs/{org_id}/activitypub", response_model=OrgActivityPubOut)
+async def update_org_activitypub(org_id: int, data: OrgActivityPubUpdate, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+    """Enabling generates the org's RSA keypair the first time only --
+    never regenerated on later enable/disable toggles, since an existing
+    remote follower's cached publicKeyPem would silently break otherwise
+    (see activitypub_delivery.py/the Organization model's own comment).
+    Disabling just flips the flag; the keypair and follower list are kept,
+    so re-enabling resumes posting to the same followers."""
+    if data.enabled and not activitypub_delivery.activitypub_configured():
+        raise HTTPException(400, "APP_BASE_URL must be configured on this instance before Fediverse participation can be enabled")
+    org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    if data.enabled and not org.activitypub_private_key:
+        org.activitypub_private_key, org.activitypub_public_key = activitypub_signing.generate_keypair()
+    org.activitypub_enabled = data.enabled
+    await db.commit()
+    await db.refresh(org)
+    return await get_org_activitypub(org_id, admin, db)
 
 
 # ---------------------------------------------------------------------------

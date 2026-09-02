@@ -94,6 +94,44 @@ async function saveOrgEdit() {
 }
 
 // ============================================================
+// FEDIVERSE / ACTIVITYPUB (issue follow-up)
+// ============================================================
+// Separate card/endpoints from the org-edit form above -- a status widget
+// (live handle + follower count) rather than a plain saved field, same
+// reasoning as why the aprs.fi key already gets its own dedicated
+// GET/PUT pair instead of folding into PATCH /orgs/{id}.
+async function loadOrgActivityPubStatus() {
+  const orgId = currentUser.current_org_id;
+  if (!orgId) return;
+  document.getElementById('org-activitypub-enabled').dataset.orgId = orgId;
+  try {
+    const status = await apiFetch(`/orgs/${orgId}/activitypub`);
+    document.getElementById('org-activitypub-enabled').checked = status.enabled;
+    const statusEl = document.getElementById('org-activitypub-status');
+    if (status.enabled) {
+      document.getElementById('org-activitypub-handle').textContent = '@' + status.handle;
+      document.getElementById('org-activitypub-followers').textContent = status.follower_count;
+      statusEl.style.display = '';
+    } else {
+      statusEl.style.display = 'none';
+    }
+  } catch { /* not an org admin for this org -- leave the toggle at its default (off) */ }
+}
+
+async function toggleOrgActivityPub(enabled) {
+  const orgId = document.getElementById('org-activitypub-enabled').dataset.orgId;
+  if (!orgId) return;
+  try {
+    await apiFetch(`/orgs/${orgId}/activitypub`, { method: 'PUT', body: JSON.stringify({ enabled }) });
+    toast(enabled ? t('Fediverse participation enabled') : t('Fediverse participation disabled'), 'success');
+    await loadOrgActivityPubStatus();
+  } catch (e) {
+    document.getElementById('org-activitypub-enabled').checked = !enabled;
+    toast(e.message, 'error');
+  }
+}
+
+// ============================================================
 // ADD OPERATOR (issue #1 follow-up) — admin-created accounts, auto-approved.
 // An org admin always seeds into their own current org (no picker -- that's
 // the only org they can act on anyway). A super admin gets an org picker

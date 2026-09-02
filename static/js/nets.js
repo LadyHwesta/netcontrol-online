@@ -284,6 +284,7 @@ async function editNet(id) {
   document.getElementById('net-reminder-minutes').value = n.reminder_minutes_before || '';
   onReminderToggle();
   document.getElementById('net-public-listed').checked = !!n.public_listed;
+  document.getElementById('net-activitypub-announce').checked = !!n.activitypub_announce;
   document.getElementById('net-band').value = n.band || '';
   document.getElementById('net-mode').value = n.mode || '';
   document.getElementById('net-ctcss-tone').value = n.ctcss_tone || '';
@@ -338,6 +339,7 @@ async function saveNet() {
   const reminderMinutesRaw = document.getElementById('net-reminder-minutes').value.trim();
   const reminder_minutes_before = reminder_enabled ? (parseInt(reminderMinutesRaw, 10) || 30) : null;
   const public_listed = document.getElementById('net-public-listed').checked;
+  const activitypub_announce = document.getElementById('net-activitypub-announce').checked;
   const band = document.getElementById('net-band').value.trim() || null;
   const mode = document.getElementById('net-mode').value.trim() || null;
   const ctcss_tone = document.getElementById('net-ctcss-tone').value.trim() || null;
@@ -348,7 +350,7 @@ async function saveNet() {
   if (!name) return toast(t('Net name is required'), 'error');
   try {
     if (editNetId) {
-      await apiFetch(`/nets/${editNetId}`, { method: 'PUT', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
+      await apiFetch(`/nets/${editNetId}`, { method: 'PUT', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, activitypub_announce, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
       // Sharing also has its own "Save Sharing" button below, but folding it into
       // this main save too means checking a share box and clicking the obvious
       // "save the form" button actually persists it -- previously that button
@@ -361,7 +363,7 @@ async function saveNet() {
       await saveAprsConfigIfVisible(editNetId);
       toast(t('Net updated'));
     } else {
-      await apiFetch('/nets', { method: 'POST', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
+      await apiFetch('/nets', { method: 'POST', body: JSON.stringify({ name, frequency, dmr_talkgroup, description, script, net_type, is_ares, has_broadcast, broadcast_label, reminder_enabled, reminder_minutes_before, public_listed, activitypub_announce, aprs_map_enabled, band, mode, ctcss_tone, region, state, website }) });
       toast(t('Net created'));
     }
     cancelNetForm();

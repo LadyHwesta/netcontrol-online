@@ -63,6 +63,7 @@ class NetOut(BaseModel):
     has_broadcast: bool = False
     broadcast_label: Optional[str] = None
     public_listed: bool = False
+    activitypub_announce: bool = False
     aprs_map_enabled: bool = False
     aprs_default_lat: Optional[float] = None
     aprs_default_lon: Optional[float] = None

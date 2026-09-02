@@ -129,6 +129,27 @@
           <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()" data-i18n="Save Organization">Save Organization</button>
         </div>
 
+        <!-- Fediverse participation (issue follow-up) -- a separate card
+             (not folded into "Save Organization" above) since it's a status
+             widget with its own live handle/follower count, not a plain form
+             field. -->
+        <div class="card" style="margin-bottom:16px;max-width:600px">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="🐘 FEDIVERSE">🐘 FEDIVERSE</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Give your organization its own Fediverse account (works with Mastodon and similar) that posts automatically when a net session starts and again when it ends. Turn on Announce on Fediverse for individual nets (Nets → Edit) once enabled here.">
+            Give your organization its own Fediverse account (works with Mastodon and similar) that posts
+            automatically when a net session starts and again when it ends. Turn on <strong>Announce on
+            Fediverse</strong> for individual nets (Nets → Edit) once enabled here.
+          </p>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="org-activitypub-enabled" style="width:auto" onchange="toggleOrgActivityPub(this.checked)" />
+            <span data-i18n="Enable Fediverse participation">Enable Fediverse participation</span>
+          </label>
+          <div id="org-activitypub-status" style="display:none;font-size:13px">
+            <div><span class="text-muted" data-i18n="Handle">Handle</span>: <span class="mono" id="org-activitypub-handle"></span></div>
+            <div style="margin-top:4px"><span class="text-muted" data-i18n="Followers">Followers</span>: <span id="org-activitypub-followers"></span></div>
+          </div>
+        </div>
+
         <!-- Add operator directly (issue #1 follow-up). The organization picker
              below is super-admin only (issue follow-up) -- an org admin can only
              ever seed their own current org anyway, so for them this always
@@ -551,7 +572,7 @@
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/js/branding.js?v=25"></script>
-<script src="/static/js/admin.js?v=44"></script>
+<script src="/static/js/admin.js?v=45"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {
@@ -596,6 +617,7 @@
     syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
 
     loadOrgEditForm();   // fire-and-forget; non-blocking — shown for org admins and super admins alike
+    loadOrgActivityPubStatus();   // fire-and-forget; non-blocking
 
     if (orgAdminOnly) {
       // Branding/Email/Net Repository/DB Stats/Announcements/Reassign are super-admin-only, instance-wide concerns.

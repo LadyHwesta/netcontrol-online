@@ -626,6 +626,34 @@ MIGRATIONS = [
          last_used_at TIMESTAMPTZ)"""),
     ("net_control_shifts: reminder_sent_at column",
      "ALTER TABLE net_control_shifts ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ"),
+
+    # ── Fediverse / ActivityPub (issue follow-up) ──
+    ("organizations: activitypub columns",
+     """ALTER TABLE organizations
+         ADD COLUMN IF NOT EXISTS activitypub_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+         ADD COLUMN IF NOT EXISTS activitypub_private_key TEXT,
+         ADD COLUMN IF NOT EXISTS activitypub_public_key TEXT"""),
+    ("nets: activitypub_announce column",
+     "ALTER TABLE nets ADD COLUMN IF NOT EXISTS activitypub_announce BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("table: activitypub_followers",
+     """CREATE TABLE IF NOT EXISTS activitypub_followers (
+         id SERIAL PRIMARY KEY,
+         org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+         actor_id VARCHAR(500) NOT NULL,
+         inbox_url VARCHAR(500) NOT NULL,
+         shared_inbox_url VARCHAR(500),
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         UNIQUE (org_id, actor_id))"""),
+    ("table: activitypub_posts",
+     """CREATE TABLE IF NOT EXISTS activitypub_posts (
+         id SERIAL PRIMARY KEY,
+         org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+         net_id INTEGER REFERENCES nets(id) ON DELETE SET NULL,
+         session_id INTEGER REFERENCES net_sessions(id) ON DELETE SET NULL,
+         uuid VARCHAR(36) UNIQUE NOT NULL,
+         kind VARCHAR(10) NOT NULL,
+         content_html TEXT NOT NULL,
+         published_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"""),
 ]
 
 # ---------------------------------------------------------------------------

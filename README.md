@@ -489,6 +489,21 @@ print('VAPID_PRIVATE_KEY=' + b64(v.private_key.private_numbers().private_value.t
 
 Paste the two printed lines into `.env`, plus `VAPID_CONTACT_EMAIL` (a `mailto:` address the browser push service can reach you at — required by the Web Push protocol, never shown to users). No app restart needed beyond picking up the new `.env` values; existing `send_reminders.py` cron setup automatically starts sending push alongside email once these are set. Leave all three unset to disable entirely — the Account page's Notifications card hides itself and nothing else changes.
 
+## Fediverse (ActivityPub)
+
+Each organization can have its own Fediverse account (works with Mastodon and any other ActivityPub-speaking server) that posts automatically:
+
+- **When a net session starts** — an announcement with the net's name and frequency.
+- **When it ends** — a summary (check-in count, duration).
+
+Both use the same **Reminder Emails**-adjacent settings on a net's Edit form: a new **Announce on Fediverse** checkbox, independent of email reminders. Skipped entirely for a backfilled/logged-past ("Log a Past Net") session — announcing something that already happened days ago would be misleading on a public timeline.
+
+This is a real, native ActivityPub actor (`@orgslug@yourdomain`, not a bridge through a third-party Mastodon account) — WebFinger discovery, a signed actor document, and HTTP-Signature-verified follows, so anyone on Mastodon can search for and follow it directly.
+
+**Requires `APP_BASE_URL`** to be set (see above) — actor and post URLs must be stable absolute HTTPS links, so this is the one feature that makes that setting mandatory rather than optional. With it set, an org admin turns Fediverse participation on from **Admin → Organization**'s **🐘 Fediverse** card, which generates the org's signing keypair the first time and shows its `@handle` and follower count. Turning it back off just stops posting — the keypair and follower list are kept, so turning it on again later resumes posting to the same followers rather than starting over.
+
+Delivery is **best-effort, single-attempt** — a follower whose server is briefly unreachable simply misses that one post; there's no retry queue. This never blocks or fails a session start/end either way.
+
 ## Digital Voice Integration
 
 Net owners can configure digital voice last-heard data in the net's Edit form, under **📻 Digital Voice Integration**. Covers **DMR, D-Star, YSF (Yaesu Fusion), NXDN, P25, and M17** — pick a **Mode**, then a source: **WPSD** or **Pi-Star** hotspot (any mode), or **BrandMeister** (DMR-only network API, by talk group). A WPSD/Pi-Star hotspot's last-heard feed reports whichever mode(s) it actually hears, tagged per-entry, so switching Mode on an already-configured hotspot just changes what's shown — no reconfiguration of the hotspot itself needed.

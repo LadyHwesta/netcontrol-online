@@ -79,6 +79,15 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fediverse Participation via ActivityPub (v2.38.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Each organization can now have its own <strong>Fediverse account</strong> (works with Mastodon and anything else speaking ActivityPub) — turn it on from <strong>Admin → Organization</strong>'s new <strong>🐘 Fediverse</strong> card. It's a real, native account (<code>@orgslug@yourdomain</code>), not a bridge through a third-party Mastodon login — anyone on Mastodon can search for and follow it directly.</li>
+              <li>Once enabled org-wide, turn on <strong>Announce on Fediverse</strong> per net (Nets → Edit) to post an announcement when that net's session starts, and a summary (check-in count, duration) when it ends. Skipped for a backfilled/logged-past session.</li>
+              <li>Requires the server operator to set <code>APP_BASE_URL</code> — see README's <strong>Fediverse (ActivityPub)</strong> section. Delivery is best-effort; a follower whose server is briefly unreachable just misses that one post, and this never blocks or fails starting/ending a session either way.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Push Notifications for Upcoming Shifts (v2.37.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <strong>🔔 Notifications</strong> card on the Account page — turn on real browser/OS push notifications alongside the existing email reminders. You'll get a notification shortly before your Net Control or Broadcaster shift starts, even if the app isn't open. A <strong>Send Test Notification</strong> button shows up once you've enabled it, so you can confirm it's working right away.</li>

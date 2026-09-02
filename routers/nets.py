@@ -41,6 +41,7 @@ class NetCreate(BaseModel):
     reminder_enabled: bool = False   # email signed-up Net Control / Broadcaster before start
     reminder_minutes_before: Optional[int] = None   # lead time, e.g. 30
     public_listed: bool = False    # shown in the public /directory (no login required)
+    activitypub_announce: bool = False   # post to the org's Fediverse actor on session start/end (issue follow-up)
     aprs_map_enabled: bool = False   # shows an APRS station map on the public live page (issue #22)
     # Optional directory metadata — not used locally, only forwarded to Net Repository
     band: Optional[str] = None
@@ -134,6 +135,7 @@ async def create_net(data: NetCreate, current_user: User = Depends(get_current_u
         reminder_enabled=data.reminder_enabled,
         reminder_minutes_before=(data.reminder_minutes_before or 30) if data.reminder_enabled else None,
         public_listed=data.public_listed,
+        activitypub_announce=data.activitypub_announce,
         aprs_map_enabled=data.aprs_map_enabled if net_type == "ham" else False,
         band=data.band or None,
         mode=data.mode or None,
@@ -173,6 +175,7 @@ async def update_net(net_id: int, data: NetCreate, current_user: User = Depends(
     net.reminder_enabled = data.reminder_enabled
     net.reminder_minutes_before = (data.reminder_minutes_before or 30) if data.reminder_enabled else None
     net.public_listed = data.public_listed
+    net.activitypub_announce = data.activitypub_announce
     net.aprs_map_enabled = data.aprs_map_enabled if net_type == "ham" else False
     net.band = data.band or None
     net.mode = data.mode or None

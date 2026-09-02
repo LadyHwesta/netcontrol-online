@@ -6,15 +6,16 @@ import html
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import activitypub_delivery
 import net_repository
 from database import get_db
-from models import ActivationSchedule, Checkin, Net, NetControlShift, NetSession, TacticalPosition, TrafficMessage, User
+from models import ActivationSchedule, Checkin, Net, NetControlShift, NetSession, Organization, TacticalPosition, TrafficMessage, User
 from routers.deps import get_current_user
 from routers.helpers import _get_net_for_user, _get_session_for_user, _net_has_prior_checkin_history, _preferred_names_for_net, _tactical_callsigns_for_session
 from routers.schedules import _duty_labels_for_session
@@ -121,7 +122,7 @@ async def list_sessions(net_id: int, current_user: User = Depends(get_current_us
 
 
 @router.post("/nets/{net_id}/sessions", response_model=SessionOut, status_code=201)
-async def start_session(net_id: int, data: SessionCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def start_session(net_id: int, data: SessionCreate, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     net = await _get_net_for_user(net_id, current_user, db)
     if data.is_offline and not data.occurred_at:
         raise HTTPException(400, "occurred_at is required for an offline net entry")
@@ -210,6 +211,16 @@ async def start_session(net_id: int, data: SessionCreate, current_user: User = D
             if template_positions or template_shifts:
                 await db.commit()
 
+    # Fediverse "starting now" announcement (issue follow-up) -- never
+    # blocks/fails session start; skipped entirely for a backfilled
+    # (is_offline) entry, and silently a no-op if the org hasn't enabled
+    # Fediverse participation or this net hasn't opted in.
+    if not session.is_offline:
+        org = (await db.execute(select(Organization).filter(Organization.id == net.org_id))).scalar_one_or_none()
+        result = await activitypub_delivery.announce_session_start(net, org, session, db)
+        if result:
+            background_tasks.add_task(activitypub_delivery.deliver_to_targets, org, result[0], result[1])
+
     out = SessionOut.model_validate(session)
     out.checkin_count = 0
     return out
@@ -230,7 +241,7 @@ async def get_session(session_id: int, current_user: User = Depends(get_current_
 
 
 @router.patch("/sessions/{session_id}/end", response_model=SessionOut)
-async def end_session(session_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def end_session(session_id: int, background_tasks: BackgroundTasks, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     session = await _get_session_for_user(session_id, current_user, db)
     # An offline entry (issue #20) already has ended_at set from creation (it's
     # never live), so that can't also signal "done entering data" for these --
@@ -250,6 +261,14 @@ async def end_session(session_id: int, current_user: User = Depends(get_current_
     net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
     if net:
         await net_repository.push_session_stats(net, session, count, db)
+        # Fediverse "net has ended" summary (issue follow-up) -- same
+        # never-blocks-the-response / silently-no-ops shape as the Net
+        # Repository push above. Skipped for is_offline (backfilled) entries.
+        if not session.is_offline:
+            org = (await db.execute(select(Organization).filter(Organization.id == net.org_id))).scalar_one_or_none()
+            result = await activitypub_delivery.announce_session_end(net, org, session, count, db)
+            if result:
+                background_tasks.add_task(activitypub_delivery.deliver_to_targets, org, result[0], result[1])
     out = SessionOut.model_validate(session)
     out.checkin_count = count
     return out

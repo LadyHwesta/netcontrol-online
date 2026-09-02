@@ -170,6 +170,19 @@ def app_base_url(monkeypatch):
     monkeypatch.setattr(helpers, "APP_BASE_URL", "http://testserver")
 
 
+# ── Fediverse / ActivityPub ──────────────────────────────────────────────────
+
+@pytest.fixture
+def activitypub_app_base_url(monkeypatch):
+    """Sets APP_BASE_URL for activitypub_delivery.activitypub_configured() --
+    a separate module-level constant from routers.helpers.APP_BASE_URL (see
+    app_base_url above), same duplication precedent as VAPID_* (see
+    vapid_configured below). Without this, PUT /orgs/{id}/activitypub 400s
+    (can't enable) and every public AP endpoint 404s (no actor to serve)."""
+    import activitypub_delivery
+    monkeypatch.setattr(activitypub_delivery, "APP_BASE_URL", "http://testserver")
+
+
 # ── Web push notifications ──────────────────────────────────────────────────
 
 @pytest.fixture

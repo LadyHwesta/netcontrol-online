@@ -113,6 +113,18 @@ class Organization(Base):
     # a public-facing setting -- see routers/orgs.py's dedicated
     # GET/PUT /orgs/{id}/aprs-key for the org-admin-only read/write path.
     aprs_fi_api_key = Column(String(100), nullable=True)
+    # Fediverse participation (issue follow-up) -- this org's own ActivityPub
+    # actor (@slug@host), posting to Mastodon/etc. when a net session starts
+    # and ends (see activitypub_delivery.py). Off by default; enabling it via
+    # PUT /orgs/{id}/activitypub generates the RSA keypair below the first
+    # time only -- it's never regenerated afterward (existing followers'
+    # cached publicKeyPem would silently break otherwise), so
+    # disable/re-enable just flips this flag and resumes posting to the same
+    # follower list. Plaintext PEM columns, matching aprs_fi_api_key's
+    # existing precedent of no field-level encryption anywhere in this app.
+    activitypub_enabled = Column(Boolean, default=False, nullable=False)
+    activitypub_private_key = Column(Text, nullable=True)
+    activitypub_public_key = Column(Text, nullable=True)
     # Org-admin-set (issue follow-up): False hides this org from the public
     # "join an existing organization" picker at registration (GET /orgs,
     # routers/orgs.py's list_orgs) AND blocks self-registration into it
@@ -174,6 +186,12 @@ class Net(Base):
     reminder_enabled = Column(Boolean, default=False, nullable=False)  # email signed-up operators before net start
     reminder_minutes_before = Column(Integer, nullable=True)  # lead time in minutes, e.g. 30
     public_listed = Column(Boolean, default=False, nullable=False)  # shown in the public /directory (no login)
+    # Fediverse participation (issue follow-up) -- per-net opt-in to post a
+    # start/end announcement to the org's ActivityPub actor. Same
+    # "always show the toggle, silently no-op if the org-level feature isn't
+    # configured" shape as reminder_enabled against SMTP-not-configured; has
+    # no effect unless the parent Organization.activitypub_enabled is also on.
+    activitypub_announce = Column(Boolean, default=False, nullable=False)
     aprs_map_enabled = Column(Boolean, default=False, nullable=False)  # shows an APRS station map on the public live page (issue #22)
     # Default APRS map viewport (issue follow-up) — where the station map opens
     # before any position has been reported yet, replacing the hardcoded
@@ -780,3 +798,53 @@ class PushSubscription(Base):
 
     def __repr__(self):
         return f"<PushSubscription user_id={self.user_id}>"
+
+
+class ActivityPubFollower(Base):
+    """A remote Fediverse account following one org's ActivityPub actor
+    (issue follow-up). inbox_url/shared_inbox_url are cached from the
+    follower's own actor document at Follow time (see
+    routers/activitypub.py's inbox handler) so a later Create/Note
+    broadcast doesn't need to re-fetch every follower's actor doc --
+    deliveries are grouped by shared_inbox_url (falling back to
+    inbox_url) so one post to a Mastodon instance with many local
+    followers is a single HTTP request, not one per follower."""
+    __tablename__ = "activitypub_followers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_id = Column(String(500), nullable=False)   # the remote actor's own AP id (URI)
+    inbox_url = Column(String(500), nullable=False)
+    shared_inbox_url = Column(String(500), nullable=True)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("org_id", "actor_id", name="uq_ap_follower_org_actor"),
+    )
+
+    def __repr__(self):
+        return f"<ActivityPubFollower org_id={self.org_id} actor_id={self.actor_id}>"
+
+
+class ActivityPubPost(Base):
+    """A Create/Note this org's actor has published (issue follow-up) --
+    "net starting now" / "net just ended" announcements. Stores just
+    enough (content_html, kind, published_at) to deterministically rebuild
+    the same Note/Create JSON on a later GET /ap/objects/notes/{uuid} --
+    every AP object id must stay dereferenceable indefinitely, so no full
+    JSON blob is persisted, just what's needed to regenerate it. net_id/
+    session_id are nullable with ON DELETE SET NULL so a later net or
+    session deletion never breaks an already-published post's permalink."""
+    __tablename__ = "activitypub_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="SET NULL"), nullable=True)
+    session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="SET NULL"), nullable=True)
+    uuid = Column(String(36), unique=True, nullable=False, index=True)
+    kind = Column(String(10), nullable=False)   # 'start' | 'end'
+    content_html = Column(Text, nullable=False)
+    published_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<ActivityPubPost org_id={self.org_id} kind={self.kind} uuid={self.uuid}>"
