@@ -583,6 +583,10 @@ Long-lived API tokens are available for service accounts and scripts. They are p
 - **List:** `GET /auth/tokens`
 - **Revoke:** `DELETE /auth/tokens/{id}`
 
+### Application Logs
+
+By default the app logs to stdout/stderr only — under systemd that means `journalctl -u nettracker`. Set `LOG_FILE=/var/log/nettracker/app.log` in `.env` to also write every log line to a plain file, for tailing/grepping without journalctl access (auto-reopens if logrotate moves the file out from under it). `LOG_LEVEL` (default `INFO`) controls verbosity either way — `DEBUG`/`INFO`/`WARNING`/`ERROR`.
+
 ### fail2ban integration
 
 Set `AUTH_LOG_FILE=/var/log/nettracker/auth.log` in `.env` to write structured auth failure lines:

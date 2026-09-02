@@ -79,6 +79,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Optional Application Log File (v2.38.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New <code>LOG_FILE</code> setting (e.g. <code>/var/log/nettracker/app.log</code>) — writes the app's logs to a plain file in addition to stdout/stderr, so they can be tailed/grepped without journalctl access. Off by default; nothing changes unless it's set. See README's <strong>Application Logs</strong> section.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fediverse Participation via ActivityPub (v2.38.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Each organization can now have its own <strong>Fediverse account</strong> (works with Mastodon and anything else speaking ActivityPub) — turn it on from <strong>Admin → Organization</strong>'s new <strong>🐘 Fediverse</strong> card. It's a real, native account (<code>@orgslug@yourdomain</code>), not a bridge through a third-party Mastodon login — anyone on Mastodon can search for and follow it directly.</li>

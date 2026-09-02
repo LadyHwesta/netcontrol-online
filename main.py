@@ -10,6 +10,7 @@ routers/<domain>.py, included below — see TECH_DEBT.md's (resolved)
 
 import html
 import logging
+import logging.handlers
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -48,10 +49,21 @@ load_dotenv()
 # even in the systemd journal, even though the equivalent failures (logged at
 # WARNING) already do.
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+# Optional (issue follow-up) -- a plain file mirroring everything the
+# systemd journal already captures from stdout/stderr, for grepping/tailing
+# without journalctl access. Same WatchedFileHandler shape as
+# routers/auth.py's narrower AUTH_LOG_FILE (auto-reopens if logrotate moves
+# the file out from under it), just wired to the root logger so every
+# logger's output goes there, not just auth failures.
+LOG_FILE = os.getenv("LOG_FILE", "")   # e.g. /var/log/nettracker/app.log
+_log_handlers = [logging.StreamHandler()]
+if LOG_FILE:
+    _log_handlers.append(logging.handlers.WatchedFileHandler(LOG_FILE))
 logging.basicConfig(
     level=LOG_LEVEL,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
+    handlers=_log_handlers,
 )
 
 # ---------------------------------------------------------------------------
@@ -67,7 +79,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.38.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.38.1", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
