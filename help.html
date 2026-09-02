@@ -79,6 +79,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fix: Couldn't Set State/Region on a Private Net (v2.39.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Bug fix: the net edit form's <strong>State</strong> and <strong>Region</strong> fields — needed to pick an evacuation zone data source (v2.39.0) — were only shown once <strong>List in Public Net Directory</strong> was turned on, so a private ARES net had no way to set them at all. They're now their own always-visible fields, independent of public listing.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Real Evacuation Zone Boundaries (v2.39.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>ARES/ACES nets can now sync <strong>real evacuation zone boundaries</strong> from an external GIS API — currently California's data.ca.gov — instead of relying only on hand-typed zone names. Set the net's <strong>State</strong> field to <code>CA</code> (Edit form), then click <strong>🔄 Sync Evacuation Zones</strong> in the live check-in screen's Zone Roster panel.</li>

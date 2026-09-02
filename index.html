@@ -372,6 +372,24 @@
             </label>
             <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Posts from your organization's own Fediverse account (Admin → Organization). Requires Fediverse participation to be enabled there first — see Help.">Posts from your organization's own Fediverse account (Admin → Organization). Requires Fediverse participation to be enabled there first — see Help.</div>
           </div>
+          <!-- Region/State (issue #27 follow-up) -- used both by the optional Net
+               Repository listing below AND to pick an evacuation zone data source
+               (Zone Roster panel on the live check-in screen), so unlike the rest
+               of the Net Repository metadata this can't be gated behind Public
+               Directory being on -- a private ARES net still needs to set its own
+               State to sync real zone boundaries. -->
+          <div class="form-row" style="margin-bottom:14px">
+            <div class="form-group">
+              <label data-i18n="Region">Region</label>
+              <input class="form-control" id="net-region" placeholder="Snohomish County" style="font-size:13px" />
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Optional. Also used to scope an ARES net's evacuation zone sync to one county.">Optional. Also used to scope an ARES net's evacuation zone sync to one county.</div>
+            </div>
+            <div class="form-group">
+              <label data-i18n="State">State</label>
+              <input class="form-control" id="net-state" placeholder="WA" style="font-size:13px" />
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Optional. Also selects which evacuation zone data source an ARES net syncs from (e.g. CA).">Optional. Also selects which evacuation zone data source an ARES net syncs from (e.g. CA).</div>
+            </div>
+          </div>
           <!-- Net Repository directory metadata — optional, only relevant once Public Directory is on -->
           <div id="net-repo-metadata-section" style="display:none;border-top:1px solid var(--lc-border);padding-top:14px;margin-bottom:14px">
             <div style="font-size:13px;font-weight:700;color:var(--lc-orange);margin-bottom:4px" data-i18n="🌐 Net Repository Details">🌐 Net Repository Details</div>
@@ -388,16 +406,6 @@
               <div class="form-group">
                 <label data-i18n="CTCSS Tone">CTCSS Tone</label>
                 <input class="form-control" id="net-ctcss-tone" placeholder="100.0" style="font-size:13px" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label data-i18n="Region">Region</label>
-                <input class="form-control" id="net-region" placeholder="Snohomish County" style="font-size:13px" />
-              </div>
-              <div class="form-group">
-                <label data-i18n="State">State</label>
-                <input class="form-control" id="net-state" placeholder="WA" style="font-size:13px" />
               </div>
             </div>
             <div class="form-group">

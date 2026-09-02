@@ -204,8 +204,12 @@ class Net(Base):
     aprs_default_lat = Column(Float, nullable=True)
     aprs_default_lon = Column(Float, nullable=True)
     aprs_default_zoom = Column(Integer, nullable=True)
-    # Optional metadata — not used locally, only forwarded to Net Repository
-    # (net_repository.py) to make the public directory listing more useful/searchable.
+    # Optional metadata, forwarded to Net Repository (net_repository.py) to
+    # make the public directory listing more useful/searchable. state and
+    # region are ALSO used locally now (issue #27) -- evac_zone_sources.py
+    # reads state to pick an evacuation zone data source and region to scope
+    # the sync to one county -- so unlike band/mode/ctcss_tone, editing
+    # these two isn't gated behind Net.public_listed in the net edit form.
     band = Column(String(10), nullable=True)         # e.g. "2m", "70cm"
     mode = Column(String(20), nullable=True)          # e.g. "FM", "DMR"
     ctcss_tone = Column(String(10), nullable=True)     # e.g. "100.0"
