@@ -79,6 +79,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — City of Santa Rosa Evacuation Zones Added (v2.40.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Sonoma County's own zone catalog (v2.40.0) turned out to explicitly exclude the City of Santa Rosa's own zones — added the City of Santa Rosa's own data source so a Region of <code>Sonoma County</code> now syncs both together, covering every city and unincorporated area in the county. Found and fixed after a real zone ("Santa Rosa Southeast2") turned up missing.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Evacuation Zone Sync Now Works Between Incidents (v2.40.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>California's statewide evacuation feed (v2.39.0) only ever contains a zone while it's actively under an evacuation order/warning — it goes empty between incidents, which made zone sync useless on a routine, non-activation net. Added a second kind of source: a county's own full zone catalog, which always has every predefined zone (currently <strong>Sonoma County, CA</strong> — 300+ zones), so there's something to pick from even when nothing's happening.</li>

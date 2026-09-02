@@ -23,18 +23,23 @@ exactly this -- multiple sources coexisting per net, never colliding):
     the moment nothing's happening, which is correct for "what's active
     right now" but useless for picking a zone during a routine
     (non-activation) net.
-  - COUNTY-level, full static catalog (issue follow-up -- e.g.
-    sonoma_county_gov): many CA counties run their own "Know Your Zone"
-    GIS system with EVERY predefined zone always present, most showing
-    zone_status="Normal" outside an incident. This is what makes zone
-    selection useful on an ordinary net, not just during an activation.
-    Each county's service has its own URL and field names -- there's no
-    statewide "full catalog" resource -- so this list only grows one
-    hand-verified county at a time, same as adding a new state does.
+  - COUNTY/CITY-level, full static catalog (issue follow-up -- e.g.
+    sonoma_county_gov, santa_rosa_ca_gov): many CA counties/cities run
+    their own "Know Your Zone"/Zonehaven GIS system with EVERY predefined
+    zone always present, most showing a "Normal"/null status outside an
+    incident. This is what makes zone selection useful on an ordinary
+    net, not just during an activation. Each service has its own URL and
+    field names -- there's no statewide "full catalog" resource, and a
+    county's own layer may not even cover every jurisdiction inside it
+    (Sonoma County's explicitly excludes the City of Santa Rosa) -- so
+    this list only grows one hand-verified jurisdiction at a time, same
+    as adding a new state does. More than one can match the same
+    Net.region (see COUNTY_ALIASES's own comment).
 
 Both kinds select by matching Net.state/Net.region respectively, and
 sync_net_evac_zones() pulls from every source that matches (a net can get
-rows from both a state-level and a county-level source at once).
+rows from a state-level source and several county/city-level sources all
+at once).
 
 Deliberately live/on-demand, not a cron sync like gmrs_sync.py: the
 California statewide feed is "fully updated every 5 minutes" during an
@@ -196,6 +201,62 @@ async def fetch_sonoma_county_gov(county: Optional[str]) -> list[dict]:
     return zones
 
 
+# City of Santa Rosa's own evacuation zone catalog (issue follow-up) --
+# Sonoma County's own countywide layer (fetch_sonoma_county_gov above)
+# explicitly EXCLUDES Santa Rosa's zones (straight from that service's
+# own item description: "...for all unincorporated areas and cities with
+# the exception of zones for the City of Santa Rosa"), so a net whose
+# region is Sonoma County was otherwise structurally blind to them --
+# found this filling exactly that gap after a user's own zone ("Santa
+# Rosa Southeast2") turned up nowhere in the synced list. Verified live:
+# 29 zones, ZoneNumber "SRS-Southeast2" / ShortName "Southeast2" among
+# them. Uses a different platform (Zonehaven) than Sonoma County's own
+# service, hence the different field names below.
+SANTA_ROSA_FEATURE_SERVER_QUERY_URL = (
+    "https://services2.arcgis.com/BhTdzxiJkq4oXsPh/arcgis/rest/services/"
+    "City_of_Santa_Rosa_-_Evacuation_Zones_Zonehaven_(View_Layer)/FeatureServer/46/query"
+)
+
+
+async def fetch_santa_rosa_ca_gov(county: Optional[str]) -> list[dict]:
+    """City of Santa Rosa's full zone catalog -- like Sonoma County's own
+    service, already scoped to one jurisdiction, so `county` is accepted
+    only for a consistent registry signature. ZoneNumber (e.g.
+    "SRS-Southeast2") is the stable per-zone code used as external_id;
+    ShortName ("Southeast2") is the short display label used as name --
+    matches how a zone is actually referred to locally. Zone_Status was
+    observed null on every row live (unlike Sonoma County's own explicit
+    "Normal"), so status is stored as whatever the source reports,
+    including None. No last-edited timestamp field exists on this layer."""
+    params = {
+        "where": "1=1",
+        "outFields": "Jurisdiction,ZoneNumber,Zone_Status,ShortName",
+        "f": "geojson",
+        "returnGeometry": "true",
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(SANTA_ROSA_FEATURE_SERVER_QUERY_URL, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+
+    zones = []
+    for feature in data.get("features", []):
+        props = feature.get("properties") or {}
+        geometry = feature.get("geometry")
+        external_id = props.get("ZoneNumber")
+        if not geometry or not external_id:
+            continue
+        zones.append({
+            "external_id": external_id,
+            "name": props.get("ShortName"),
+            "county": props.get("Jurisdiction"),
+            "status": props.get("Zone_Status"),
+            "geometry": geometry,
+            "source_updated_at": None,
+        })
+    return zones
+
+
 # Registry -- add a new source by writing a fetch_* function above (or in
 # a new module imported here) with this same signature, and one entry
 # below (plus a STATE_ALIASES or COUNTY_ALIASES entry, matching whichever
@@ -203,6 +264,7 @@ async def fetch_sonoma_county_gov(county: Optional[str]) -> list[dict]:
 SOURCES = {
     "data_ca_gov": fetch_data_ca_gov,
     "sonoma_county_gov": fetch_sonoma_county_gov,
+    "santa_rosa_ca_gov": fetch_santa_rosa_ca_gov,
 }
 
 # STATE-level sources: which Net.state values map to which source.
@@ -213,13 +275,20 @@ STATE_ALIASES = {
     "data_ca_gov": {"CA", "CALIFORNIA"},
 }
 
-# COUNTY-level sources: which Net.region values map to which source. Same
-# free-text-alias matching as STATE_ALIASES, with a trailing "county"
-# stripped first (same reasoning as fetch_data_ca_gov's own county-filter
-# normalization -- Net.region's established placeholder is "Snohomish
-# County").
+# COUNTY-level sources: which Net.region values map to which source(s) --
+# unlike STATE_ALIASES, more than one source can match the same region
+# (a single Net.region field can't itself list "Sonoma County AND Santa
+# Rosa"), so this is checked exhaustively rather than stopping at the
+# first hit. santa_rosa_ca_gov deliberately also matches on "Sonoma"/
+# "Sonoma County" -- since Santa Rosa's zones are invisible to that
+# county's own layer, a net whose region is just "Sonoma County" would
+# otherwise never see them even though the city is inside the county.
+# Same trailing-"county"-stripped, case-insensitive matching as
+# fetch_data_ca_gov's own county filter (Net.region's established
+# placeholder is "Snohomish County").
 COUNTY_ALIASES = {
     "sonoma_county_gov": {"SONOMA"},
+    "santa_rosa_ca_gov": {"SONOMA", "SANTA ROSA"},
 }
 
 
@@ -240,38 +309,39 @@ def select_source_for_state(state: Optional[str]) -> Optional[str]:
     return None
 
 
-def select_source_for_county(region: Optional[str]) -> Optional[str]:
+def select_sources_for_county(region: Optional[str]) -> list[str]:
+    """Unlike select_source_for_state, returns every matching source --
+    see COUNTY_ALIASES's own comment for why more than one commonly
+    applies to the same region."""
     if not region:
-        return None
+        return []
     normalized = _strip_county_suffix(region)
-    for source, aliases in COUNTY_ALIASES.items():
-        if normalized in aliases:
-            return source
-    return None
+    return [source for source, aliases in COUNTY_ALIASES.items() if normalized in aliases]
 
 
 async def sync_net_evac_zones(net: Net, db: AsyncSession) -> int:
     """Fetches from every source that matches this net's state (active-
-    incidents feed) AND region (a county's full catalog, if one's
-    registered) -- a net can pull from both at once, e.g. California's
-    statewide feed for "what's active right now" alongside Sonoma
-    County's own catalog for "what zones exist at all". Each matched
-    source replaces its own EvacZoneBoundary rows for (net.id, source) in
-    one transaction -- a source's zone set is small (tens to low
-    hundreds of rows), so a full delete-and-reinsert per source is
-    simpler than diffing individual zone lifecycle (a retired/merged
-    zone just disappears on the next sync). Raises UnsupportedSourceError
-    if NEITHER state nor region matches any registered source; lets any
-    fetch failure (network error, non-2xx response) propagate as-is --
-    on a multi-source net, one failing aborts the whole sync rather than
-    partially committing, so a retry doesn't need to guess what's stale."""
+    incidents feed) AND region (any county/city full catalogs
+    registered) -- a net can pull from several sources at once, e.g.
+    California's statewide feed for "what's active right now" alongside
+    Sonoma County's AND Santa Rosa's own catalogs for "what zones exist
+    at all". Each matched source replaces its own EvacZoneBoundary rows
+    for (net.id, source) in one transaction -- a source's zone set is
+    small (tens to low hundreds of rows), so a full delete-and-reinsert
+    per source is simpler than diffing individual zone lifecycle (a
+    retired/merged zone just disappears on the next sync). Raises
+    UnsupportedSourceError if NEITHER state nor region matches any
+    registered source; lets any fetch failure (network error, non-2xx
+    response) propagate as-is -- on a multi-source net, one failing
+    aborts the whole sync rather than partially committing, so a retry
+    doesn't need to guess what's stale."""
     sources = []
     state_source = select_source_for_state(net.state)
     if state_source:
         sources.append(state_source)
-    county_source = select_source_for_county(net.region)
-    if county_source and county_source not in sources:
-        sources.append(county_source)
+    for county_source in select_sources_for_county(net.region):
+        if county_source not in sources:
+            sources.append(county_source)
     if not sources:
         raise UnsupportedSourceError(net.state)
 
