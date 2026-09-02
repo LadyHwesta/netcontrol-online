@@ -108,9 +108,12 @@
         <div class="form-group">
           <label data-i18n="Affected Zones">Affected Zones</label>
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px" data-i18n="Only zones already synced for this net (Zone Roster panel on the live check-in screen) can be selected. Sync there first if the list below is empty.">Only zones already synced for this net (Zone Roster panel on the live check-in screen) can be selected. Sync there first if the list below is empty.</div>
-          <div id="incident-zone-checkboxes" style="max-height:200px;overflow-y:auto;border:1px solid var(--lc-border);border-radius:6px;padding:8px">
+          <input class="form-control" id="incident-zone-search" placeholder="Search zones by name, county, or status…" data-i18n-placeholder="Search zones by name, county, or status…" oninput="filterIncidentZoneCheckboxes(this.value)" style="margin-bottom:8px;font-size:13px" />
+          <div id="incident-zone-checkboxes" style="max-height:240px;overflow-y:auto;border:1px solid var(--lc-border);border-radius:6px;padding:8px">
             <p class="text-muted" style="font-size:12px;margin:0" data-i18n="No synced zones for this net yet.">No synced zones for this net yet.</p>
           </div>
+          <p class="text-muted" id="incident-zone-no-results" style="display:none;font-size:12px;margin:6px 0 0" data-i18n="No zones match that search.">No zones match that search.</p>
+          <p class="text-muted" id="incident-zone-selected-count" style="font-size:11px;margin:6px 0 0"></p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="saveIncident()" data-i18n="Save">Save</button>
         <button class="btn btn-ghost btn-sm" onclick="cancelIncidentForm()" data-i18n="Cancel">Cancel</button>
@@ -162,7 +165,7 @@
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
   <script src="/static/js/evac-zone-map.js?v=1"></script>
-  <script src="/static/js/incidents.js?v=1"></script>
+  <script src="/static/js/incidents.js?v=2"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {

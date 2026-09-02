@@ -93,16 +93,47 @@ function showNewIncidentForm() {
 
 function renderIncidentZoneCheckboxes(selectedIds) {
   const el = document.getElementById('incident-zone-checkboxes');
+  const searchInput = document.getElementById('incident-zone-search');
+  if (searchInput) searchInput.value = '';
+  document.getElementById('incident-zone-no-results').style.display = 'none';
+
   if (!currentIncidentZoneBoundaries.length) {
     el.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('No synced zones for this net yet.')}</p>`;
+    updateIncidentZoneSelectedCount();
     return;
   }
-  el.innerHTML = currentIncidentZoneBoundaries.map(z => `
-    <label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer">
-      <input type="checkbox" class="incident-zone-checkbox" value="${z.id}" ${selectedIds.includes(z.id) ? 'checked' : ''} style="width:auto" />
-      <span>${esc(z.name || z.external_id)}${z.status ? ` — ${esc(z.status)}` : ''}</span>
-    </label>
-  `).join('');
+  // data-search carries name/county/status pre-lowercased so filtering
+  // (below) is a plain substring check per keystroke, no re-render --
+  // a checked box that scrolls out of a filtered view stays checked,
+  // since the row is only hidden (display:none), never removed from the DOM.
+  el.innerHTML = currentIncidentZoneBoundaries.map(z => {
+    const label = z.name || z.external_id;
+    const searchText = `${label} ${z.county || ''} ${z.status || ''}`.toLowerCase();
+    return `
+    <label class="incident-zone-row" data-search="${esc(searchText)}" style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;cursor:pointer">
+      <input type="checkbox" class="incident-zone-checkbox" value="${z.id}" ${selectedIds.includes(z.id) ? 'checked' : ''} onchange="updateIncidentZoneSelectedCount()" style="width:auto" />
+      <span>${esc(label)}${z.status ? ` — ${esc(z.status)}` : ''}</span>
+    </label>`;
+  }).join('');
+  updateIncidentZoneSelectedCount();
+}
+
+function filterIncidentZoneCheckboxes(query) {
+  const q = query.trim().toLowerCase();
+  let anyVisible = false;
+  document.querySelectorAll('.incident-zone-row').forEach(row => {
+    const matches = !q || row.dataset.search.includes(q);
+    row.style.display = matches ? 'flex' : 'none';
+    if (matches) anyVisible = true;
+  });
+  document.getElementById('incident-zone-no-results').style.display = (q && !anyVisible) ? '' : 'none';
+}
+
+function updateIncidentZoneSelectedCount() {
+  const el = document.getElementById('incident-zone-selected-count');
+  if (!el) return;
+  const n = document.querySelectorAll('.incident-zone-checkbox:checked').length;
+  el.textContent = n ? tn(n, '{n} zone selected', '{n} zones selected') : '';
 }
 
 function cancelIncidentForm() {
