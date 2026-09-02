@@ -79,6 +79,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fix: Evacuation Zone Sync Ignored "County" in Region (v2.39.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Bug fix: evacuation zone sync matched a net's <strong>Region</strong> exactly against the county name — but the field's own placeholder ("Snohomish County") invites typing it <em>with</em> "County" on the end, which then matched nothing and silently synced zero zones. A trailing "County" is now stripped before matching, regardless of case.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fix: Couldn't Set State/Region on a Private Net (v2.39.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Bug fix: the net edit form's <strong>State</strong> and <strong>Region</strong> fields — needed to pick an evacuation zone data source (v2.39.0) — were only shown once <strong>List in Public Net Directory</strong> was turned on, so a private ARES net had no way to set them at all. They're now their own always-visible fields, independent of public listing.</li>

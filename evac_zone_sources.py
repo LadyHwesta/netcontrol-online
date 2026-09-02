@@ -76,7 +76,19 @@ async def fetch_data_ca_gov(county: Optional[str]) -> list[dict]:
     real error to the admin who triggered the sync."""
     where = "1=1"
     if county:
-        safe_county = county.strip().upper().replace("'", "''")
+        # The source's COUNTY field is the bare county name with no
+        # "County" suffix (e.g. "SAN LUIS OBISPO", "SONOMA") -- but
+        # Net.region's own established placeholder ("Snohomish County",
+        # predating this feature -- it's also shown in the public
+        # directory/Net Repository listing, where the suffix reads
+        # naturally) actively invites typing it WITH "County" on the end.
+        # Left as an exact match against that, a region of "Sonoma
+        # County" would silently match nothing, every time, for every
+        # county -- so a trailing "county" is stripped before matching.
+        normalized = county.strip().upper()
+        if normalized.endswith(" COUNTY"):
+            normalized = normalized[: -len(" COUNTY")].strip()
+        safe_county = normalized.replace("'", "''")
         where = f"COUNTY='{safe_county}'"
 
     params = {

@@ -113,6 +113,21 @@ class TestFetchDataCaGov:
         await evac_zone_sources.fetch_data_ca_gov("O'Brien")
         assert mock_ca_fetch[0]["params"]["where"] == "COUNTY='O''BRIEN'"
 
+    async def test_county_filter_strips_county_suffix(self, mock_ca_fetch):
+        """Net.region's own established placeholder ("Snohomish County",
+        predating this feature) actively invites typing the county WITH
+        "County" on the end -- the source's COUNTY field never has that
+        suffix (e.g. "SONOMA", not "SONOMA COUNTY"), so left unstripped
+        this silently matched nothing for every net that followed the
+        field's own hint. Found on a real deploy (region set to "Sonoma
+        County") before this fix."""
+        await evac_zone_sources.fetch_data_ca_gov("Sonoma County")
+        assert mock_ca_fetch[0]["params"]["where"] == "COUNTY='SONOMA'"
+
+    async def test_county_filter_suffix_strip_is_case_insensitive(self, mock_ca_fetch):
+        await evac_zone_sources.fetch_data_ca_gov("sonoma county")
+        assert mock_ca_fetch[0]["params"]["where"] == "COUNTY='SONOMA'"
+
     async def test_features_missing_zone_id_are_skipped(self, mock_ca_fetch):
         mock_ca_fetch.response = {
             "type": "FeatureCollection",
