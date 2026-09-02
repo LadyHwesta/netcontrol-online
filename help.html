@@ -79,6 +79,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Push Failures Are Now Logged (v2.38.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Bug fix: a push subscription pywebpush reports as gone (HTTP 404/410) was silently removed with no log line at all — expected cleanup for a subscription that's genuinely gone stale, but it meant a subscription that failed immediately after being created (a real misconfiguration) looked identical in the logs to never having subscribed in the first place. Now logged at INFO.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Optional Application Log File (v2.38.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <code>LOG_FILE</code> setting (e.g. <code>/var/log/nettracker/app.log</code>) — writes the app's logs to a plain file in addition to stdout/stderr, so they can be tailed/grepped without journalctl access. Off by default; nothing changes unless it's set. See README's <strong>Application Logs</strong> section.</li>

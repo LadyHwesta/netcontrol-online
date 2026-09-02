@@ -120,3 +120,30 @@ class TestTestNotification:
         resp = client.post("/push/test", headers=admin_headers)
         # VAPID unconfigured -> _send_web_push short-circuits to 0 sends
         assert resp.status_code == 400
+
+    def test_gone_subscription_is_removed_and_logged(self, client, admin_headers, vapid_configured, monkeypatch, caplog):
+        """A subscription pywebpush reports as gone (404/410) is deleted --
+        expected steady-state cleanup, not a failure -- but it must still
+        be LOGGED (issue follow-up): a fresh subscription failing this way
+        immediately after being created is otherwise indistinguishable from
+        never having subscribed at all, which made a real deploy-time push
+        failure undiagnosable."""
+        import pywebpush
+
+        class FakeResponse:
+            status_code = 410
+
+        def fake_webpush(**kwargs):
+            raise pywebpush.WebPushException("Gone", response=FakeResponse())
+
+        monkeypatch.setattr(pywebpush, "webpush", fake_webpush)
+        client.post("/push/subscribe", json=SUB_A, headers=admin_headers)
+
+        with caplog.at_level("INFO", logger="ham_net_tracker.push"):
+            resp = client.post("/push/test", headers=admin_headers)
+        assert resp.status_code == 400
+        assert any("reported gone" in r.message for r in caplog.records)
+
+        # The subscription is actually gone now, not just reported as such
+        second_resp = client.post("/push/test", headers=admin_headers)
+        assert second_resp.status_code == 400

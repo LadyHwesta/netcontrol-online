@@ -149,6 +149,10 @@ async def send_web_push(db, user_id: int, title: str, body: str, url: str = "/")
         except WebPushException as exc:
             status = getattr(exc.response, "status_code", None)
             if status in (404, 410):
+                # Expected cleanup, not a failure -- still logged (see
+                # routers/helpers.py's _send_web_push, this function's own
+                # twin, for why this used to be silent and shouldn't be).
+                log(f"Push subscription for user {user_id} reported gone (HTTP {status}) -- removing it: {exc}")
                 await db.delete(sub)
             else:
                 log(f"Push send failed for user {user_id}: {exc}")

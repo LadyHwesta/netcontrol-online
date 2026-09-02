@@ -210,6 +210,16 @@ async def _send_web_push(db: AsyncSession, user_id: int, title: str, body: str, 
         except WebPushException as exc:
             status = getattr(exc.response, "status_code", None)
             if status in (404, 410):
+                # Expected steady-state cleanup (the browser revoked it, or the
+                # user cleared site data), not an error -- logged at INFO, not
+                # WARNING, so it doesn't read as a false alarm months into
+                # normal operation. Still logged (not silent) since this is
+                # also exactly what a genuinely broken subscription looks like
+                # right after subscribing, and that's otherwise undiagnosable:
+                # without this line, POST /push/test's generic "no active
+                # subscriptions" response looks identical whether there was
+                # never a subscription at all, or one was just deleted here.
+                _push_log.info("Push subscription for user %s reported gone (HTTP %s) -- removing it: %s", user_id, status, exc)
                 await db.delete(sub)
             else:
                 _push_log.warning("Push send failed for user %s: %s", user_id, exc)
