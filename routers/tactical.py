@@ -39,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models import ActivationSchedule, Checkin, Net, NetControlShift, NetSession, TacticalPosition, User, utcnow
 from routers.deps import get_current_user
-from routers.helpers import _get_net_for_user, _get_session_for_user
+from routers.helpers import _get_editable_net, _get_net_for_user, _get_session_for_user
 from routers.schemas import CheckinOut
 
 router = APIRouter()
@@ -215,6 +215,20 @@ async def _get_position_for_user(position_id: int, user: User, db: AsyncSession)
     return position
 
 
+async def _user_has_full_net_access(net_id: int, user: User, db: AsyncSession) -> bool:
+    """True if the caller has net_control_op (edit-rights) access to this net
+    -- owner, org admin, super admin, or an editor share. Used to decide
+    whether tactical position sign-on/off identity is enforced (issue
+    follow-up): previously ANY net access, even a bare view share, could
+    sign on/off as any typed callsign; a caller without full access may now
+    only manage their own."""
+    try:
+        await _get_editable_net(net_id, user, db)
+        return True
+    except HTTPException:
+        return False
+
+
 async def _current_occupant(position_id: int, db: AsyncSession) -> Optional[Checkin]:
     # Take-the-first (.limit(1) + .scalars().first()), not scalar_one_or_none() --
     # normal app flow keeps this to one row (sign-on always closes the prior
@@ -384,6 +398,19 @@ async def sign_on_tactical_position(position_id: int, data: TacticalSignOn, curr
         raise HTTPException(400, "Cannot sign on to a position on an ended session")
 
     outgoing = await _current_occupant(position.id, db)
+
+    # Role revamp (issue follow-up): without full (net_control_op) net
+    # access, a caller may only sign themselves on -- not assign an
+    # arbitrary typed callsign to someone else, and not evict whoever's
+    # already there -- this is what makes a Tactical Operator share
+    # genuinely self-service rather than roster management.
+    if not await _user_has_full_net_access(position.net_id, current_user, db):
+        own_callsigns = {c.upper() for c in (current_user.callsign, current_user.gmrs_callsign) if c}
+        if data.callsign.upper() not in own_callsigns:
+            raise HTTPException(403, "You can only sign yourself on to a tactical position")
+        if outgoing and outgoing.callsign.upper() not in own_callsigns:
+            raise HTTPException(403, "This position is already occupied by someone else")
+
     if outgoing:
         outgoing.signed_off_at = utcnow()
 
@@ -408,6 +435,10 @@ async def sign_off_tactical_position(position_id: int, current_user: User = Depe
     outgoing = await _current_occupant(position.id, db)
     if not outgoing:
         raise HTTPException(404, "This position is not currently occupied")
+    if not await _user_has_full_net_access(position.net_id, current_user, db):
+        own_callsigns = {c.upper() for c in (current_user.callsign, current_user.gmrs_callsign) if c}
+        if outgoing.callsign.upper() not in own_callsigns:
+            raise HTTPException(403, "You can only sign yourself off a tactical position")
     outgoing.signed_off_at = utcnow()
     await db.commit()
     await db.refresh(outgoing)

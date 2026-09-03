@@ -20,7 +20,7 @@ from database import get_db
 from models import Net, NetControlSignup, NetSchedule, NetSession, OrganizationMembership, User
 from routers import helpers
 from routers.deps import get_current_user
-from routers.helpers import _get_editable_net
+from routers.helpers import _get_editable_net, _get_net_for_role, _get_net_for_user
 
 router = APIRouter()
 
@@ -282,7 +282,10 @@ def _build_ics(net: "Net", schedule: "NetSchedule", signup: "NetControlSignup", 
 
 @router.get("/nets/{net_id}/schedules", response_model=list[ScheduleOut])
 async def list_schedules(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await _get_editable_net(net_id, current_user, db)
+    # Read-only schedule data — any net share suffices (issue follow-up:
+    # previously edit rights, which blocked a Tactical Operator/Broadcaster
+    # share from even seeing the schedule to find their own slot).
+    await _get_net_for_user(net_id, current_user, db)
     schedules = (await db.execute(select(NetSchedule).filter(NetSchedule.net_id == net_id).order_by(NetSchedule.day_of_week))).scalars().all()
     return [_schedule_to_out(s) for s in schedules]
 
@@ -321,7 +324,7 @@ async def upcoming_slots(
     db: AsyncSession = Depends(get_db),
 ):
     """Return the next `weeks` scheduled dates across all schedules for a net, with signup info."""
-    await _get_editable_net(net_id, current_user, db)
+    await _get_net_for_user(net_id, current_user, db)  # read-only — any net share suffices, see list_schedules
     schedules = (await db.execute(select(NetSchedule).filter(NetSchedule.net_id == net_id))).scalars().all()
 
     # Gather all upcoming dates across all schedules
@@ -346,7 +349,24 @@ async def upcoming_slots(
 
 @router.post("/nets/{net_id}/signups", response_model=SignupOut, status_code=201)
 async def create_signup(net_id: int, data: SignupCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    net = await _get_editable_net(net_id, current_user, db)
+    # Role revamp (issue follow-up): a Broadcaster-role share (without full
+    # edit rights) may self-signup for the broadcaster slot specifically --
+    # never assign someone else, never claim net_control/both. Full edit
+    # rights (net_control_op) is still the primary gate and keeps every
+    # existing capability (assigning others, any role) unchanged.
+    broadcaster_self_only = False
+    try:
+        net = await _get_editable_net(net_id, current_user, db)
+    except HTTPException as e:
+        if e.status_code != 403:
+            raise
+        net = await _get_net_for_role(net_id, current_user, db, "broadcaster")
+        broadcaster_self_only = True
+    if broadcaster_self_only:
+        if data.role != "broadcaster":
+            raise HTTPException(403, "The broadcaster role can only self-signup for the broadcaster slot")
+        if data.assigned_user_id:
+            raise HTTPException(403, "Only the net owner can assign other operators")
 
     # Verify the schedule belongs to this net
     sched = (await db.execute(select(NetSchedule).filter(
@@ -492,7 +512,7 @@ async def delete_signup(signup_id: int, current_user: User = Depends(get_current
 
 @router.get("/nets/{net_id}/signups", response_model=list[SignupOut])
 async def list_signups(net_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await _get_editable_net(net_id, current_user, db)
+    await _get_net_for_user(net_id, current_user, db)  # read-only — any net share suffices, see list_schedules
     signups = (
         (await db.execute(select(NetControlSignup).filter(NetControlSignup.net_id == net_id).order_by(NetControlSignup.slot_date))).scalars().all()
     )

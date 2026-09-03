@@ -32,7 +32,7 @@ from routers.deps import limiter
 from routers.helpers import STATIC_DIR, UPLOADS_DIR, _get_setting, _public_base_url
 
 from routers import (
-    activitypub, admin, aprs, auth, callsign_lookup, checkins, digital_voice, evac_zones,
+    activitypub, admin, aprs, assignments, auth, callsign_lookup, checkins, digital_voice, evac_zones,
     expected_stations, history, incidents, nets, orgs, public, push, schedules, sessions,
     support, tactical, traffic, translation,
 )
@@ -79,7 +79,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.41.2", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.42.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -117,6 +117,7 @@ app.include_router(translation.router)
 app.include_router(push.router)
 app.include_router(activitypub.router)
 app.include_router(incidents.router)
+app.include_router(assignments.router)
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +162,16 @@ def serve_report():
 @app.get("/incidents", response_class=HTMLResponse, include_in_schema=False)
 def serve_incidents():
     return _serve_html("incidents.html")
+
+
+@app.get("/assignments", response_class=HTMLResponse, include_in_schema=False)
+def serve_assignments():
+    """Minimal self-service view for the Tactical Operator / Broadcaster
+    roles (issue follow-up) — sign up for available tactical positions and/or
+    broadcaster schedule slots on nets they hold those roles on. A
+    Net Control Op keeps using the main My Nets page unchanged; this is
+    additional, not a replacement (see assignments.html's own header comment)."""
+    return _serve_html("assignments.html")
 
 
 @app.get("/manifest.json", include_in_schema=False)

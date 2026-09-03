@@ -436,6 +436,18 @@ Thank you all for checking in. This net is now closed.
 
 Leave the field blank to hide the panel entirely.
 
+## Roles & Self-Service Sign-Up
+
+Every registered operator holds one of two org-level roles — **Admin** (org management: approving members, branding, etc.) or **Net Control Op** (everyday net access; this is what "Member" used to be called, with identical privileges) — and can *additionally* hold either or both of two minimal, self-service roles: **Tactical Operator** and **Broadcaster**. The registration form lets a new operator flag which of these they're interested in as a hint; it's always the org admin who decides what's actually granted, from the pending-approval queue or later from the Operators list in Admin.
+
+Holding a role at the org level only makes it *offerable* — it still has to be granted per net via that net's **🔗 Sharing** section (Edit Net → Sharing), the same place edit rights (`Can edit`, i.e. Net Control Op access) are already granted. A user can hold different roles on different nets: Net Control Op on one, Tactical Operator on another, both on a third — sharing only ever offers a role the org admin already approved for that user, so revoking it at the org level takes it away everywhere at once.
+
+A Tactical Operator or Broadcaster share is deliberately minimal:
+- **Tactical Operator** can sign themselves on (and off) an available tactical position during a live activation on that net — see **🎯 My Assignments** in the sidebar — but, unlike a full Net Control Op share, can't assign the position to anyone else or bump whoever's already signed on to it.
+- **Broadcaster** can see that net's schedule and self-signup for the **Broadcaster** slot specifically (not Net Control, not "Cover Both Roles") — also from **🎯 My Assignments**.
+
+A Net Control Op share keeps every capability it already had — full net configuration, schedule management, assigning either role to someone else — nothing changes there.
+
 ## Broadcaster Role (Additional Broadcast)
 
 Some nets carry a second segment alongside net control — for example, a member reading the latest **Amateur Radio Newsline** bulletin. Enable **Additional Broadcast** in the net's Edit form and give it a name (e.g. "Amateur Radio Newsline"); this adds a **Broadcaster** role to that net's Schedule sign-ups, separate from Net Control.

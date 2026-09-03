@@ -220,6 +220,10 @@ async function doRegister(btn) {
     if (!orgSlug) return showAuthError('Select an organization to join, or switch to "Create new"');
     body.org_slug = orgSlug;
   }
+  // Role revamp (issue follow-up) — informational hint only, see UserCreate.requested_roles
+  const requestedRoles = ['net_control_op', 'tactical_operator', 'broadcaster']
+    .filter(r => document.getElementById(`reg-role-${r}`).checked);
+  if (requestedRoles.length) body.requested_roles = requestedRoles;
   if (captchaProvider) body.captcha_token = getCaptchaToken('reg');
   btnLoading(btn, true);
   try {

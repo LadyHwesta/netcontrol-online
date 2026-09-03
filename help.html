@@ -60,6 +60,7 @@
       <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
       <a class="sidebar-btn" href="/" data-i18n="📻 Net Control">📻 Net Control</a>
       <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none" data-i18n="🔑 Admin">🔑 Admin</a>
+      <a class="sidebar-btn" href="/assignments" data-i18n="🎯 My Assignments">🎯 My Assignments</a>
       <a class="sidebar-btn" href="/incidents" data-i18n="🚨 Incidents">🚨 Incidents</a>
       <a class="sidebar-btn" href="/tokens" data-i18n="⚙️ Account">⚙️ Account</a>
       <a class="sidebar-btn" href="/help" data-i18n="❓ Help">❓ Help</a>
@@ -79,6 +80,17 @@
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Role Revamp: Tactical Operator &amp; Broadcaster (v2.42.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The org-wide <strong>Member</strong> role is now called <strong>Net Control Op</strong> — same privileges as before, name only. It sits alongside a new <strong>Admin</strong> tier (unchanged) and two brand new, minimal self-service roles: <strong>Tactical Operator</strong> (sign up for an available tactical position during a live activation) and <strong>Broadcaster</strong> (sign up for a net's broadcaster schedule slot). A user can hold more than one at once.</li>
+              <li>Holding a role at the org level (approved by your org admin) only makes it <em>offerable</em> — it still has to be granted per net from that net's <strong>🔗 Sharing</strong> section, the same place edit rights already live. A Tactical Operator or Broadcaster share is intentionally narrow: it can sign the operator themselves on/off a position, or sign themselves up for the broadcaster slot, but can't manage anyone else's assignment. A full Net Control Op share keeps every capability it already had.</li>
+              <li>New <strong>🎯 My Assignments</strong> page for the two new roles — sign on/off tactical positions and claim/cancel broadcaster slots across every net you hold those roles on, without needing the full My Nets view.</li>
+              <li>Registration now asks (optionally) which role(s) you're interested in — a hint only; your org admin decides what's actually granted, from the pending-approval queue or later from the Operators list in Admin.</li>
+              <li>Tightened: signing on to a tactical position without full net access now only works for your own callsign, and can't bump whoever's already signed on — previously any level of net access could sign anyone on to any position.</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Fix: Blank Zone Names Showing Only "Normal" (v2.41.2)</div>
@@ -1640,9 +1652,9 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
   </footer>
   <script>document.getElementById('app-footer-year').textContent = new Date().getFullYear();</script>
 </div>
-  <script src="/static/js/state.js?v=24"></script>
+  <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=22"></script>
-  <script src="/static/js/auth.js?v=35"></script>
+  <script src="/static/js/auth.js?v=36"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>

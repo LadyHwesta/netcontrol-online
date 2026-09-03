@@ -283,6 +283,33 @@ class TestReassignUser:
         assert [o["id"] for o in mine] == [org_b_id]
         assert mine[0]["role"] == "member"
 
+    def test_moving_a_user_with_extra_roles_does_not_error_and_drops_them(self, client):
+        """Regression (role revamp, issue follow-up): this endpoint bulk-
+        deletes OrganizationMembership rows via a raw Core `delete()`, which
+        SQLite doesn't actually cascade to OrganizationMembershipRole without
+        PRAGMA foreign_keys=ON -- a naive fix only shows up on a SECOND move
+        (a later INSERT reusing a freed membership id collides with an
+        orphaned role row). Move the same user twice to catch that."""
+        super_token = _bootstrap_super_admin(client)
+        org_a_id, admin_a_token = _create_org(client, super_token, "W1A", "orgax", "Org AX")
+        org_b_id, _ = _create_org(client, super_token, "W2B", "orgbx", "Org BX")
+        org_c_id, _ = _create_org(client, super_token, "W3C", "orgcx", "Org CX")
+
+        user_a = next(u for u in client.get("/admin/users", headers=auth(super_token)).json() if u["callsign"] == "W1A")
+        # Org A's own founder/admin grants themselves an extra role.
+        client.put(f"/orgs/{org_a_id}/members/{user_a['id']}/extra-roles", json={"roles": ["broadcaster"]}, headers=auth(admin_a_token))
+
+        for target_org in (org_b_id, org_c_id):
+            move = client.patch(f"/admin/users/{user_a['id']}/org", headers=auth(super_token), json={
+                "org_id": target_org, "role": "member",
+            })
+            assert move.status_code == 200, move.text
+
+        # The move doesn't carry extra roles into the new org (a fresh
+        # membership row, never explicitly granted anything there).
+        mine = client.get("/orgs/mine", headers=auth(login(client, "W1A"))).json()
+        assert mine[0]["roles"] == ["net_control_op"]
+
     def test_moving_last_member_orphans_and_deletes_old_org(self, client):
         super_token = _bootstrap_super_admin(client)
         org_a_id, _ = _create_org(client, super_token, "W1A", "orga", "Org A")

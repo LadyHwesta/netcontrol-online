@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import engine, get_db
-from models import EnabledLanguage, Organization, OrganizationMembership, OrgEnabledLanguage, User
+from models import EnabledLanguage, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, User
 from routers import helpers
 from routers.deps import get_current_user
 from routers.helpers import _create_invited_user, _delete_orphaned_orgs, _get_or_create_org
@@ -293,6 +293,18 @@ async def admin_reassign_user_org(user_id: int, data: OrgReassignUser, admin: Us
         raise HTTPException(404, "Organization not found")
 
     old_org_ids = set((await db.execute(select(OrganizationMembership.org_id).filter(OrganizationMembership.user_id == user.id))).scalars().all())
+    # Explicit child cleanup (issue follow-up): ON DELETE CASCADE on
+    # OrganizationMembershipRole isn't actually enforced by SQLite for a bulk
+    # Core-level DELETE like this one (no PRAGMA foreign_keys=ON) -- relying
+    # on it silently orphans role rows in dev/test and, worse, can collide
+    # with a rowid a later INSERT reuses. Postgres enforces it either way, so
+    # this is a no-op there; being explicit costs nothing and is correct on
+    # both.
+    old_membership_ids = (await db.execute(
+        select(OrganizationMembership.id).filter(OrganizationMembership.user_id == user.id)
+    )).scalars().all()
+    if old_membership_ids:
+        await db.execute(delete(OrganizationMembershipRole).where(OrganizationMembershipRole.membership_id.in_(old_membership_ids)))
     await db.execute(delete(OrganizationMembership).where(OrganizationMembership.user_id == user.id))
     db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
     user.current_org_id = org.id

@@ -26,7 +26,7 @@ from database import get_db
 from models import ApiToken, OrganizationMembership, User
 from routers import helpers
 from routers.deps import ALGORITHM, SECRET_KEY, get_current_user, limiter
-from routers.helpers import _captcha_configured, _captcha_log, _get_or_create_org, _verify_captcha
+from routers.helpers import SELF_REQUESTABLE_ROLES, _captcha_configured, _captcha_log, _get_or_create_org, _verify_captcha
 from routers.schemas import UserOut
 
 router = APIRouter()
@@ -88,11 +88,26 @@ class UserCreate(BaseModel):
     org_name: Optional[str] = None
     org_website_url: Optional[str] = None
     captcha_token: Optional[str] = None  # bot-protection widget response, required only if CAPTCHA_PROVIDER is set
+    # Role revamp (issue follow-up): which role(s) the registrant is interested
+    # in filling -- an informational hint only (OrganizationMembership.
+    # requested_roles), never authoritative; the org admin decides the actual
+    # grant at approval time. "admin" is deliberately not self-requestable.
+    requested_roles: Optional[list[str]] = None
 
     @field_validator("callsign")
     @classmethod
     def callsign_upper(cls, v):
         return v.upper().strip()
+
+    @field_validator("requested_roles")
+    @classmethod
+    def valid_requested_roles(cls, v):
+        if v is None:
+            return v
+        bad = [r for r in v if r not in SELF_REQUESTABLE_ROLES]
+        if bad:
+            raise ValueError(f"Invalid requested role(s): {', '.join(bad)}")
+        return v
 
 
 class ThemeUpdate(BaseModel):
@@ -219,6 +234,7 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
         user_id=user.id,
         role="admin" if org_created else "member",
         approved=membership_approved,
+        requested_roles=",".join(data.requested_roles) if data.requested_roles else None,
     ))
     await db.commit()
 

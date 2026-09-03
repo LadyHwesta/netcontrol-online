@@ -701,6 +701,27 @@ MIGRATIONS = [
          added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
          UNIQUE (incident_id, callsign))"""),
+
+    # ── Role revamp (issue follow-up) — org-level roles + net-level grants ──
+    # organization_memberships.role and net_shares.can_edit are UNCHANGED
+    # ('member' is just displayed "Net Control Op" now, see ORG_ROLE_DISPLAY
+    # in routers/helpers.py); the two new self-service roles (Tactical
+    # Operator, Broadcaster) are additive/multi-valued, so they live in these
+    # separate join tables instead of becoming more values of those columns.
+    ("organization_memberships: requested roles hint from registration",
+     "ALTER TABLE organization_memberships ADD COLUMN IF NOT EXISTS requested_roles VARCHAR(200)"),
+    ("table: organization_membership_roles",
+     """CREATE TABLE IF NOT EXISTS organization_membership_roles (
+         id SERIAL PRIMARY KEY,
+         membership_id INTEGER NOT NULL REFERENCES organization_memberships(id) ON DELETE CASCADE,
+         role VARCHAR(20) NOT NULL,
+         UNIQUE (membership_id, role))"""),
+    ("table: net_share_roles",
+     """CREATE TABLE IF NOT EXISTS net_share_roles (
+         id SERIAL PRIMARY KEY,
+         net_share_id INTEGER NOT NULL REFERENCES net_shares(id) ON DELETE CASCADE,
+         role VARCHAR(20) NOT NULL,
+         UNIQUE (net_share_id, role))"""),
 ]
 
 # ---------------------------------------------------------------------------

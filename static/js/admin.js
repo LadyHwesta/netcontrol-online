@@ -419,26 +419,45 @@ async function adminDelete(userId) {
 // fed from the org-scoped endpoints and with a much smaller action set —
 // deactivate/make-admin/delete are global-account actions an org admin
 // shouldn't have.
+let orgMembersCache = [];   // last-loaded /orgs/{id}/members rows -- orgToggleExtraRole below reads current roles from here
+
 async function loadOrgOperators() {
   const orgId = currentUser.current_org_id;
   const [pending, members] = await Promise.all([
     apiFetch(`/orgs/${orgId}/pending-members`).catch(e => { toast(e.message, 'error'); return []; }),
     apiFetch(`/orgs/${orgId}/members`).catch(e => { toast(e.message, 'error'); return []; }),
   ]);
+  orgMembersCache = members;
 
   const pendingEl = document.getElementById('admin-pending-list');
   if (pending.length === 0) {
     pendingEl.innerHTML = `<p class="text-muted" style="font-size:13px">${t('No pending registrations.')}</p>`;
   } else {
+    // Role revamp (issue follow-up): the two self-service roles are pre-checked
+    // from the registrant's own requested_roles hint, editable before approving
+    // -- admin/net_control_op are still granted separately (role toggle below,
+    // once approved) since they're the single base role, not additive.
     pendingEl.innerHTML = pending.map(m => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-        <span class="callsign">${esc(m.callsign)}</span>
-        <span>${esc(m.name)}</span>
-        <span class="text-muted" style="font-size:12px">${esc(m.email)}</span>
-        <span class="text-muted" style="font-size:11px">${t('Requested')} ${fmt(m.requested_at)}</span>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-primary btn-sm" onclick="orgApproveMember(${orgId}, ${m.user_id}, this)">✓ ${t('Approve')}</button>
-          <button class="btn btn-danger btn-sm" onclick="orgRejectMember(${orgId}, ${m.user_id}, '${esc(m.callsign)}')">✕ ${t('Reject')}</button>
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="callsign">${esc(m.callsign)}</span>
+          <span>${esc(m.name)}</span>
+          <span class="text-muted" style="font-size:12px">${esc(m.email)}</span>
+          <span class="text-muted" style="font-size:11px">${t('Requested')} ${fmt(m.requested_at)}</span>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="orgApproveMember(${orgId}, ${m.user_id}, this)">✓ ${t('Approve')}</button>
+            <button class="btn btn-danger btn-sm" onclick="orgRejectMember(${orgId}, ${m.user_id}, '${esc(m.callsign)}')">✕ ${t('Reject')}</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:14px;margin-top:6px;font-size:11px;color:var(--text-muted)">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
+            <input type="checkbox" id="pending-role-tactical_operator-${m.user_id}" style="width:auto" ${m.requested_roles.includes('tactical_operator') ? 'checked' : ''}>
+            ${t('Tactical Operator')}
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
+            <input type="checkbox" id="pending-role-broadcaster-${m.user_id}" style="width:auto" ${m.requested_roles.includes('broadcaster') ? 'checked' : ''}>
+            ${t('Broadcaster')}
+          </label>
         </div>
       </div>
     `).join('');
@@ -463,11 +482,23 @@ async function loadOrgOperators() {
       : (m.role === 'admin'
           ? `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'member', '${esc(m.callsign)}')">${t('Remove Admin')}</button>`
           : `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'admin', '${esc(m.callsign)}')">${t('Make Admin')}</button>`);
+    // Role revamp (issue follow-up): base role badge (rename "Member" ->
+    // "Net Control Op" is display-only, see ORG_ROLE_DISPLAY) plus a clickable
+    // badge per extra role that toggles it on/off for this member.
+    const baseBadge = m.role === 'admin'
+      ? `<span class="badge badge-blue">${t('Org Admin')}</span>`
+      : `<span class="badge badge-gray">${t('Net Control Op')}</span>`;
+    const extraBadges = ['tactical_operator', 'broadcaster'].map(r => {
+      const held = m.roles.includes(r);
+      const label = r === 'tactical_operator' ? t('Tactical Op') : t('Broadcaster');
+      return `<span class="badge ${held ? 'badge-green' : 'badge-gray'}" style="cursor:pointer" title="${t('Click to toggle')}"
+        onclick="orgToggleExtraRole(${orgId}, ${m.user_id}, '${r}', ${held}, '${esc(m.callsign)}')">${held ? '✓ ' : ''}${label}</span>`;
+    }).join(' ');
     return `<tr>
     <td><span class="callsign">${esc(m.callsign)}</span></td>
     <td>${esc(m.name)}</td>
     <td class="text-muted" style="font-size:12px">${esc(m.email)}</td>
-    <td>${m.role === 'admin' ? `<span class="badge badge-blue">${t('Org Admin')}</span>` : `<span class="badge badge-gray">${t('Member')}</span>`}</td>
+    <td style="display:flex;gap:4px;flex-wrap:wrap">${baseBadge} ${extraBadges}</td>
     <td><span class="badge badge-green">${t('Active')}</span></td>
     <td class="text-muted" style="font-size:11px;text-align:center">—</td>
     <td class="text-muted" style="font-size:12px">${fmt(m.requested_at)}</td>
@@ -476,10 +507,28 @@ async function loadOrgOperators() {
   }).join('');
 }
 
+async function orgToggleExtraRole(orgId, userId, role, currentlyHeld, callsign) {
+  // Full replace (issue follow-up) -- fetch the member's current extra roles
+  // from the already-loaded table rather than a round trip, then flip just
+  // this one and PUT the whole set back.
+  const row = orgMembersCache.find(m => m.user_id === userId);
+  const current = new Set(row ? row.roles.filter(r => r === 'tactical_operator' || r === 'broadcaster') : []);
+  if (currentlyHeld) current.delete(role); else current.add(role);
+  try {
+    await apiFetch(`/orgs/${orgId}/members/${userId}/extra-roles`, { method: 'PUT', body: JSON.stringify({ roles: [...current] }) });
+    toast(`${callsign} ${currentlyHeld ? t('role removed') : t('role granted')}`, 'success');
+    loadOrgOperators();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function orgApproveMember(orgId, userId, btn) {
   btnLoading(btn, true);
+  const roles = ['tactical_operator', 'broadcaster'].filter(r => {
+    const el = document.getElementById(`pending-role-${r}-${userId}`);
+    return el && el.checked;
+  });
   try {
-    await apiFetch(`/orgs/${orgId}/members/${userId}/approve`, { method: 'PATCH' });
+    await apiFetch(`/orgs/${orgId}/members/${userId}/approve`, { method: 'PATCH', body: JSON.stringify({ roles }) });
     toast(t('Member approved'), 'success');
     loadOrgOperators();
   } catch (e) {
@@ -502,7 +551,7 @@ async function orgSetMemberRole(orgId, userId, role, callsign) {
   if (!confirm(msg)) return;
   try {
     await apiFetch(`/orgs/${orgId}/members/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role }) });
-    toast(role === 'admin' ? `${callsign} ${t('is now an org admin')}` : `${callsign} ${t('is now a member')}`, 'success');
+    toast(role === 'admin' ? `${callsign} ${t('is now an org admin')}` : `${callsign} ${t('is now a Net Control Op')}`, 'success');
     loadOrgOperators();
   } catch (e) { toast(e.message, 'error'); }
 }

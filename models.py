@@ -148,18 +148,35 @@ class OrganizationMembership(Base):
     separate from User.is_admin (super admin, bypasses org scoping entirely).
     approved=False means pending: the org hasn't accepted this user yet, mirroring
     the existing User.is_active pending-approval flow but per-org instead of
-    instance-wide. A user may hold multiple memberships (multiple orgs)."""
+    instance-wide. A user may hold multiple memberships (multiple orgs).
+
+    Role revamp (issue follow-up): `role` itself is UNCHANGED ('admin' | 'member')
+    -- 'member' is just displayed as "Net Control Op" everywhere now (see
+    routers/helpers.py's ORG_ROLE_DISPLAY), same privileges as before, so no
+    data migration was needed to rename it. A membership can ALSO hold zero or
+    more of the two new self-service roles (Tactical Operator, Broadcaster) --
+    those live in the separate `extra_roles` table below rather than as more
+    values of this column, since a membership can hold several of them at once
+    (e.g. both Net Control Op AND Broadcaster), which a single string column
+    can't express. A membership's full canonical role set is
+    {ORG_ROLE_DISPLAY-mapped `role`} | {extra_roles}."""
     __tablename__ = "organization_memberships"
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False, default="member")  # 'admin' | 'member'
+    role = Column(String(20), nullable=False, default="member")  # 'admin' | 'member' (displayed "Net Control Op")
     approved = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    # Comma-joined role names (e.g. "tactical_operator,broadcaster") the user asked
+    # for on the registration/join form -- purely an informational hint shown to
+    # the org admin during approval, never authoritative on its own; the admin's
+    # actual grant is always the extra_roles rows below, set explicitly.
+    requested_roles = Column(String(200), nullable=True)
 
     org = relationship("Organization", back_populates="memberships")
     user = relationship("User", back_populates="memberships", foreign_keys=[user_id])
+    extra_roles = relationship("OrganizationMembershipRole", back_populates="membership", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("org_id", "user_id", name="uq_org_membership_org_user"),
@@ -167,6 +184,30 @@ class OrganizationMembership(Base):
 
     def __repr__(self):
         return f"<OrganizationMembership org={self.org_id} user={self.user_id} role={self.role}>"
+
+
+class OrganizationMembershipRole(Base):
+    """One extra self-service role (issue follow-up) granted to an
+    OrganizationMembership on top of its base 'admin'/'member' role --
+    'tactical_operator' | 'broadcaster' only (admin/net_control_op live on
+    OrganizationMembership.role itself, see its docstring). Org-approved here
+    is what makes a role *offerable* when a net is later shared with this
+    user (routers/nets.py's update_net_shares) -- holding it here alone grants
+    no net access by itself."""
+    __tablename__ = "organization_membership_roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    membership_id = Column(Integer, ForeignKey("organization_memberships.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), nullable=False)  # 'tactical_operator' | 'broadcaster'
+
+    membership = relationship("OrganizationMembership", back_populates="extra_roles")
+
+    __table_args__ = (
+        UniqueConstraint("membership_id", "role", name="uq_org_membership_extra_role"),
+    )
+
+    def __repr__(self):
+        return f"<OrganizationMembershipRole membership={self.membership_id} role={self.role}>"
 
 
 class Net(Base):
@@ -651,11 +692,15 @@ class NetShare(Base):
     # Whether this share also grants edit rights (net details, schedule, DMR
     # config, evac zones, station remarks) rather than just view/check-in
     # access (issue follow-up). Deleting the net and managing sharing itself
-    # stay owner/admin-only regardless.
+    # stay owner/admin-only regardless. This is the "net_control_op" role in
+    # the role-revamp's vocabulary (issue follow-up) -- full access already
+    # implies every other role, so it stays this plain boolean rather than
+    # becoming one more row in extra_roles below.
     can_edit = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
     net = relationship("Net", back_populates="shares")
+    extra_roles = relationship("NetShareRole", back_populates="net_share", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("net_id", "user_id", name="uq_net_share_net_user"),
@@ -664,6 +709,31 @@ class NetShare(Base):
     def __repr__(self):
         target = f"user={self.user_id}" if self.user_id else "ALL"
         return f"<NetShare net={self.net_id} {target}>"
+
+
+class NetShareRole(Base):
+    """One extra minimal-access role (issue follow-up) granted by a NetShare
+    -- 'tactical_operator' | 'broadcaster' only (full "net_control_op" access
+    is NetShare.can_edit itself, see its docstring). A share can carry more
+    than one, e.g. someone who's both Tactical Operator and Broadcaster on
+    the same net. Only ever offerable for a role the target user's
+    OrganizationMembership already holds (routers/nets.py's
+    update_net_shares) -- enforced server-side, not by any DB constraint
+    here, since that check spans two tables."""
+    __tablename__ = "net_share_roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    net_share_id = Column(Integer, ForeignKey("net_shares.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), nullable=False)  # 'tactical_operator' | 'broadcaster'
+
+    net_share = relationship("NetShare", back_populates="extra_roles")
+
+    __table_args__ = (
+        UniqueConstraint("net_share_id", "role", name="uq_net_share_extra_role"),
+    )
+
+    def __repr__(self):
+        return f"<NetShareRole share={self.net_share_id} role={self.role}>"
 
 
 class NetSchedule(Base):

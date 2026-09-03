@@ -9,16 +9,16 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, EmailStr, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import activitypub_delivery
 import activitypub_signing
 from database import get_db
-from models import ActivityPubFollower, Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrgEnabledLanguage, SystemSetting, User
+from models import ActivityPubFollower, Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, SystemSetting, User
 from routers import helpers
 from routers.deps import get_current_user
-from routers.helpers import _get_or_create_org, _net_to_out, _org_logo_file
+from routers.helpers import NET_EXTRA_ROLES, ORG_ROLE_DISPLAY, SELF_REQUESTABLE_ROLES, _get_or_create_org, _net_to_out, _org_logo_file, _org_role_set
 from routers.schemas import AdminUserOut, NetOut, OrganizationOut, UserOut
 from routers.translation import _translation_configured, run_enable_language_job
 
@@ -49,6 +49,12 @@ class OrgMemberOut(BaseModel):
     name: str
     email: str
     role: str
+    # Role revamp (issue follow-up): the membership's full canonical role set
+    # -- {"admin"} or {"net_control_op"} plus any of tactical_operator/
+    # broadcaster -- and, for a still-pending row, what the registrant asked
+    # for (informational hint only, see OrganizationMembership.requested_roles).
+    roles: list[str] = []
+    requested_roles: list[str] = []
     approved: bool
     requested_at: datetime
 
@@ -57,6 +63,7 @@ class MyOrgOut(OrganizationOut):
     """Like OrganizationOut, plus the caller's own role in that org — lets the
     frontend show the org-admin panel only where the user actually has it."""
     role: str
+    roles: list[str] = []
 
 
 async def require_org_admin(org_id: int, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
@@ -113,12 +120,20 @@ async def list_my_orgs(current_user: User = Depends(get_current_user), db: Async
     """The current user's own approved organizations, with their role in each
     — powers the org switcher and the org-admin panel visibility check."""
     rows = (await db.execute(
-        select(Organization, OrganizationMembership.role)
+        select(Organization, OrganizationMembership)
         .join(OrganizationMembership, OrganizationMembership.org_id == Organization.id)
         .filter(OrganizationMembership.user_id == current_user.id, OrganizationMembership.approved == True)
         .order_by(Organization.name)
     )).all()
-    return [_org_to_out(org, cls=MyOrgOut, role=role) for org, role in rows]
+    out = []
+    for org, m in rows:
+        roles = {ORG_ROLE_DISPLAY.get(m.role, m.role)}
+        extra = (await db.execute(select(OrganizationMembershipRole.role).filter(
+            OrganizationMembershipRole.membership_id == m.id
+        ))).scalars().all()
+        roles.update(extra)
+        out.append(_org_to_out(org, cls=MyOrgOut, role=m.role, roles=sorted(roles)))
+    return out
 
 
 class OrganizationUpdate(BaseModel):
@@ -393,6 +408,17 @@ class OrgJoinRequest(BaseModel):
     org_slug: Optional[str] = None
     org_name: Optional[str] = None
     org_website_url: Optional[str] = None
+    requested_roles: Optional[list[str]] = None   # same role-interest hint as registration (issue follow-up)
+
+    @field_validator("requested_roles")
+    @classmethod
+    def valid_requested_roles(cls, v):
+        if v is None:
+            return v
+        bad = [r for r in v if r not in SELF_REQUESTABLE_ROLES]
+        if bad:
+            raise ValueError(f"Invalid requested role(s): {', '.join(bad)}")
+        return v
 
 
 @router.post("/orgs/join", response_model=OrganizationOut, status_code=201)
@@ -415,6 +441,7 @@ async def join_org(data: OrgJoinRequest, current_user: User = Depends(get_curren
         user_id=current_user.id,
         role="admin" if org_created else "member",
         approved=False,
+        requested_roles=",".join(data.requested_roles) if data.requested_roles else None,
     ))
     await db.commit()
     return org
@@ -447,6 +474,30 @@ async def switch_current_org(data: CurrentOrgUpdate, current_user: User = Depend
     return current_user
 
 
+async def _org_member_out_rows(rows: list, db: AsyncSession) -> list[OrgMemberOut]:
+    """Shared by the pending-queue and member-list endpoints below — attaches
+    each membership's full canonical role set (+ requested_roles, for the
+    pending queue's approval-hint) in one extra query rather than N+1."""
+    membership_ids = [m.id for m, _u in rows]
+    extra_by_membership: dict[int, set[str]] = {}
+    if membership_ids:
+        extra_rows = (await db.execute(select(OrganizationMembershipRole).filter(
+            OrganizationMembershipRole.membership_id.in_(membership_ids)
+        ))).scalars().all()
+        for r in extra_rows:
+            extra_by_membership.setdefault(r.membership_id, set()).add(r.role)
+    out = []
+    for m, u in rows:
+        roles = {ORG_ROLE_DISPLAY.get(m.role, m.role)} | extra_by_membership.get(m.id, set())
+        requested = [r for r in (m.requested_roles or "").split(",") if r]
+        out.append(OrgMemberOut(
+            user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
+            role=m.role, roles=sorted(roles), requested_roles=requested,
+            approved=m.approved, requested_at=m.created_at,
+        ))
+    return out
+
+
 @router.get("/orgs/{org_id}/pending-members", response_model=list[OrgMemberOut])
 async def list_pending_org_members(org_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     rows = (await db.execute(
@@ -455,13 +506,7 @@ async def list_pending_org_members(org_id: int, admin: User = Depends(require_or
         .filter(OrganizationMembership.org_id == org_id, OrganizationMembership.approved == False)
         .order_by(OrganizationMembership.created_at.desc())
     )).all()
-    return [
-        OrgMemberOut(
-            user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
-            role=m.role, approved=m.approved, requested_at=m.created_at,
-        )
-        for m, u in rows
-    ]
+    return await _org_member_out_rows(rows, db)
 
 
 @router.get("/orgs/{org_id}/members", response_model=list[OrgMemberOut])
@@ -472,13 +517,7 @@ async def list_org_members(org_id: int, admin: User = Depends(require_org_admin)
         .filter(OrganizationMembership.org_id == org_id, OrganizationMembership.approved == True)
         .order_by(User.callsign)
     )).all()
-    return [
-        OrgMemberOut(
-            user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
-            role=m.role, approved=m.approved, requested_at=m.created_at,
-        )
-        for m, u in rows
-    ]
+    return await _org_member_out_rows(rows, db)
 
 
 @router.get("/orgs/{org_id}/nets", response_model=list[NetOut])
@@ -492,14 +531,33 @@ async def list_org_nets(org_id: int, admin: User = Depends(require_org_admin), d
     return [await _net_to_out(n, admin, db) for n in nets]
 
 
+class OrgMemberApprove(BaseModel):
+    # Role revamp (issue follow-up): the extra roles (tactical_operator/
+    # broadcaster) to grant right away, alongside approval -- typically the
+    # admin panel's approve button pre-fills this from the pending row's own
+    # requested_roles, editable before submitting. Omitted/empty grants none;
+    # they can always be added later via PUT .../extra-roles.
+    roles: list[str] = []
+
+    @field_validator("roles")
+    @classmethod
+    def valid_roles(cls, v):
+        bad = [r for r in v if r not in NET_EXTRA_ROLES]
+        if bad:
+            raise ValueError(f"Invalid role(s): {', '.join(bad)} — only tactical_operator/broadcaster may be set here")
+        return v
+
+
 @router.patch("/orgs/{org_id}/members/{user_id}/approve", status_code=204)
-async def approve_org_member(org_id: int, user_id: int, admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
+async def approve_org_member(org_id: int, user_id: int, data: OrgMemberApprove = OrgMemberApprove(), admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db)):
     membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org_id, OrganizationMembership.user_id == user_id,
     ))).scalar_one_or_none()
     if not membership:
         raise HTTPException(404, "Membership not found")
     membership.approved = True
+    for role in data.roles:
+        db.add(OrganizationMembershipRole(membership_id=membership.id, role=role))
     user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
     # Only their FIRST approved org needs to flip is_active — a user already
     # active via another org just needed this specific membership approved.
@@ -576,10 +634,48 @@ async def update_org_member_role(
     await db.commit()
 
     user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
-    return OrgMemberOut(
-        user_id=user.id, callsign=user.callsign, name=user.name, email=user.email,
-        role=membership.role, approved=membership.approved, requested_at=membership.created_at,
-    )
+    rows = await _org_member_out_rows([(membership, user)], db)
+    return rows[0]
+
+
+class OrgMemberExtraRolesUpdate(BaseModel):
+    roles: list[str] = []   # replaces the membership's full extra-role set
+
+    @field_validator("roles")
+    @classmethod
+    def valid_roles(cls, v):
+        bad = [r for r in v if r not in NET_EXTRA_ROLES]
+        if bad:
+            raise ValueError(f"Invalid role(s): {', '.join(bad)} — only tactical_operator/broadcaster may be set here")
+        return v
+
+
+@router.put("/orgs/{org_id}/members/{user_id}/extra-roles", response_model=OrgMemberOut)
+async def update_org_member_extra_roles(
+    org_id: int, user_id: int, data: OrgMemberExtraRolesUpdate,
+    admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+):
+    """Set which of the two self-service roles (Tactical Operator,
+    Broadcaster — issue follow-up) an already-approved member holds at the
+    org level — a full replace, same shape as the sharing endpoints'
+    full-replace convention. Separate from update_org_member_role above
+    since these are additive/multi-valued (unlike admin/net_control_op,
+    which stay a single base role) — see OrganizationMembership's docstring."""
+    membership = (await db.execute(select(OrganizationMembership).filter(
+        OrganizationMembership.org_id == org_id,
+        OrganizationMembership.user_id == user_id,
+        OrganizationMembership.approved == True,
+    ))).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(404, "Membership not found")
+    await db.execute(delete(OrganizationMembershipRole).where(OrganizationMembershipRole.membership_id == membership.id))
+    for role in set(data.roles):
+        db.add(OrganizationMembershipRole(membership_id=membership.id, role=role))
+    await db.commit()
+
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+    rows = await _org_member_out_rows([(membership, user)], db)
+    return rows[0]
 
 
 class OrgUserCreate(BaseModel):

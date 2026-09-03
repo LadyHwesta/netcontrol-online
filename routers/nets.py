@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import get_db
-from models import Net, NetShare, OrganizationMembership, User
+from models import Net, NetShare, NetShareRole, OrganizationMembership, User
 from routers.deps import get_current_user
-from routers.helpers import _get_editable_net, _get_net_for_user, _get_owned_net, _net_to_out
+from routers.helpers import NET_EXTRA_ROLES, _get_editable_net, _get_net_for_user, _get_owned_net, _net_to_out, _org_role_set
 from routers.schemas import NetOut
 
 router = APIRouter()
@@ -63,7 +63,17 @@ class NetShareUpdate(BaseModel):
     share_with_all: bool = False
     can_edit_all: bool = False        # edit rights for the "shared with all" grant, only meaningful when share_with_all=True
     user_ids: list[int] = []          # specific user IDs to share with (ignored when share_with_all=True)
-    editor_user_ids: list[int] = []   # subset of user_ids to also grant edit rights
+    editor_user_ids: list[int] = []   # subset of user_ids to also grant edit rights (net_control_op)
+    # Role revamp (issue follow-up): subsets of user_ids to also grant the two
+    # minimal self-service roles -- each only actually applied to a user whose
+    # own org membership already holds that role (silently dropped otherwise,
+    # so stale UI state never grants more than the org admin approved).
+    tactical_operator_user_ids: list[int] = []
+    broadcaster_user_ids: list[int] = []
+    # Same idea for the "shared with all" grant, only meaningful when
+    # share_with_all=True -- still gated per-user against org membership below.
+    tactical_operator_all: bool = False
+    broadcaster_all: bool = False
 
 
 class NetOwnerUpdate(BaseModel):
@@ -244,25 +254,77 @@ async def get_net_shares(net_id: int, current_user: User = Depends(get_current_u
     """Return the current sharing config for a net (owner or admin only)."""
     await _get_owned_net(net_id, current_user, db)
     shares = (await db.execute(select(NetShare).filter(NetShare.net_id == net_id))).scalars().all()
+    share_ids = [s.id for s in shares]
+    extra_rows = (
+        (await db.execute(select(NetShareRole).filter(NetShareRole.net_share_id.in_(share_ids)))).scalars().all()
+        if share_ids else []
+    )
+    extra_by_share = {}
+    for r in extra_rows:
+        extra_by_share.setdefault(r.net_share_id, set()).add(r.role)
     all_share = next((s for s in shares if s.user_id is None), None)
+    all_extra = extra_by_share.get(all_share.id, set()) if all_share else set()
     return {
         "share_with_all": all_share is not None,
         "can_edit_all": bool(all_share and all_share.can_edit),
+        "tactical_operator_all": "tactical_operator" in all_extra,
+        "broadcaster_all": "broadcaster" in all_extra,
         "user_ids": [s.user_id for s in shares if s.user_id is not None],
         "editor_user_ids": [s.user_id for s in shares if s.user_id is not None and s.can_edit],
+        "tactical_operator_user_ids": [s.user_id for s in shares if s.user_id is not None and "tactical_operator" in extra_by_share.get(s.id, set())],
+        "broadcaster_user_ids": [s.user_id for s in shares if s.user_id is not None and "broadcaster" in extra_by_share.get(s.id, set())],
     }
 
 
 @router.put("/nets/{net_id}/shares", status_code=204)
 async def update_net_shares(net_id: int, data: NetShareUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Replace the sharing config for a net (owner or admin only)."""
-    await _get_owned_net(net_id, current_user, db)
-    # Wipe existing shares for this net
+    """Replace the sharing config for a net (owner or admin only). Role
+    revamp (issue follow-up): a per-user tactical_operator/broadcaster grant
+    is only actually written when that user's own org membership already
+    holds the role -- an org admin decides who's *eligible* to be offered a
+    role (via approval), sharing decides which of their eligible roles apply
+    to THIS net. Silently dropped rather than a 400 so stale client-side
+    state (e.g. a role revoked at the org level after the share form was
+    opened) never grants more than intended."""
+    net = await _get_owned_net(net_id, current_user, db)
+    # Wipe existing shares for this net. NetShareRole's ON DELETE CASCADE
+    # isn't actually enforced by SQLite for a bulk Core-level DELETE like
+    # this one (no PRAGMA foreign_keys=ON) -- relying on it silently orphans
+    # role rows in dev/test and, worse, a later INSERT reusing a freed rowid
+    # can then collide with one. Postgres enforces it either way, so the
+    # explicit delete below is a no-op there; being explicit is correct on
+    # both.
+    old_share_ids = (await db.execute(select(NetShare.id).filter(NetShare.net_id == net_id))).scalars().all()
+    if old_share_ids:
+        await db.execute(delete(NetShareRole).where(NetShareRole.net_share_id.in_(old_share_ids)))
     await db.execute(delete(NetShare).where(NetShare.net_id == net_id))
+    await db.flush()
+
+    async def _add_share(user_id, can_edit, extra_roles):
+        share = NetShare(net_id=net_id, user_id=user_id, can_edit=can_edit)
+        db.add(share)
+        await db.flush()
+        for role in extra_roles:
+            db.add(NetShareRole(net_share_id=share.id, role=role))
+
     if data.share_with_all:
-        db.add(NetShare(net_id=net_id, user_id=None, can_edit=data.can_edit_all))
+        extra = set()
+        if data.tactical_operator_all:
+            extra.add("tactical_operator")
+        if data.broadcaster_all:
+            extra.add("broadcaster")
+        await _add_share(None, data.can_edit_all, extra)
     else:
         editor_ids = set(data.editor_user_ids)
+        tactical_ids = set(data.tactical_operator_user_ids)
+        broadcaster_ids = set(data.broadcaster_user_ids)
         for uid in data.user_ids:
-            db.add(NetShare(net_id=net_id, user_id=uid, can_edit=uid in editor_ids))
+            extra = set()
+            if uid in tactical_ids or uid in broadcaster_ids:
+                held = await _org_role_set(net.org_id, uid, db)
+                if uid in tactical_ids and "tactical_operator" in held:
+                    extra.add("tactical_operator")
+                if uid in broadcaster_ids and "broadcaster" in held:
+                    extra.add("broadcaster")
+            await _add_share(uid, uid in editor_ids, extra)
     await db.commit()

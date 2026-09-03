@@ -135,6 +135,21 @@
           <select class="form-control" id="reg-org-select" style="display:none"></select>
           <p id="reg-org-hint" style="margin:6px 0 0;font-size:11px;color:var(--text-muted)" data-i18n="You'll be this organization's admin, pending a super admin's approval before you can log in.">You'll be this organization's admin, pending a super admin's approval before you can log in.</p>
         </div>
+        <div class="form-group">
+          <label data-i18n="What would you like to help with? (optional)">What would you like to help with? (optional)</label>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="reg-role-net_control_op" value="net_control_op" style="width:auto"> <span data-i18n="Net Control Op — run scheduled nets">Net Control Op — run scheduled nets</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="reg-role-tactical_operator" value="tactical_operator" style="width:auto"> <span data-i18n="Tactical Operator — staff a field position during an activation">Tactical Operator — staff a field position during an activation</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="reg-role-broadcaster" value="broadcaster" style="width:auto"> <span data-i18n="Broadcaster — carry a broadcast segment during a net">Broadcaster — carry a broadcast segment during a net</span>
+            </label>
+          </div>
+          <p style="margin:6px 0 0;font-size:11px;color:var(--text-muted)" data-i18n="Just a hint for your org admin — they decide what's actually granted, and you can ask for more later.">Just a hint for your org admin — they decide what's actually granted, and you can ask for more later.</p>
+        </div>
         <div id="reg-captcha" style="display:none;margin-bottom:14px"></div>
         <button class="btn btn-primary" style="width:100%" onclick="doRegister(this)" data-i18n="Create Account">Create Account</button>
       </div>
@@ -258,6 +273,7 @@
       <button class="sidebar-btn active" onclick="showView('nets')" id="nav-nets"><span class="sb-icon">📡</span><span class="sb-label" data-i18n="My Nets">My Nets</span></button>
       <button class="sidebar-btn" onclick="showView('history')" id="nav-history" style="display:none"><span class="sb-icon">📊</span><span class="sb-label" data-i18n="History">History</span></button>
       <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none"><span class="sb-icon">🔑</span><span class="sb-label" data-i18n="Admin">Admin</span></a>
+      <a class="sidebar-btn" href="/assignments"><span class="sb-icon">🎯</span><span class="sb-label" data-i18n="My Assignments">My Assignments</span></a>
       <a class="sidebar-btn" href="/incidents"><span class="sb-icon">🚨</span><span class="sb-label" data-i18n="Incidents">Incidents</span></a>
       <a class="sidebar-btn" href="/tokens"><span class="sb-icon">⚙️</span><span class="sb-label" data-i18n="Account">Account</span></a>
       <a class="sidebar-btn" href="/help"><span class="sb-icon">❓</span><span class="sb-label" data-i18n="Help">Help</span></a>
@@ -548,11 +564,21 @@
                 onchange="onShareAllChanged()" />
               <span data-i18n="Share with all registered users">Share with all registered users</span>
             </label>
-            <label id="net-share-all-edit-wrap" style="display:none;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-muted);margin:0 0 10px 24px">
+            <label id="net-share-all-edit-wrap" style="display:none;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-muted);margin:0 0 6px 24px">
               <input type="checkbox" id="net-share-all-edit" style="accent-color:var(--lc-orange)"
                 onchange="onShareAllEditChanged()" />
               <span data-i18n="Everyone can also edit this net, not just view/check in">Everyone can also edit this net, not just view/check in</span>
             </label>
+            <div id="net-share-all-roles-wrap" style="display:none;gap:14px;margin:0 0 10px 24px;font-size:11px;color:var(--text-muted)">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="net-share-all-tactical" style="accent-color:var(--lc-green)" onchange="onShareAllRoleChanged('tactical_operator')" />
+                <span data-i18n="Everyone can hold Tactical Operator here">Everyone can hold Tactical Operator here</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="net-share-all-broadcaster" style="accent-color:var(--lc-green)" onchange="onShareAllRoleChanged('broadcaster')" />
+                <span data-i18n="Everyone can hold Broadcaster here">Everyone can hold Broadcaster here</span>
+              </label>
+            </div>
             <div id="net-share-users" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--lc-border);border-radius:6px;padding:8px 10px">
               <div class="text-muted" style="font-size:12px;margin-bottom:6px" data-i18n="Select individual users — check &quot;Can edit&quot; to also grant them edit rights, not just view/check-in access:">Select individual users — check "Can edit" to also grant them edit rights, not just view/check-in access:</div>
               <div id="net-share-user-list"></div>
@@ -1518,20 +1544,20 @@
   <script>document.getElementById('app-footer-year').textContent = new Date().getFullYear();</script>
 </div><!-- /app -->
 
-  <script src="/static/js/state.js?v=24"></script>
+  <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=22"></script>
   <script src="/static/js/offline-queue.js?v=2"></script>
-  <script src="/static/js/auth.js?v=35"></script>
+  <script src="/static/js/auth.js?v=36"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/views.js?v=19"></script>
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/js/report.js?v=21"></script>
-  <script src="/static/js/nets.js?v=34"></script>
+  <script src="/static/js/nets.js?v=35"></script>
   <script src="/static/js/sessions.js?v=34"></script>
   <script src="/static/js/checkins.js?v=42"></script>
   <script src="/static/js/history.js?v=23"></script>
-  <script src="/static/js/admin.js?v=45"></script>
+  <script src="/static/js/admin.js?v=46"></script>
   <script src="/static/js/schedules.js?v=24"></script>
   <script src="/static/js/tokens.js?v=27"></script>
   <script src="/static/js/dmr.js?v=21"></script>

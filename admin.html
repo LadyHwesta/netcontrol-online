@@ -60,6 +60,7 @@
       <div class="sidebar-section" data-i18n="Navigation">Navigation</div>
       <a class="sidebar-btn" href="/" data-i18n="📻 Net Control">📻 Net Control</a>
       <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none" data-i18n="🔑 Admin">🔑 Admin</a>
+      <a class="sidebar-btn" href="/assignments" data-i18n="🎯 My Assignments">🎯 My Assignments</a>
       <a class="sidebar-btn" href="/incidents" data-i18n="🚨 Incidents">🚨 Incidents</a>
       <a class="sidebar-btn" href="/tokens" data-i18n="⚙️ Account">⚙️ Account</a>
       <a class="sidebar-btn" href="/help" data-i18n="❓ Help">❓ Help</a>
@@ -202,7 +203,7 @@
             <div class="form-group">
               <label data-i18n="Role">Role</label>
               <select class="form-control" id="addop-role">
-                <option value="member" data-i18n="Member">Member</option>
+                <option value="member" data-i18n="Net Control Op">Net Control Op</option>
                 <option value="admin" data-i18n="Org Admin">Org Admin</option>
               </select>
             </div>
@@ -481,7 +482,7 @@
             <div class="form-group">
               <label data-i18n="Role">Role</label>
               <select class="form-control" id="reassign-user-role-select">
-                <option value="member" data-i18n="Member">Member</option>
+                <option value="member" data-i18n="Net Control Op">Net Control Op</option>
                 <option value="admin" data-i18n="Org Admin">Org Admin</option>
               </select>
             </div>
@@ -506,7 +507,7 @@
             <div class="form-group">
               <label data-i18n="Role">Role</label>
               <select class="form-control" id="addmembership-role-select">
-                <option value="member" data-i18n="Member">Member</option>
+                <option value="member" data-i18n="Net Control Op">Net Control Op</option>
                 <option value="admin" data-i18n="Org Admin">Org Admin</option>
               </select>
             </div>
@@ -568,13 +569,13 @@
   </footer>
   <script>document.getElementById('app-footer-year').textContent = new Date().getFullYear();</script>
 </div>
-<script src="/static/js/state.js?v=24"></script>
+<script src="/static/js/state.js?v=25"></script>
 <script src="/static/js/utils.js?v=22"></script>
-<script src="/static/js/auth.js?v=35"></script>
+<script src="/static/js/auth.js?v=36"></script>
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/js/branding.js?v=25"></script>
-<script src="/static/js/admin.js?v=45"></script>
+<script src="/static/js/admin.js?v=46"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {

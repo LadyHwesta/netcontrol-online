@@ -24,7 +24,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Checkin, Net, NetSession, NetShare, Organization, OrganizationMembership, PushSubscription, StationRemark, SystemSetting, TacticalPosition, User, utcnow
+from models import Checkin, Net, NetSession, NetShare, NetShareRole, Organization, OrganizationMembership, OrganizationMembershipRole, PushSubscription, StationRemark, SystemSetting, TacticalPosition, User, utcnow
 from routers.schemas import NetOut
 
 # ---------------------------------------------------------------------------
@@ -671,6 +671,50 @@ async def _net_has_prior_checkin_history(net_id: int, exclude_session_id: int, d
 
 
 # ---------------------------------------------------------------------------
+# Role revamp (issue follow-up) — org-level roles + net-level grants.
+#
+# Four canonical role names are used everywhere (frontend, API, net-level
+# grants): "admin", "net_control_op", "tactical_operator", "broadcaster".
+# OrganizationMembership.role itself keeps its original two DB values
+# ('admin' | 'member') unchanged -- no data migration needed -- and is just
+# *displayed*/translated as "net_control_op" everywhere else; the two new
+# roles (tactical_operator/broadcaster) are additional and multi-valued, so
+# they live in the separate OrganizationMembershipRole table instead of
+# becoming more values of that single column. A membership's full canonical
+# role set is {ORG_ROLE_DISPLAY[role]} | {its extra_roles}.
+#
+# At the net level, "net_control_op" is still exactly NetShare.can_edit (full
+# access already implies every other role); "tactical_operator" and
+# "broadcaster" are additional per-share grants in NetShareRole, each only
+# ever offerable for a role the target user's org membership already holds
+# (enforced in routers/nets.py's update_net_shares, not by a DB constraint,
+# since that check spans both tables).
+# ---------------------------------------------------------------------------
+ORG_ROLE_DISPLAY = {"admin": "admin", "member": "net_control_op"}
+SELF_REQUESTABLE_ROLES = ("net_control_op", "tactical_operator", "broadcaster")  # never "admin"
+NET_EXTRA_ROLES = ("tactical_operator", "broadcaster")  # NetShareRole values; net_control_op is can_edit
+
+
+async def _org_role_set(org_id: int, user_id: int, db: AsyncSession) -> set[str]:
+    """Every canonical role name an APPROVED membership holds in this org --
+    empty set if not a member (or not yet approved). Used to decide which
+    extra roles are actually offerable when sharing a net with this user."""
+    membership = (await db.execute(select(OrganizationMembership).filter(
+        OrganizationMembership.org_id == org_id,
+        OrganizationMembership.user_id == user_id,
+        OrganizationMembership.approved == True,
+    ))).scalar_one_or_none()
+    if not membership:
+        return set()
+    roles = {ORG_ROLE_DISPLAY.get(membership.role, membership.role)}
+    extra = (await db.execute(select(OrganizationMembershipRole.role).filter(
+        OrganizationMembershipRole.membership_id == membership.id
+    ))).scalars().all()
+    roles.update(extra)
+    return roles
+
+
+# ---------------------------------------------------------------------------
 # Net/session access control (used by nearly every router)
 # ---------------------------------------------------------------------------
 
@@ -764,6 +808,31 @@ async def _get_net_for_user(net_id: int, user: User, db: AsyncSession) -> Net:
     if not share:
         raise HTTPException(403, "Access denied")
     return net
+
+
+async def _get_net_for_role(net_id: int, user: User, db: AsyncSession, role: str) -> Net:
+    """Fetch a net; require owner/org-admin, a full-edit (net_control_op)
+    share -- which already implies every other role -- or a NetShare
+    carrying this specific extra role (tactical_operator/broadcaster, see
+    NET_EXTRA_ROLES). Used by the self-service tactical/broadcaster
+    endpoints (issue follow-up); net_control_op access itself is still just
+    _get_editable_net, unchanged."""
+    net = await _get_net_for_user(net_id, user, db)  # raises 403/404; also org-scopes
+    if net.owner_id == user.id or user.is_admin:
+        return net
+    shares = (await db.execute(select(NetShare).filter(
+        NetShare.net_id == net_id, or_(NetShare.user_id == user.id, NetShare.user_id == None),
+    ))).scalars().all()
+    if any(s.can_edit for s in shares):
+        return net  # full access implies every role
+    if role in NET_EXTRA_ROLES and shares:
+        share_ids = [s.id for s in shares]
+        has_role = (await db.execute(select(NetShareRole.id).filter(
+            NetShareRole.net_share_id.in_(share_ids), NetShareRole.role == role,
+        ).limit(1))).scalar()
+        if has_role:
+            return net
+    raise HTTPException(403, f"The {role} role is required on this net")
 
 
 async def _get_session_for_user(session_id: int, user: User, db: AsyncSession) -> NetSession:

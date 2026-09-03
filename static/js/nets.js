@@ -262,7 +262,7 @@ function cancelNetForm() {
   document.getElementById('net-aprs-section').style.display = 'none';
   document.getElementById('net-form-tab-tactical-btn').style.display = 'none';
   editNetId = null;
-  shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [] };
+  shareState = { share_with_all: false, can_edit_all: false, user_ids: [], editor_user_ids: [], tactical_operator_all: false, broadcaster_all: false, tactical_operator_user_ids: [], broadcaster_user_ids: [] };
   switchNetFormTab('details');
 }
 
@@ -386,10 +386,18 @@ async function loadSharesForNet(netId) {
       can_edit_all: shares.can_edit_all || false,
       user_ids: shares.user_ids || [],
       editor_user_ids: shares.editor_user_ids || [],
+      // Role revamp (issue follow-up)
+      tactical_operator_all: shares.tactical_operator_all || false,
+      broadcaster_all: shares.broadcaster_all || false,
+      tactical_operator_user_ids: shares.tactical_operator_user_ids || [],
+      broadcaster_user_ids: shares.broadcaster_user_ids || [],
     };
     document.getElementById('net-share-all').checked = shareState.share_with_all;
     document.getElementById('net-share-all-edit').checked = shareState.can_edit_all;
+    document.getElementById('net-share-all-tactical').checked = shareState.tactical_operator_all;
+    document.getElementById('net-share-all-broadcaster').checked = shareState.broadcaster_all;
     document.getElementById('net-share-all-edit-wrap').style.display = shareState.share_with_all ? '' : 'none';
+    document.getElementById('net-share-all-roles-wrap').style.display = shareState.share_with_all ? 'flex' : 'none';
     renderShareUserList();
     document.getElementById('net-share-users').style.display = shareState.share_with_all ? 'none' : '';
   } catch (e) {
@@ -406,18 +414,29 @@ function renderShareUserList() {
   el.innerHTML = allUsers.map(u => {
     const shared = shareState.user_ids.includes(u.id);
     const canEdit = shareState.editor_user_ids.includes(u.id);
+    const isTactical = shareState.tactical_operator_user_ids.includes(u.id);
+    const isBroadcaster = shareState.broadcaster_user_ids.includes(u.id);
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:3px 0;font-size:13px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0">
+    <div style="display:flex;align-items:center;gap:12px;padding:3px 0;font-size:13px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:160px">
         <input type="checkbox" data-uid="${u.id}" style="accent-color:var(--lc-blue);flex-shrink:0"
           ${shared ? 'checked' : ''} onchange="toggleShareUser(${u.id}, this.checked)" />
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.callsign)} — ${esc(u.name)}</span>
       </label>
-      <label data-edit-row="${u.id}" style="display:${shared ? 'flex' : 'none'};align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--text-muted);flex-shrink:0">
-        <input type="checkbox" style="accent-color:var(--lc-orange)"
-          ${canEdit ? 'checked' : ''} onchange="toggleShareUserEdit(${u.id}, this.checked)" />
-        Can edit
-      </label>
+      <div data-extra-row="${u.id}" style="display:${shared ? 'flex' : 'none'};align-items:center;gap:10px;font-size:11px;color:var(--text-muted);flex-shrink:0">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" style="accent-color:var(--lc-orange)"
+            ${canEdit ? 'checked' : ''} onchange="toggleShareUserEdit(${u.id}, this.checked)" /> Can edit
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" style="accent-color:var(--lc-green)"
+            ${isTactical ? 'checked' : ''} onchange="toggleShareUserRole(${u.id}, 'tactical_operator', this.checked)" /> Tactical Op
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" style="accent-color:var(--lc-green)"
+            ${isBroadcaster ? 'checked' : ''} onchange="toggleShareUserRole(${u.id}, 'broadcaster', this.checked)" /> Broadcaster
+        </label>
+      </div>
     </div>`;
   }).join('');
 }
@@ -426,10 +445,15 @@ function onShareAllChanged() {
   shareState.share_with_all = document.getElementById('net-share-all').checked;
   document.getElementById('net-share-users').style.display = shareState.share_with_all ? 'none' : '';
   document.getElementById('net-share-all-edit-wrap').style.display = shareState.share_with_all ? '' : 'none';
+  document.getElementById('net-share-all-roles-wrap').style.display = shareState.share_with_all ? 'flex' : 'none';
 }
 
 function onShareAllEditChanged() {
   shareState.can_edit_all = document.getElementById('net-share-all-edit').checked;
+}
+
+function onShareAllRoleChanged(role) {
+  shareState[`${role}_all`] = document.getElementById(`net-share-all-${role === 'tactical_operator' ? 'tactical' : 'broadcaster'}`).checked;
 }
 
 function toggleShareUser(uid, checked) {
@@ -437,13 +461,16 @@ function toggleShareUser(uid, checked) {
     if (!shareState.user_ids.includes(uid)) shareState.user_ids.push(uid);
   } else {
     shareState.user_ids = shareState.user_ids.filter(id => id !== uid);
-    // Losing sharing loses edit rights too -- can't edit a net you can't see.
+    // Losing sharing loses edit rights and every extra role too -- can't
+    // hold a role on a net you can't see.
     shareState.editor_user_ids = shareState.editor_user_ids.filter(id => id !== uid);
+    shareState.tactical_operator_user_ids = shareState.tactical_operator_user_ids.filter(id => id !== uid);
+    shareState.broadcaster_user_ids = shareState.broadcaster_user_ids.filter(id => id !== uid);
   }
-  const row = document.querySelector(`[data-edit-row="${uid}"]`);
+  const row = document.querySelector(`[data-extra-row="${uid}"]`);
   if (row) {
     row.style.display = checked ? 'flex' : 'none';
-    if (!checked) row.querySelector('input').checked = false;
+    if (!checked) row.querySelectorAll('input').forEach(i => i.checked = false);
   }
 }
 
@@ -455,12 +482,25 @@ function toggleShareUserEdit(uid, checked) {
   }
 }
 
+function toggleShareUserRole(uid, role, checked) {
+  const key = `${role}_user_ids`;
+  if (checked) {
+    if (!shareState[key].includes(uid)) shareState[key].push(uid);
+  } else {
+    shareState[key] = shareState[key].filter(id => id !== uid);
+  }
+}
+
 function _shareStatePayload() {
   return {
     share_with_all: shareState.share_with_all,
     can_edit_all: shareState.can_edit_all,
     user_ids: shareState.user_ids,
     editor_user_ids: shareState.editor_user_ids,
+    tactical_operator_all: shareState.tactical_operator_all,
+    broadcaster_all: shareState.broadcaster_all,
+    tactical_operator_user_ids: shareState.tactical_operator_user_ids,
+    broadcaster_user_ids: shareState.broadcaster_user_ids,
   };
 }
 
@@ -470,14 +510,10 @@ async function saveSharing() {
     await apiFetch(`/nets/${editNetId}/shares`, { method: 'PUT', body: JSON.stringify(_shareStatePayload()) });
     toast(t('Sharing saved'));
     await loadNets();
-    // Re-render to update share info on card without closing form
-    const n = nets.find(x => x.id === editNetId);
-    if (n) {
-      shareState.share_with_all = n.shared_with_all;
-      shareState.can_edit_all = n.can_edit_all;
-      shareState.user_ids = n.shared_user_ids || [];
-      shareState.editor_user_ids = n.editor_user_ids || [];
-    }
+    // Re-fetch full sharing state (incl. extra roles, silently dropped
+    // server-side if a target user's org membership no longer holds them)
+    // to update the card without closing the form.
+    await loadSharesForNet(editNetId);
   } catch (e) { toast(e.message, 'error'); }
 }
 
