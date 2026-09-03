@@ -34,6 +34,7 @@ router = APIRouter()
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))  # 8 hours
 VERIFICATION_TOKEN_TTL_DAYS = 7
 PASSWORD_SET_TOKEN_TTL_DAYS = 14   # admin-created accounts' invite link (issue #1 follow-up) — longer than email verification since an operator may not check email daily
+PASSWORD_RESET_TOKEN_TTL_HOURS = 1   # forgot-password link (issue follow-up) — short-lived: self-triggered by anyone who knows the account's callsign/email, not vouched for by an admin like the invite link above
 
 # Self-service profile photo (issue follow-up) -- same "glob the uploads dir
 # by extension" shape as routers/orgs.py's _org_logo_file/_LOGO_EXTS, just
@@ -68,6 +69,20 @@ _auth_log.setLevel(logging.WARNING)
 def _log_auth_fail(request: Request, reason: str) -> None:
     ip = request.headers.get("X-Forwarded-For", request.client.host if request.client else "unknown").split(",")[0].strip()
     _auth_log.warning("AUTH_FAIL ip=%s reason=%s", ip, reason)
+
+
+def _token_expired(sent_at: Optional[datetime], ttl: timedelta) -> bool:
+    """True if a *_sent_at timestamp is older than ttl -- shared by every
+    token-redemption endpoint below (email verify, admin-invite set-password,
+    forgot-password reset). sent_at=None means "no expiry recorded", treated
+    as not-expired (matches these tokens' original individual behavior).
+    SQLite returns tz-naive datetimes; PostgreSQL returns tz-aware --
+    normalize to UTC before comparing."""
+    if not sent_at:
+        return False
+    if sent_at.tzinfo is None:
+        sent_at = sent_at.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - sent_at > ttl
 
 
 class UserCreate(BaseModel):
@@ -345,13 +360,8 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).filter(User.verification_token == token_hash))).scalar_one_or_none()
     if not user:
         return RedirectResponse(url="/?verified=0")
-    if user.verification_sent_at:
-        # SQLite returns tz-naive datetimes; PostgreSQL returns tz-aware — normalize to UTC.
-        sent_at = user.verification_sent_at
-        if sent_at.tzinfo is None:
-            sent_at = sent_at.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) - sent_at > timedelta(days=VERIFICATION_TOKEN_TTL_DAYS):
-            return RedirectResponse(url="/?verified=0")
+    if _token_expired(user.verification_sent_at, timedelta(days=VERIFICATION_TOKEN_TTL_DAYS)):
+        return RedirectResponse(url="/?verified=0")
     user.email_verified = True
     user.verification_token = None
     await db.commit()
@@ -377,15 +387,91 @@ async def set_password(request: Request, data: SetPasswordRequest, db: AsyncSess
     user = (await db.execute(select(User).filter(User.password_set_token == token_hash))).scalar_one_or_none()
     if not user:
         raise HTTPException(400, "This link is invalid or has already been used.")
-    if user.password_set_sent_at:
-        sent_at = user.password_set_sent_at
-        if sent_at.tzinfo is None:
-            sent_at = sent_at.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) - sent_at > timedelta(days=PASSWORD_SET_TOKEN_TTL_DAYS):
-            raise HTTPException(400, "This link has expired. Contact your organization admin for a new invite.")
+    if _token_expired(user.password_set_sent_at, timedelta(days=PASSWORD_SET_TOKEN_TTL_DAYS)):
+        raise HTTPException(400, "This link has expired. Contact your organization admin for a new invite.")
     user.hashed_password = hash_password(data.password)
     user.password_set_token = None
     user.password_set_sent_at = None
+    await db.commit()
+    await db.refresh(user)
+
+    token = create_access_token({"sub": str(user.id)}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str   # callsign or email, same dual lookup as /auth/login's username field
+
+
+@router.post("/auth/forgot-password", status_code=204)
+@limiter.limit("5/minute")
+async def forgot_password(request: Request, data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Self-service "forgot password" (issue follow-up) — issues a short-lived
+    reset link by email, if a matching account exists. Always responds the
+    same way (204, no body) regardless of whether one was found or whether
+    SMTP is even configured (send_email() itself already no-ops quietly when
+    it isn't) — telling the caller which is true would let this be used to
+    enumerate registered callsigns/emails. No CAPTCHA on this endpoint
+    (unlike registration/login) — it can only ever email an *existing*
+    account, so the abuse surface is a handful of unwanted reset emails to a
+    real user, not open-ended spam; rate limiting alone is proportionate."""
+    identifier = data.identifier.strip()
+    user = (
+        (await db.execute(select(User).filter(User.callsign == identifier.upper()))).scalar_one_or_none()
+        or (await db.execute(select(User).filter(User.email == identifier.lower()))).scalar_one_or_none()
+    )
+    # Nothing to do if SMTP isn't configured -- the token could never be
+    # delivered anyway, so skip generating and storing one pointlessly (the
+    # frontend already hides the link entirely in this case; this only
+    # matters for a direct API call). Response is identical either way.
+    if user and helpers._smtp_configured():
+        raw_token = secrets.token_urlsafe(32)
+        user.password_reset_token = hashlib.sha256(raw_token.encode()).hexdigest()
+        user.password_reset_sent_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        reset_link = helpers._app_url(f"/?resetpw={raw_token}")
+        helpers.send_email(
+            to=[user.email],
+            subject="[NetControl Online] Reset Your Password",
+            body_html=f"""<div style="font-family:sans-serif;max-width:520px">
+  <h2 style="color:#FF9900">Reset Your Password</h2>
+  <p>Hello <strong>{html.escape(user.name)}</strong> ({user.callsign}),</p>
+  <p>Someone (hopefully you) requested a password reset for your NetControl Online account. This link expires in {PASSWORD_RESET_TOKEN_TTL_HOURS} hour{'s' if PASSWORD_RESET_TOKEN_TTL_HOURS != 1 else ''}.</p>
+  {f'<p style="margin-top:16px"><a href="{reset_link}" style="background:#FF9900;color:#000;padding:10px 20px;text-decoration:none;border-radius:20px;font-weight:bold;display:inline-block">Reset Password</a></p>' if reset_link else '<p>Contact your administrator for help resetting your password.</p>'}
+  <p style="color:#888;font-size:12px">If you didn't request this, you can safely ignore this email — your password won't change unless you click the link above and set a new one.</p>
+</div>""",
+            body_text=(
+                f"Hello {user.name} ({user.callsign}),\n\n"
+                f"Someone (hopefully you) requested a password reset for your NetControl Online account. "
+                f"This link expires in {PASSWORD_RESET_TOKEN_TTL_HOURS} hour{'s' if PASSWORD_RESET_TOKEN_TTL_HOURS != 1 else ''}.\n\n"
+                + (f"Reset your password: {reset_link}\n\n" if reset_link else "Contact your administrator for help resetting your password.\n\n")
+                + "If you didn't request this, you can safely ignore this email — your password won't change unless you follow the link above and set a new one."
+            ),
+        )
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+@router.post("/auth/reset-password", response_model=Token)
+@limiter.limit("10/minute")
+async def reset_password(request: Request, data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Redeems a forgot-password link (issue follow-up). Logs the user
+    straight in on success, same shape/convention as /auth/set-password."""
+    if len(data.password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    token_hash = hashlib.sha256(data.token.encode()).hexdigest()
+    user = (await db.execute(select(User).filter(User.password_reset_token == token_hash))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(400, "This link is invalid or has already been used.")
+    if _token_expired(user.password_reset_sent_at, timedelta(hours=PASSWORD_RESET_TOKEN_TTL_HOURS)):
+        raise HTTPException(400, "This link has expired. Request a new one from the login page.")
+    user.hashed_password = hash_password(data.password)
+    user.password_reset_token = None
+    user.password_reset_sent_at = None
     await db.commit()
     await db.refresh(user)
 
@@ -433,7 +519,10 @@ def auth_config():
     Turnstile/reCAPTCHA) which site key to use. Site keys are meant to be
     public; only the *_SECRET_KEY / ALTCHA_HMAC_KEY values are sensitive.
     ALTCHA needs no site key at all — its widget instead points at
-    /captcha/altcha-challenge below."""
+    /captcha/altcha-challenge below. Also reports whether SMTP is
+    configured (issue follow-up) -- the login page hides its "Forgot
+    password?" link entirely rather than offering a form that can never
+    actually deliver a reset email."""
     configured = _captcha_configured()
     site_key = None
     if configured:
@@ -444,6 +533,7 @@ def auth_config():
     return {
         "captcha_provider": helpers.CAPTCHA_PROVIDER if configured else None,
         "captcha_site_key": site_key,
+        "smtp_configured": helpers._smtp_configured(),
         # Deprecated aliases, kept for any external client still reading the
         # old shape — TURNSTILE_SITE_KEY doubles as the "enabled" flag's
         # provider check since Turnstile was the only option before.

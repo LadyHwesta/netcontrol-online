@@ -89,11 +89,45 @@
           <label data-i18n="Password">Password</label>
           <input class="form-control" id="login-pass" type="password" autocomplete="current-password" />
         </div>
+        <p id="login-forgot-link" style="display:none;margin:-8px 0 14px;font-size:12px;text-align:right">
+          <a href="#" onclick="showForgotPassword(); return false;" data-i18n="Forgot password?">Forgot password?</a>
+        </p>
         <div id="login-captcha" style="display:none;margin-bottom:14px"></div>
         <button class="btn btn-primary" style="width:100%" onclick="doLogin()" data-i18n="Sign In">Sign In</button>
         <p style="margin:14px 0 0;font-size:12px;color:var(--text-muted);text-align:center">
           New here? Check <strong>Help → Changelog</strong> after logging in to see what's new.
         </p>
+      </div>
+
+      <!-- Forgot Password (issue follow-up) — request a reset link -->
+      <div id="tab-forgotpassword" style="display:none">
+        <p style="margin:0 0 14px;font-size:13px;color:var(--text-muted)" data-i18n="Enter your callsign or email and we'll send you a link to reset your password, if an account exists for it.">
+          Enter your callsign or email and we'll send you a link to reset your password, if an account exists for it.
+        </p>
+        <div class="form-group">
+          <label data-i18n="Callsign or Email">Callsign or Email</label>
+          <input class="form-control" id="fp-identifier" placeholder="W1AW" autocomplete="username" />
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="doForgotPassword(this)" data-i18n="Send Reset Link">Send Reset Link</button>
+        <p style="margin:14px 0 0;text-align:center">
+          <a href="#" onclick="backToLoginFromForgot(); return false;" data-i18n="← Back to Login">← Back to Login</a>
+        </p>
+      </div>
+
+      <!-- Reset Password (issue follow-up) — landed here from the reset-link email -->
+      <div id="tab-resetpassword" style="display:none">
+        <p style="margin:0 0 14px;font-size:13px;color:var(--text-muted)" data-i18n="Enter a new password for your account.">
+          Enter a new password for your account.
+        </p>
+        <div class="form-group">
+          <label data-i18n="New Password">New Password</label>
+          <input class="form-control" id="resetpw-pass" type="password" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label data-i18n="Confirm Password">Confirm Password</label>
+          <input class="form-control" id="resetpw-pass2" type="password" autocomplete="new-password" />
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="doResetPassword(this)" data-i18n="Set Password &amp; Log In">Set Password &amp; Log In</button>
       </div>
 
       <!-- Register -->
@@ -1548,7 +1582,7 @@
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=22"></script>
   <script src="/static/js/offline-queue.js?v=2"></script>
-  <script src="/static/js/auth.js?v=36"></script>
+  <script src="/static/js/auth.js?v=37"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/views.js?v=19"></script>
@@ -1566,7 +1600,7 @@
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
   <script src="/static/js/aprs-map.js?v=41"></script>
   <script src="/static/js/evac-zone-map.js?v=1"></script>
-  <script src="/static/js/app.js?v=27"></script>
+  <script src="/static/js/app.js?v=28"></script>
   <script src="/static/js/pwa.js?v=2"></script>
 </body>
 </html>

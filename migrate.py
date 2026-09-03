@@ -738,6 +738,14 @@ MIGRATIONS = [
               SELECT 1 FROM organization_membership_roles r
               WHERE r.membership_id = m.id AND r.role = 'net_control_op'
           )"""),
+
+    # ── Forgot-password self-service reset link (issue follow-up) ──
+    # Same hash-only-stored pattern as password_set_token above, deliberately
+    # a separate column pair -- see User.password_reset_token's docstring.
+    ("users: password-reset token",
+     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(64)"),
+    ("users: password-reset sent-at",
+     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_sent_at TIMESTAMPTZ"),
 ]
 
 # ---------------------------------------------------------------------------

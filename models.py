@@ -61,6 +61,15 @@ class User(Base):
     # an unusable random placeholder until this is redeemed via /auth/set-password.
     password_set_token = Column(String(64), nullable=True)
     password_set_sent_at = Column(UTCDateTime, nullable=True)
+    # Forgot-password self-service reset link (issue follow-up). Same
+    # hash-only-stored pattern as verification_token/password_set_token
+    # above, but deliberately its own separate token+timestamp pair rather
+    # than reusing password_set_token -- this one is self-triggered by
+    # anyone who knows the account's callsign/email, not vouched for by an
+    # admin, so it gets a much shorter expiry (PASSWORD_RESET_TOKEN_TTL_HOURS
+    # in routers/auth.py) than the admin-invite link's 14 days.
+    password_reset_token = Column(String(64), nullable=True)
+    password_reset_sent_at = Column(UTCDateTime, nullable=True)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
     # Multi-tenancy (issue #1). is_admin above is the *super admin* tier — unchanged,
     # still bypasses org scoping everywhere. current_org_id is which org this user is

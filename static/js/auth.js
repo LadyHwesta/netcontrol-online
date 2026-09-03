@@ -49,6 +49,95 @@ function switchAuthTab(tab) {
   if (tab === 'register') loadRegOrgPicker();
 }
 
+// ============================================================
+// FORGOT / RESET PASSWORD (issue follow-up)
+// showForgotPassword()/backToLoginFromForgot() swap #tab-login and
+// #tab-forgotpassword directly (like the ?resetpw= landing below, this
+// isn't one of switchAuthTab's own login/register tabs) -- the tab bar
+// itself stays hidden while on the forgot-password form, same convention
+// as the registration-submitted confirmation view.
+// ============================================================
+function showForgotPassword() {
+  document.getElementById('auth-tabs').style.display = 'none';
+  document.getElementById('tab-login').style.display = 'none';
+  document.getElementById('tab-forgotpassword').style.display = '';
+  document.getElementById('auth-error').style.display = 'none';
+  document.getElementById('fp-identifier').value = document.getElementById('login-user').value;
+}
+
+function backToLoginFromForgot() {
+  document.getElementById('auth-tabs').style.display = '';
+  document.getElementById('tab-forgotpassword').style.display = 'none';
+  switchAuthTab('login');
+}
+
+// Shows the "Forgot password?" login link only when SMTP is actually
+// configured on this instance -- otherwise a reset email could never be
+// delivered, so offering the form at all would be a dead end. Its own
+// small /auth/config fetch (separate from initCaptcha's) rather than
+// entangling with that function's own early-return-if-no-CAPTCHA path.
+async function initForgotPasswordLink() {
+  try {
+    const config = await apiFetch('/auth/config');
+    if (config.smtp_configured) document.getElementById('login-forgot-link').style.display = '';
+  } catch { /* leave hidden */ }
+}
+
+async function doForgotPassword(btn) {
+  clearAuthError();
+  const identifier = document.getElementById('fp-identifier').value.trim();
+  if (!identifier) return showAuthError('Enter your callsign or email');
+  btnLoading(btn, true);
+  try {
+    await apiFetch('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ identifier }) });
+    // Always the same message regardless of whether an account was found --
+    // see forgot_password()'s own docstring on why.
+    document.getElementById('tab-forgotpassword').innerHTML = `
+      <div style="text-align:center;padding:12px 0">
+        <div style="font-size:36px;margin-bottom:12px">📧</div>
+        <h3 style="margin:0 0 10px;color:var(--lc-green)">${t('Check Your Email')}</h3>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.6;margin:0 0 16px">
+          ${t("If an account exists for that callsign or email, we've sent a link to reset its password.")}<br>
+          <span style="font-size:11px">${t("Don't see it? Check your spam/junk folder.")}</span>
+        </p>
+        <button class="btn btn-ghost btn-sm" onclick="backToLoginFromForgot()">${t('← Back to Login')}</button>
+      </div>`;
+  } catch (e) {
+    showAuthError(e.message);
+    btnLoading(btn, false);
+  }
+}
+
+// Landed here from the reset-password email (?resetpw=TOKEN, set in app.js
+// as window._resetpwToken) -- redeems it and logs straight in, same as
+// doSetPassword's admin-invite counterpart.
+async function doResetPassword(btn) {
+  clearAuthError();
+  const pass = document.getElementById('resetpw-pass').value;
+  const pass2 = document.getElementById('resetpw-pass2').value;
+  if (!pass || !pass2) return showAuthError('Fill in both password fields');
+  if (pass !== pass2) return showAuthError('Passwords do not match');
+  if (pass.length < 8) return showAuthError('Password must be at least 8 characters');
+  btnLoading(btn, true);
+  try {
+    const res = await fetch(API + '/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: window._resetpwToken, password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not reset password');
+    token = data.access_token;
+    currentUser = data.user;
+    localStorage.setItem('nt_token', token);
+    toast('Password reset — welcome back!', 'success');
+    enterApp();
+  } catch (e) {
+    showAuthError(e.message);
+    btnLoading(btn, false);
+  }
+}
+
 // Multi-tenancy (issue #1) — the registration form's "create new" vs "join
 // existing" organization choice. No auth required for GET /orgs; safe to
 // call before login.

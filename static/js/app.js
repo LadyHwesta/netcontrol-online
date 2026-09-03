@@ -91,8 +91,21 @@ if (window._setpwToken) {
   document.getElementById('tab-setpassword').style.display = '';
 }
 
+// ============================================================
+// RESET PASSWORD (forgot-password link, issue follow-up)
+// Landed here from the reset-password email (?resetpw=TOKEN) -- same
+// shape as the admin-invite ?setpw= handling above, just its own tab/token.
+// ============================================================
+window._resetpwToken = new URLSearchParams(window.location.search).get('resetpw');
+if (window._resetpwToken) {
+  document.getElementById('auth-tabs').style.display = 'none';
+  document.getElementById('tab-login').style.display = 'none';
+  document.getElementById('tab-register').style.display = 'none';
+  document.getElementById('tab-resetpassword').style.display = '';
+}
+
 // Auto-login if token stored
-if (token && !window._setpwToken) {
+if (token && !window._setpwToken && !window._resetpwToken) {
   enterApp();
 } else {
   loadLoginMessage();      // fire-and-forget; non-blocking — staying on the login screen
@@ -100,14 +113,17 @@ if (token && !window._setpwToken) {
 }
 
 // Bot protection: Turnstile / reCAPTCHA / ALTCHA (issue #1 follow-up) —
-// no-op if CAPTCHA_PROVIDER isn't configured
+// no-op if CAPTCHA_PROVIDER isn't configured.
 initCaptcha();
+initForgotPasswordLink();   // issue follow-up; fire-and-forget, non-blocking
 
 // Enter to submit login
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('login-user').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 onEnter(['reg-call', 'reg-name', 'reg-email', 'reg-pass'], () => doRegister(document.querySelector('#tab-register button.btn-primary')));
 onEnter(['setpw-pass', 'setpw-pass2'], () => doSetPassword(document.querySelector('#tab-setpassword button.btn-primary')));
+onEnter(['fp-identifier'], () => doForgotPassword(document.querySelector('#tab-forgotpassword button.btn-primary')));
+onEnter(['resetpw-pass', 'resetpw-pass2'], () => doResetPassword(document.querySelector('#tab-resetpassword button.btn-primary')));
 
 // ============================================================
 // KEYBOARD SHORTCUT  /  → focus callsign input
