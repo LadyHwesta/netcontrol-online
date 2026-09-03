@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import get_db
-from models import Net, NetShare, NetShareRole, OrganizationMembership, User
+from models import Net, NetShare, NetShareRole, OrganizationMembership, OrganizationMembershipRole, User
 from routers.deps import get_current_user
 from routers.helpers import NET_EXTRA_ROLES, _get_editable_net, _get_net_for_user, _get_owned_net, _net_to_out, _org_role_set
 from routers.schemas import NetOut
@@ -24,6 +24,12 @@ class UserPublicOut(BaseModel):
     callsign: str
     gmrs_callsign: Optional[str] = None
     name: str
+    # Role revamp (issue follow-up): this user's canonical org role set --
+    # lets the sharing/schedule pickers show which of Net Control Op/
+    # Tactical Operator/Broadcaster are actually offerable for them, instead
+    # of silently dropping a selection the org admin never approved (issue
+    # follow-up -- see update_net_shares' own docstring on that gate).
+    roles: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -94,15 +100,28 @@ async def list_users(net_id: Optional[int] = None, current_user: User = Depends(
     if net_id is not None:
         org_id = (await _get_editable_net(net_id, current_user, db)).org_id
 
-    users = (
-        (await db.execute(select(User).join(OrganizationMembership, OrganizationMembership.user_id == User.id).filter(
+    rows = (
+        (await db.execute(select(User, OrganizationMembership).join(OrganizationMembership, OrganizationMembership.user_id == User.id).filter(
             User.is_active == True,
             User.id != current_user.id,
             OrganizationMembership.org_id == org_id,
             OrganizationMembership.approved == True,
-        ).order_by(User.callsign))).scalars().all()
+        ).order_by(User.callsign))).all()
     )
-    return users
+    membership_ids = [m.id for _u, m in rows]
+    extra_by_membership: dict[int, set[str]] = {}
+    if membership_ids:
+        extra_rows = (await db.execute(select(OrganizationMembershipRole).filter(
+            OrganizationMembershipRole.membership_id.in_(membership_ids)
+        ))).scalars().all()
+        for r in extra_rows:
+            extra_by_membership.setdefault(r.membership_id, set()).add(r.role)
+
+    out = []
+    for u, m in rows:
+        roles = ({"admin"} if m.role == "admin" else set()) | extra_by_membership.get(m.id, set())
+        out.append(UserPublicOut(id=u.id, callsign=u.callsign, gmrs_callsign=u.gmrs_callsign, name=u.name, roles=sorted(roles)))
+    return out
 
 
 @router.get("/nets", response_model=list[NetOut])

@@ -433,10 +433,12 @@ async function loadOrgOperators() {
   if (pending.length === 0) {
     pendingEl.innerHTML = `<p class="text-muted" style="font-size:13px">${t('No pending registrations.')}</p>`;
   } else {
-    // Role revamp (issue follow-up): the two self-service roles are pre-checked
-    // from the registrant's own requested_roles hint, editable before approving
-    // -- admin/net_control_op are still granted separately (role toggle below,
-    // once approved) since they're the single base role, not additive.
+    // Role revamp (issue follow-up): all three participant roles are shown
+    // as checkboxes right on the pending row -- Net Control Op defaults
+    // CHECKED (the normal case, matching pre-revamp behavior where every
+    // approved member got it for free); Tactical Operator/Broadcaster
+    // default from the registrant's own requested_roles hint. All three are
+    // just a starting point -- editable before submitting.
     pendingEl.innerHTML = pending.map(m => `
       <div style="padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -450,6 +452,10 @@ async function loadOrgOperators() {
           </div>
         </div>
         <div style="display:flex;gap:14px;margin-top:6px;font-size:11px;color:var(--text-muted)">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
+            <input type="checkbox" id="pending-role-net_control_op-${m.user_id}" style="width:auto" checked>
+            ${t('Net Control Op')}
+          </label>
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
             <input type="checkbox" id="pending-role-tactical_operator-${m.user_id}" style="width:auto" ${m.requested_roles.includes('tactical_operator') ? 'checked' : ''}>
             ${t('Tactical Operator')}
@@ -482,15 +488,16 @@ async function loadOrgOperators() {
       : (m.role === 'admin'
           ? `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'member', '${esc(m.callsign)}')">${t('Remove Admin')}</button>`
           : `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'admin', '${esc(m.callsign)}')">${t('Make Admin')}</button>`);
-    // Role revamp (issue follow-up): base role badge (rename "Member" ->
-    // "Net Control Op" is display-only, see ORG_ROLE_DISPLAY) plus a clickable
-    // badge per extra role that toggles it on/off for this member.
-    const baseBadge = m.role === 'admin'
-      ? `<span class="badge badge-blue">${t('Org Admin')}</span>`
-      : `<span class="badge badge-gray">${t('Net Control Op')}</span>`;
-    const extraBadges = ['tactical_operator', 'broadcaster'].map(r => {
+    // Role revamp (issue follow-up): "Org Admin" stays a plain badge, managed
+    // only via the Make/Remove Admin button (isMe-safe, org-management tier).
+    // All three participant roles -- Net Control Op, Tactical Operator,
+    // Broadcaster -- are symmetric, independently clickable badges below,
+    // for every member (an admin can hold them too, e.g. a founder who also
+    // runs nets).
+    const baseBadge = m.role === 'admin' ? `<span class="badge badge-blue">${t('Org Admin')}</span>` : '';
+    const extraBadges = ['net_control_op', 'tactical_operator', 'broadcaster'].map(r => {
       const held = m.roles.includes(r);
-      const label = r === 'tactical_operator' ? t('Tactical Op') : t('Broadcaster');
+      const label = r === 'net_control_op' ? t('Net Control Op') : r === 'tactical_operator' ? t('Tactical Op') : t('Broadcaster');
       return `<span class="badge ${held ? 'badge-green' : 'badge-gray'}" style="cursor:pointer" title="${t('Click to toggle')}"
         onclick="orgToggleExtraRole(${orgId}, ${m.user_id}, '${r}', ${held}, '${esc(m.callsign)}')">${held ? '✓ ' : ''}${label}</span>`;
     }).join(' ');
@@ -511,8 +518,9 @@ async function orgToggleExtraRole(orgId, userId, role, currentlyHeld, callsign) 
   // Full replace (issue follow-up) -- fetch the member's current extra roles
   // from the already-loaded table rather than a round trip, then flip just
   // this one and PUT the whole set back.
+  const EXTRA_ROLES = ['net_control_op', 'tactical_operator', 'broadcaster'];
   const row = orgMembersCache.find(m => m.user_id === userId);
-  const current = new Set(row ? row.roles.filter(r => r === 'tactical_operator' || r === 'broadcaster') : []);
+  const current = new Set(row ? row.roles.filter(r => EXTRA_ROLES.includes(r)) : []);
   if (currentlyHeld) current.delete(role); else current.add(role);
   try {
     await apiFetch(`/orgs/${orgId}/members/${userId}/extra-roles`, { method: 'PUT', body: JSON.stringify({ roles: [...current] }) });
@@ -523,7 +531,7 @@ async function orgToggleExtraRole(orgId, userId, role, currentlyHeld, callsign) 
 
 async function orgApproveMember(orgId, userId, btn) {
   btnLoading(btn, true);
-  const roles = ['tactical_operator', 'broadcaster'].filter(r => {
+  const roles = ['net_control_op', 'tactical_operator', 'broadcaster'].filter(r => {
     const el = document.getElementById(`pending-role-${r}-${userId}`);
     return el && el.checked;
   });

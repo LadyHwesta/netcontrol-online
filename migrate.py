@@ -703,11 +703,11 @@ MIGRATIONS = [
          UNIQUE (incident_id, callsign))"""),
 
     # ── Role revamp (issue follow-up) — org-level roles + net-level grants ──
-    # organization_memberships.role and net_shares.can_edit are UNCHANGED
-    # ('member' is just displayed "Net Control Op" now, see ORG_ROLE_DISPLAY
-    # in routers/helpers.py); the two new self-service roles (Tactical
-    # Operator, Broadcaster) are additive/multi-valued, so they live in these
-    # separate join tables instead of becoming more values of those columns.
+    # organization_memberships.role stays 'admin' | 'member' (the org-
+    # management tier only) and net_shares.can_edit is UNCHANGED; the three
+    # participant roles (Net Control Op, Tactical Operator, Broadcaster) are
+    # additive/multi-valued, so they live in these separate join tables
+    # instead of becoming more values of those columns.
     ("organization_memberships: requested roles hint from registration",
      "ALTER TABLE organization_memberships ADD COLUMN IF NOT EXISTS requested_roles VARCHAR(200)"),
     ("table: organization_membership_roles",
@@ -722,6 +722,22 @@ MIGRATIONS = [
          net_share_id INTEGER NOT NULL REFERENCES net_shares(id) ON DELETE CASCADE,
          role VARCHAR(20) NOT NULL,
          UNIQUE (net_share_id, role))"""),
+
+    # net_control_op originally lived implicitly on role=='member' (every
+    # approved non-admin membership had it for free); it's now a real,
+    # independently-toggleable entry in organization_membership_roles like
+    # the other two (issue follow-up, so an org admin can revoke it from
+    # someone who should only be Tactical Operator/Broadcaster). Backfill
+    # every already-approved non-admin membership so nobody upgrading loses
+    # net access they already had -- guarded against re-running.
+    ("role revamp: backfill net_control_op for existing approved members",
+     """INSERT INTO organization_membership_roles (membership_id, role)
+        SELECT m.id, 'net_control_op' FROM organization_memberships m
+        WHERE m.role = 'member' AND m.approved = TRUE
+          AND NOT EXISTS (
+              SELECT 1 FROM organization_membership_roles r
+              WHERE r.membership_id = m.id AND r.role = 'net_control_op'
+          )"""),
 ]
 
 # ---------------------------------------------------------------------------

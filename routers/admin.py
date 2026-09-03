@@ -7,7 +7,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
@@ -15,7 +15,7 @@ from database import engine, get_db
 from models import EnabledLanguage, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, User
 from routers import helpers
 from routers.deps import get_current_user
-from routers.helpers import _create_invited_user, _delete_orphaned_orgs, _get_or_create_org
+from routers.helpers import _create_invited_user, _delete_orphaned_orgs, _get_or_create_org, _grant_default_net_control_op
 from routers.schemas import AdminUserOut, UserOut
 
 router = APIRouter()
@@ -128,10 +128,18 @@ async def admin_approve_user(user_id: int, admin: User = Depends(require_admin),
     user.verification_token = None
     # Super-admin approval is a global escape hatch (issue #1) — clear every
     # pending org membership too, not just the account-level gate, since a
-    # super admin isn't scoped to any one org's approval queue.
-    await db.execute(update(OrganizationMembership).where(
+    # super admin isn't scoped to any one org's approval queue. This path has
+    # no per-role UI of its own (unlike the org-scoped approve endpoint), so
+    # every non-admin membership it approves gets net_control_op by default
+    # (issue follow-up) -- the normal case; an org admin can revoke it (or
+    # grant Tactical Operator/Broadcaster) afterward from the Operators list.
+    pending = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.user_id == user.id, OrganizationMembership.approved == False,
-    ).values(approved=True))
+    ))).scalars().all()
+    for membership in pending:
+        membership.approved = True
+        if membership.role != "admin":
+            await _grant_default_net_control_op(membership.id, db)
     await db.commit()
     await db.refresh(user)
 
@@ -306,7 +314,15 @@ async def admin_reassign_user_org(user_id: int, data: OrgReassignUser, admin: Us
     if old_membership_ids:
         await db.execute(delete(OrganizationMembershipRole).where(OrganizationMembershipRole.membership_id.in_(old_membership_ids)))
     await db.execute(delete(OrganizationMembership).where(OrganizationMembership.user_id == user.id))
-    db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True))
+    new_membership = OrganizationMembership(org_id=org.id, user_id=user.id, role=data.role, approved=True)
+    db.add(new_membership)
+    await db.flush()
+    if data.role != "admin":
+        # Same default as the other immediate-approval paths (issue
+        # follow-up) -- this endpoint has no per-role UI of its own, so a
+        # plain moved-in member should come out with normal net access,
+        # same as before this role revamp existed.
+        await _grant_default_net_control_op(new_membership.id, db)
     user.current_org_id = org.id
     user.is_active = True
     await db.flush()

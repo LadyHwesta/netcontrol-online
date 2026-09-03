@@ -37,8 +37,12 @@ def _org_owner(client, super_token, callsign, org_slug, org_name, website="https
 
 def _join_and_approve(client, owner_token, callsign, org_slug, requested_roles=None, granted_roles=None):
     """Registers a second user joining owner_token's org, then has the org
-    admin approve them, granting `granted_roles` (defaults to whatever was
-    requested). Returns (jwt, user_id, org_id)."""
+    admin approve them. `granted_roles`, when given explicitly, is exactly
+    what gets granted (a test wanting a role deliberately absent passes
+    granted_roles=[] or omits tactical_operator/broadcaster). Otherwise
+    defaults to net_control_op + whatever was requested, matching the admin
+    panel's own default (Net Control Op pre-checked, the normal case).
+    Returns (jwt, user_id, org_id)."""
     body = {
         "callsign": callsign, "name": callsign, "email": f"{callsign.lower()}@example.com",
         "password": "testpass123", "org_slug": org_slug,
@@ -49,7 +53,10 @@ def _join_and_approve(client, owner_token, callsign, org_slug, requested_roles=N
     assert resp.status_code == 201, resp.text
     user_id = resp.json()["id"]
     org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
-    roles = granted_roles if granted_roles is not None else (requested_roles or [])
+    if granted_roles is not None:
+        roles = granted_roles
+    else:
+        roles = list(dict.fromkeys(["net_control_op"] + (requested_roles or [])))
     approve = client.patch(
         f"/orgs/{org_id}/members/{user_id}/approve", json={"roles": roles}, headers=auth(owner_token),
     )
@@ -83,7 +90,10 @@ class TestRequestedRoles:
         row = next(m for m in pending if m["callsign"] == "W2REQ")
         assert row["requested_roles"] == ["tactical_operator"]
         # Nothing is actually granted until the admin approves with roles=[...]
-        assert row["roles"] == ["net_control_op"]
+        # -- role revamp (issue follow-up): net_control_op is no longer
+        # automatic for an unapproved (or even approved-but-ungranted)
+        # membership, so a still-pending row shows no roles at all yet.
+        assert row["roles"] == []
 
 
 class TestOrgApproveAndExtraRoles:
@@ -104,7 +114,10 @@ class TestOrgApproveAndExtraRoles:
         )
         assert resp.status_code == 200, resp.text
         row = _member_row(client, owner_token, org_id, uid)
-        assert sorted(row["roles"]) == ["broadcaster", "net_control_op"]
+        # A full replace -- tactical_operator (the only role originally
+        # granted, net_control_op deliberately excluded) is gone, only
+        # broadcaster remains.
+        assert row["roles"] == ["broadcaster"]
 
     def test_extra_roles_rejects_admin(self, client):
         super_token = _bootstrap_super_admin(client)
@@ -116,12 +129,92 @@ class TestOrgApproveAndExtraRoles:
         assert resp.status_code == 422
 
 
+class TestNetControlOpToggle:
+    """net_control_op used to be automatic and non-revocable (implicit in
+    OrganizationMembership.role == "member"); it's now a real, independently
+    toggleable entry in extra_roles, symmetric with Tactical Operator/
+    Broadcaster (issue found live: "not clickable like the others")."""
+
+    def test_global_approve_grants_net_control_op_by_default(self, client, admin_token, user_headers):
+        """user_headers goes through the plain super-admin /admin/users/{id}/
+        approve path (no roles body of its own) -- it must still come out
+        with net_control_op, same as before this whole revamp existed."""
+        me = client.get("/auth/me", headers=user_headers).json()
+        org_id = me["current_org_id"]
+        row = _member_row(client, admin_token, org_id, me["id"])
+        assert row["roles"] == ["net_control_op"]
+
+    def test_toggle_off_and_on(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1NCOWN", "ncotoggle", "NCO Toggle Co")
+        _, uid, org_id = _join_and_approve(client, owner_token, "W2NCO", "ncotoggle")
+        assert _member_row(client, owner_token, org_id, uid)["roles"] == ["net_control_op"]
+
+        # Revoke it (an admin deciding this person should be Tactical
+        # Operator-only, say) via the same clickable-badge endpoint.
+        resp = client.put(f"/orgs/{org_id}/members/{uid}/extra-roles", json={"roles": []}, headers=auth(owner_token))
+        assert resp.status_code == 200, resp.text
+        assert _member_row(client, owner_token, org_id, uid)["roles"] == []
+
+        # Grant it back.
+        resp = client.put(f"/orgs/{org_id}/members/{uid}/extra-roles", json={"roles": ["net_control_op"]}, headers=auth(owner_token))
+        assert resp.status_code == 200, resp.text
+        assert _member_row(client, owner_token, org_id, uid)["roles"] == ["net_control_op"]
+
+    def test_admin_can_also_hold_it_as_an_extra_role(self, client):
+        """An org founder (base role 'admin') doesn't get net_control_op
+        automatically (admin stays orthogonal to net access), but can
+        explicitly hold it too -- symmetric with Tactical Operator/
+        Broadcaster, all three toggleable regardless of admin status."""
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1ADMNCO", "adminnco", "Admin NCO Co")
+        me = client.get("/auth/me", headers=auth(owner_token)).json()
+        org_id = me["current_org_id"]
+        # "admin" itself is always present in roles for an admin membership
+        # (the base role, see _org_member_out_rows) -- it's net_control_op
+        # specifically that isn't automatic for them.
+        assert _member_row(client, owner_token, org_id, me["id"])["roles"] == ["admin"]
+
+        resp = client.put(f"/orgs/{org_id}/members/{me['id']}/extra-roles", json={"roles": ["net_control_op"]}, headers=auth(owner_token))
+        assert resp.status_code == 200, resp.text
+        assert sorted(_member_row(client, owner_token, org_id, me["id"])["roles"]) == ["admin", "net_control_op"]
+
+
 class TestNetShareRoleGate:
     def _owner_and_net(self, client, callsign="W1NOWN", slug="netroleco"):
         super_token = _bootstrap_super_admin(client)
         owner_token = _org_owner(client, super_token, callsign, slug, "Net Role Co")
         net = client.post("/nets", json={"name": "Test Net"}, headers=auth(owner_token)).json()
         return owner_token, net
+
+    def test_list_users_exposes_roles_for_the_share_picker(self, client):
+        """Feeds the net-sharing UI's eligibility gate (issue found live) --
+        GET /users must show each candidate's org role set so the picker can
+        grey out a role they don't actually hold, instead of silently
+        dropping the selection on save with no explanation."""
+        owner_token, net = self._owner_and_net(client, "W1LISTU", "netrolelist")
+        _, uid, _ = _join_and_approve(client, owner_token, "W2LISTU", "netrolelist", granted_roles=["broadcaster"])
+        users = client.get(f"/users?net_id={net['id']}", headers=auth(owner_token)).json()
+        row = next(u for u in users if u["id"] == uid)
+        assert row["roles"] == ["broadcaster"]
+
+    def test_multiple_broadcasters_on_one_net(self, client):
+        """Regression (issue found live): sharing a net with more than one
+        user as Broadcaster must grant it to ALL of them, not just one --
+        the backend logic was always correct here; the actual live bug was
+        the org-role gate silently dropping anyone the org admin hadn't
+        separately granted Broadcaster to, with no visibility into why. This
+        locks in the case where everyone selected legitimately holds it."""
+        owner_token, net = self._owner_and_net(client, "W1MULTIBC", "netrolemultibc")
+        _, uid1, _ = _join_and_approve(client, owner_token, "W2MULTIBC", "netrolemultibc", granted_roles=["broadcaster"])
+        _, uid2, _ = _join_and_approve(client, owner_token, "W3MULTIBC", "netrolemultibc", granted_roles=["broadcaster"])
+
+        resp = client.put(f"/nets/{net['id']}/shares", json={
+            "share_with_all": False, "user_ids": [uid1, uid2], "broadcaster_user_ids": [uid1, uid2],
+        }, headers=auth(owner_token))
+        assert resp.status_code == 204, resp.text
+        shares = client.get(f"/nets/{net['id']}/shares", headers=auth(owner_token)).json()
+        assert sorted(shares["broadcaster_user_ids"]) == sorted([uid1, uid2])
 
     def test_grants_role_the_user_holds(self, client):
         owner_token, net = self._owner_and_net(client)
@@ -137,7 +230,7 @@ class TestNetShareRoleGate:
 
     def test_silently_drops_role_the_user_lacks(self, client):
         owner_token, net = self._owner_and_net(client, "W1NOWN2", "netroleco2")
-        _, uid, _ = _join_and_approve(client, owner_token, "W2LACK", "netroleco2")  # no extra roles
+        _, uid, _ = _join_and_approve(client, owner_token, "W2LACK", "netroleco2")  # net_control_op only, no tactical_operator
 
         resp = client.put(f"/nets/{net['id']}/shares", json={
             "share_with_all": False, "user_ids": [uid], "editor_user_ids": [],

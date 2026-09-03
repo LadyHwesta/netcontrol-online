@@ -82,6 +82,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-03 — Fix: Net Control Op Toggle + Multiple Broadcasters (v2.42.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Bug fix: <strong>Net Control Op</strong> in the Operators list (Admin → Organization) is now a clickable badge just like Tactical Operator/Broadcaster — grant or revoke it independently, for anyone (an org admin can even hold it themselves alongside Org Admin). It defaults to granted at approval, same as before this existed.</li>
+              <li>Bug fix: sharing a net with more than one person as Broadcaster (or Tactical Operator) now actually works for all of them — the underlying grant was always correct, but the sharing form gave no indication that a role only sticks for someone your org has already approved for it, so an unapproved selection silently vanished on save and looked like it "removed the role." The picker now greys out and explains an ineligible checkbox instead.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-02 — Role Revamp: Tactical Operator &amp; Broadcaster (v2.42.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The org-wide <strong>Member</strong> role is now called <strong>Net Control Op</strong> — same privileges as before, name only. It sits alongside a new <strong>Admin</strong> tier (unchanged) and two brand new, minimal self-service roles: <strong>Tactical Operator</strong> (sign up for an available tactical position during a live activation) and <strong>Broadcaster</strong> (sign up for a net's broadcaster schedule slot). A user can hold more than one at once.</li>

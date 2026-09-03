@@ -18,7 +18,7 @@ from database import get_db
 from models import ActivityPubFollower, Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, SystemSetting, User
 from routers import helpers
 from routers.deps import get_current_user
-from routers.helpers import NET_EXTRA_ROLES, ORG_ROLE_DISPLAY, SELF_REQUESTABLE_ROLES, _get_or_create_org, _net_to_out, _org_logo_file, _org_role_set
+from routers.helpers import ORG_EXTRA_ROLES, SELF_REQUESTABLE_ROLES, _get_or_create_org, _grant_default_net_control_op, _net_to_out, _org_logo_file, _org_role_set
 from routers.schemas import AdminUserOut, NetOut, OrganizationOut, UserOut
 from routers.translation import _translation_configured, run_enable_language_job
 
@@ -127,7 +127,7 @@ async def list_my_orgs(current_user: User = Depends(get_current_user), db: Async
     )).all()
     out = []
     for org, m in rows:
-        roles = {ORG_ROLE_DISPLAY.get(m.role, m.role)}
+        roles = {"admin"} if m.role == "admin" else set()
         extra = (await db.execute(select(OrganizationMembershipRole.role).filter(
             OrganizationMembershipRole.membership_id == m.id
         ))).scalars().all()
@@ -488,7 +488,7 @@ async def _org_member_out_rows(rows: list, db: AsyncSession) -> list[OrgMemberOu
             extra_by_membership.setdefault(r.membership_id, set()).add(r.role)
     out = []
     for m, u in rows:
-        roles = {ORG_ROLE_DISPLAY.get(m.role, m.role)} | extra_by_membership.get(m.id, set())
+        roles = ({"admin"} if m.role == "admin" else set()) | extra_by_membership.get(m.id, set())
         requested = [r for r in (m.requested_roles or "").split(",") if r]
         out.append(OrgMemberOut(
             user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
@@ -532,19 +532,22 @@ async def list_org_nets(org_id: int, admin: User = Depends(require_org_admin), d
 
 
 class OrgMemberApprove(BaseModel):
-    # Role revamp (issue follow-up): the extra roles (tactical_operator/
-    # broadcaster) to grant right away, alongside approval -- typically the
-    # admin panel's approve button pre-fills this from the pending row's own
-    # requested_roles, editable before submitting. Omitted/empty grants none;
-    # they can always be added later via PUT .../extra-roles.
+    # Role revamp (issue follow-up): the roles (net_control_op/
+    # tactical_operator/broadcaster) to grant right away, alongside approval
+    # -- typically the admin panel's approve button pre-fills this with
+    # net_control_op checked by default (the normal case) plus whatever the
+    # pending row's own requested_roles suggests, editable before submitting.
+    # Omitted/empty grants none at all; roles can always be changed later via
+    # PUT .../extra-roles. "admin" is not settable here -- see
+    # update_org_member_role for that.
     roles: list[str] = []
 
     @field_validator("roles")
     @classmethod
     def valid_roles(cls, v):
-        bad = [r for r in v if r not in NET_EXTRA_ROLES]
+        bad = [r for r in v if r not in ORG_EXTRA_ROLES]
         if bad:
-            raise ValueError(f"Invalid role(s): {', '.join(bad)} — only tactical_operator/broadcaster may be set here")
+            raise ValueError(f"Invalid role(s): {', '.join(bad)} — only {', '.join(ORG_EXTRA_ROLES)} may be set here")
         return v
 
 
@@ -644,9 +647,9 @@ class OrgMemberExtraRolesUpdate(BaseModel):
     @field_validator("roles")
     @classmethod
     def valid_roles(cls, v):
-        bad = [r for r in v if r not in NET_EXTRA_ROLES]
+        bad = [r for r in v if r not in ORG_EXTRA_ROLES]
         if bad:
-            raise ValueError(f"Invalid role(s): {', '.join(bad)} — only tactical_operator/broadcaster may be set here")
+            raise ValueError(f"Invalid role(s): {', '.join(bad)} — only {', '.join(ORG_EXTRA_ROLES)} may be set here")
         return v
 
 
@@ -655,12 +658,12 @@ async def update_org_member_extra_roles(
     org_id: int, user_id: int, data: OrgMemberExtraRolesUpdate,
     admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
 ):
-    """Set which of the two self-service roles (Tactical Operator,
-    Broadcaster — issue follow-up) an already-approved member holds at the
-    org level — a full replace, same shape as the sharing endpoints'
-    full-replace convention. Separate from update_org_member_role above
-    since these are additive/multi-valued (unlike admin/net_control_op,
-    which stay a single base role) — see OrganizationMembership's docstring."""
+    """Set which of the three participant roles (Net Control Op, Tactical
+    Operator, Broadcaster — issue follow-up) an already-approved member
+    holds at the org level — a full replace, same shape as the sharing
+    endpoints' full-replace convention. Separate from update_org_member_role
+    above since these are additive/multi-valued (unlike admin, which stays a
+    single base role) — see OrganizationMembership's docstring."""
     membership = (await db.execute(select(OrganizationMembership).filter(
         OrganizationMembership.org_id == org_id,
         OrganizationMembership.user_id == user_id,

@@ -416,6 +416,15 @@ function renderShareUserList() {
     const canEdit = shareState.editor_user_ids.includes(u.id);
     const isTactical = shareState.tactical_operator_user_ids.includes(u.id);
     const isBroadcaster = shareState.broadcaster_user_ids.includes(u.id);
+    // Role revamp (issue follow-up): Tactical Op/Broadcaster only actually
+    // stick server-side if this user's own org membership already holds
+    // that role (see update_net_shares) -- grayed out + disabled here
+    // instead of silently dropping the selection on save with no
+    // explanation, which read as "it removes the role" (issue found live).
+    const userRoles = u.roles || [];
+    const canTactical = userRoles.includes('tactical_operator');
+    const canBroadcaster = userRoles.includes('broadcaster');
+    const ineligibleTitle = t('Grant this role to them at the org level first (Admin → Operators)');
     return `
     <div style="display:flex;align-items:center;gap:12px;padding:3px 0;font-size:13px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:160px">
@@ -428,12 +437,12 @@ function renderShareUserList() {
           <input type="checkbox" style="accent-color:var(--lc-orange)"
             ${canEdit ? 'checked' : ''} onchange="toggleShareUserEdit(${u.id}, this.checked)" /> Can edit
         </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" style="accent-color:var(--lc-green)"
+        <label style="display:flex;align-items:center;gap:5px;cursor:${canTactical ? 'pointer' : 'not-allowed'};${canTactical ? '' : 'opacity:.45'}" ${canTactical ? '' : `title="${ineligibleTitle}"`}>
+          <input type="checkbox" style="accent-color:var(--lc-green)" ${canTactical ? '' : 'disabled'}
             ${isTactical ? 'checked' : ''} onchange="toggleShareUserRole(${u.id}, 'tactical_operator', this.checked)" /> Tactical Op
         </label>
-        <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" style="accent-color:var(--lc-green)"
+        <label style="display:flex;align-items:center;gap:5px;cursor:${canBroadcaster ? 'pointer' : 'not-allowed'};${canBroadcaster ? '' : 'opacity:.45'}" ${canBroadcaster ? '' : `title="${ineligibleTitle}"`}>
+          <input type="checkbox" style="accent-color:var(--lc-green)" ${canBroadcaster ? '' : 'disabled'}
             ${isBroadcaster ? 'checked' : ''} onchange="toggleShareUserRole(${u.id}, 'broadcaster', this.checked)" /> Broadcaster
         </label>
       </div>

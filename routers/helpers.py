@@ -582,7 +582,14 @@ async def _create_invited_user(
     await db.commit()
     await db.refresh(user)
 
-    db.add(OrganizationMembership(org_id=org.id, user_id=user.id, role=role, approved=True))
+    membership = OrganizationMembership(org_id=org.id, user_id=user.id, role=role, approved=True)
+    db.add(membership)
+    await db.flush()
+    if role != "admin":
+        # Same default as the other approval paths (issue follow-up) -- Add
+        # Operator has no per-role UI of its own, so a normal operator
+        # account should come out with normal net access.
+        await _grant_default_net_control_op(membership.id, db)
     await db.commit()
 
     set_link = _app_url(f"/?setpw={raw_token}")
@@ -675,24 +682,35 @@ async def _net_has_prior_checkin_history(net_id: int, exclude_session_id: int, d
 #
 # Four canonical role names are used everywhere (frontend, API, net-level
 # grants): "admin", "net_control_op", "tactical_operator", "broadcaster".
-# OrganizationMembership.role itself keeps its original two DB values
-# ('admin' | 'member') unchanged -- no data migration needed -- and is just
-# *displayed*/translated as "net_control_op" everywhere else; the two new
-# roles (tactical_operator/broadcaster) are additional and multi-valued, so
-# they live in the separate OrganizationMembershipRole table instead of
-# becoming more values of that single column. A membership's full canonical
-# role set is {ORG_ROLE_DISPLAY[role]} | {its extra_roles}.
+# OrganizationMembership.role keeps its original two DB values ('admin' |
+# 'member') for the org-management tier only (still managed via the
+# separate "Make Admin"/"Remove Admin" action); it no longer implies
+# net_control_op automatically (issue follow-up -- originally it did, but
+# that made net_control_op the only one of the three participant roles an
+# admin couldn't independently grant/revoke, unlike Tactical Operator/
+# Broadcaster). All three participant roles now live symmetrically in
+# OrganizationMembershipRole, independent of admin/member and of each
+# other -- a membership's full canonical role set is
+# {"admin"} (if role=="admin") | {its extra_roles}. Approval auto-grants
+# net_control_op by default (see admin_approve_user/approve_org_member/
+# _create_invited_user) so a plain "approve this person" still gets someone
+# normal net access without the approver having to think about it --  it's
+# just no longer the ONLY option, the same as the other two.
 #
-# At the net level, "net_control_op" is still exactly NetShare.can_edit (full
-# access already implies every other role); "tactical_operator" and
-# "broadcaster" are additional per-share grants in NetShareRole, each only
-# ever offerable for a role the target user's org membership already holds
-# (enforced in routers/nets.py's update_net_shares, not by a DB constraint,
-# since that check spans both tables).
+# At the net level, "net_control_op" is still exactly NetShare.can_edit,
+# deliberately NOT gated by the org-level role (issue follow-up: unlike the
+# other two, granting edit rights on a net predates this whole role system
+# and has never required any org-level prerequisite -- changing that now
+# would be an unrelated, unrequested behavior change for existing
+# deployments). "tactical_operator" and "broadcaster" are per-share grants
+# in NetShareRole, each only ever offerable for a role the target user's
+# org membership already holds (enforced in routers/nets.py's
+# update_net_shares, not by a DB constraint, since that check spans both
+# tables).
 # ---------------------------------------------------------------------------
-ORG_ROLE_DISPLAY = {"admin": "admin", "member": "net_control_op"}
 SELF_REQUESTABLE_ROLES = ("net_control_op", "tactical_operator", "broadcaster")  # never "admin"
-NET_EXTRA_ROLES = ("tactical_operator", "broadcaster")  # NetShareRole values; net_control_op is can_edit
+NET_EXTRA_ROLES = ("tactical_operator", "broadcaster")  # NetShareRole values; net_control_op is can_edit, deliberately ungated
+ORG_EXTRA_ROLES = ("net_control_op", "tactical_operator", "broadcaster")  # OrganizationMembershipRole values
 
 
 async def _org_role_set(org_id: int, user_id: int, db: AsyncSession) -> set[str]:
@@ -706,12 +724,26 @@ async def _org_role_set(org_id: int, user_id: int, db: AsyncSession) -> set[str]
     ))).scalar_one_or_none()
     if not membership:
         return set()
-    roles = {ORG_ROLE_DISPLAY.get(membership.role, membership.role)}
+    roles = {"admin"} if membership.role == "admin" else set()
     extra = (await db.execute(select(OrganizationMembershipRole.role).filter(
         OrganizationMembershipRole.membership_id == membership.id
     ))).scalars().all()
     roles.update(extra)
     return roles
+
+
+async def _grant_default_net_control_op(membership_id: int, db: AsyncSession) -> None:
+    """Grants net_control_op on a freshly-approved non-admin membership,
+    unless it already somehow holds it -- the "approve someone, they get
+    normal net access" default (issue follow-up), for the approval paths
+    that don't take an explicit roles list of their own (the super admin's
+    global approve, and admin-seeded operator accounts). Does not commit --
+    callers are already inside their own commit."""
+    existing = (await db.execute(select(OrganizationMembershipRole.id).filter(
+        OrganizationMembershipRole.membership_id == membership_id, OrganizationMembershipRole.role == "net_control_op",
+    ))).scalar_one_or_none()
+    if not existing:
+        db.add(OrganizationMembershipRole(membership_id=membership_id, role="net_control_op"))
 
 
 # ---------------------------------------------------------------------------

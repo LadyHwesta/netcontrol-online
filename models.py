@@ -150,22 +150,26 @@ class OrganizationMembership(Base):
     the existing User.is_active pending-approval flow but per-org instead of
     instance-wide. A user may hold multiple memberships (multiple orgs).
 
-    Role revamp (issue follow-up): `role` itself is UNCHANGED ('admin' | 'member')
-    -- 'member' is just displayed as "Net Control Op" everywhere now (see
-    routers/helpers.py's ORG_ROLE_DISPLAY), same privileges as before, so no
-    data migration was needed to rename it. A membership can ALSO hold zero or
-    more of the two new self-service roles (Tactical Operator, Broadcaster) --
-    those live in the separate `extra_roles` table below rather than as more
-    values of this column, since a membership can hold several of them at once
-    (e.g. both Net Control Op AND Broadcaster), which a single string column
-    can't express. A membership's full canonical role set is
-    {ORG_ROLE_DISPLAY-mapped `role`} | {extra_roles}."""
+    Role revamp (issue follow-up): `role` ('admin' | 'member') is now purely
+    the org-MANAGEMENT tier (still managed via the "Make Admin"/"Remove
+    Admin" action) — it no longer implies net_control_op automatically the
+    way it originally did. All three participant roles (Net Control Op,
+    Tactical Operator, Broadcaster) live symmetrically in the separate
+    `extra_roles` table below, independent of `role` and of each other, so a
+    membership can hold any combination (e.g. Net Control Op AND
+    Broadcaster) — something a single string column can't express. A
+    membership's full canonical role set is {"admin"} (if role=="admin") |
+    {extra_roles}. Approval defaults to granting net_control_op (see
+    admin_approve_user/approve_org_member/_create_invited_user) so a plain
+    "approve this person" still gets someone normal net access without the
+    approver having to think about it — it's just no longer the only option,
+    same as the other two."""
     __tablename__ = "organization_memberships"
 
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False, default="member")  # 'admin' | 'member' (displayed "Net Control Op")
+    role = Column(String(20), nullable=False, default="member")  # 'admin' | 'member' -- org management tier only
     approved = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
     # Comma-joined role names (e.g. "tactical_operator,broadcaster") the user asked
@@ -187,18 +191,20 @@ class OrganizationMembership(Base):
 
 
 class OrganizationMembershipRole(Base):
-    """One extra self-service role (issue follow-up) granted to an
-    OrganizationMembership on top of its base 'admin'/'member' role --
-    'tactical_operator' | 'broadcaster' only (admin/net_control_op live on
-    OrganizationMembership.role itself, see its docstring). Org-approved here
-    is what makes a role *offerable* when a net is later shared with this
-    user (routers/nets.py's update_net_shares) -- holding it here alone grants
-    no net access by itself."""
+    """One participant role (issue follow-up) granted to an
+    OrganizationMembership, independent of its base 'admin'/'member' role --
+    'net_control_op' | 'tactical_operator' | 'broadcaster'. Org-approved here
+    is what makes net_control_op/tactical_operator/broadcaster *offerable*
+    when a net is later shared with this user (routers/nets.py's
+    update_net_shares checks it for the latter two specifically --
+    net_control_op's net-level counterpart, NetShare.can_edit, is
+    deliberately NOT gated by this, see NetShare's docstring) -- holding a
+    role here alone grants no net access by itself."""
     __tablename__ = "organization_membership_roles"
 
     id = Column(Integer, primary_key=True, index=True)
     membership_id = Column(Integer, ForeignKey("organization_memberships.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False)  # 'tactical_operator' | 'broadcaster'
+    role = Column(String(20), nullable=False)  # 'net_control_op' | 'tactical_operator' | 'broadcaster'
 
     membership = relationship("OrganizationMembership", back_populates="extra_roles")
 
@@ -695,7 +701,11 @@ class NetShare(Base):
     # stay owner/admin-only regardless. This is the "net_control_op" role in
     # the role-revamp's vocabulary (issue follow-up) -- full access already
     # implies every other role, so it stays this plain boolean rather than
-    # becoming one more row in extra_roles below.
+    # becoming one more row in extra_roles below. Deliberately NOT gated by
+    # whether the target holds net_control_op at the org level, unlike
+    # tactical_operator/broadcaster -- granting edit rights on a net predates
+    # the whole role system and never had an org-level prerequisite; adding
+    # one now would be an unrelated behavior change for existing deployments.
     can_edit = Column(Boolean, default=False, nullable=False)
     created_at = Column(UTCDateTime, default=utcnow, nullable=False)
 
