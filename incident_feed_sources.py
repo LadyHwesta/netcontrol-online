@@ -53,12 +53,17 @@ from models import EvacZoneBoundary, IncidentFeedDismissal, Net
 # generous around the county line since a quake felt locally can epicenter
 # just outside it. county_match is compared case-insensitively against
 # each source's own County field. nws_ugc is the NWS county UGC code --
-# found via https://alerts.weather.gov/'s own zone/county list.
+# look one up via GET https://api.weather.gov/zones/county/{guess}, e.g.
+# CAC097 for Sonoma (SAME code 006097 = FIPS 06097, confirms it's the
+# right one); alerts.weather.gov's old zone/county picker that used to
+# make this easier has since been retired. state is the two-letter postal
+# code, used only to build each NWS alert's own link (see fetch_nws_alerts).
 COUNTY_CONFIG = {
     "SONOMA": {
         "bbox": (38.0, 39.0, -123.6, -122.35),
         "county_match": {"SONOMA"},
         "nws_ugc": "CAC097",
+        "state": "CA",
     },
 }
 
@@ -199,7 +204,15 @@ async def fetch_nws_alerts(county: str) -> list[dict]:
     per item (affectedZones' own shape isn't fetched separately; the
     alert feature's own geometry, when present, covers it -- some
     county-wide alerts carry null geometry, meaning "the whole zone",
-    left as None here rather than guessed at)."""
+    left as None here rather than guessed at).
+
+    url is deliberately NOT the alert's own "@id"/feature id -- those are
+    api.weather.gov endpoints that return raw JSON, not a page a person
+    can read (confirmed live: no per-alert human page exists at all --
+    NWS retired the old alerts.weather.gov CAP viewer that used to offer
+    one). Instead this links to weather.gov's own state-wide Active
+    Alerts page, which is real, always exists, and -- since the alert
+    is still active -- will show this one."""
     config = COUNTY_CONFIG[county]
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.get(NWS_ALERTS_URL.format(ugc=config["nws_ugc"]), headers=_NWS_HEADERS)
@@ -223,7 +236,7 @@ async def fetch_nws_alerts(county: str) -> list[dict]:
             "lat": None, "lon": None,
             "geometry": feature.get("geometry"),
             "occurred_at": _parse_date(props.get("sent")),
-            "url": props.get("@id") or feature.get("id"),
+            "url": f"https://www.weather.gov/alerts/{config['state'].lower()}.html",
         })
     return items
 

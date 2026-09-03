@@ -188,6 +188,9 @@ class TestFetchParsing:
         assert item["category"] == "weather_alert"
         assert item["severity"] == "Severe"
         assert item["geometry"]["type"] == "Polygon"
+        # A human-readable page, never the raw-JSON API endpoint an
+        # alert's own "@id"/feature id would point to (issue follow-up).
+        assert item["url"] == "https://www.weather.gov/alerts/ca.html"
 
     async def test_fetch_caloes_power_outages_filters_small_outages(self, mock_feed_fetch):
         items = await incident_feed_sources.fetch_caloes_power_outages("SONOMA")
