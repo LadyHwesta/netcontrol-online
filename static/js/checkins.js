@@ -1347,7 +1347,7 @@ function renderTrafficMessages() {
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Subject')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Type')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Status')}</th>
-      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Notes')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Message')}</th>
       <th></th>
     </tr></thead>
     <tbody>
@@ -1367,9 +1367,10 @@ function renderTrafficMessages() {
           <option value="undeliverable" ${m.status==='undeliverable'?'selected':''}>${t('Undeliverable')}</option>
         </select>
       </td>
-      <td style="padding:4px 6px;color:var(--text-muted)">${esc(m.notes || '')}</td>
+      <td style="padding:4px 6px;color:var(--text-muted);white-space:pre-wrap;max-width:220px">${esc(m.notes || '')}</td>
       <td style="padding:4px 6px;white-space:nowrap">
         <button class="btn btn-ghost btn-sm" onclick="exportTrafficIcs213(${m.id})" title="Export as ICS-213 for Winlink" data-i18n-title="Export as ICS-213 for Winlink" style="padding:1px 6px;font-size:11px">📡</button>
+        <button class="btn btn-ghost btn-sm" onclick="printTrafficIcs213(${m.id})" title="Print / Save ICS-213 as PDF" data-i18n-title="Print / Save ICS-213 as PDF" style="padding:1px 6px;font-size:11px">🖨️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteTrafficMessage(${m.id})" style="padding:1px 6px;font-size:11px">✕</button>
       </td>
     </tr>`).join('')}
@@ -1423,6 +1424,24 @@ async function deleteTrafficMessage(msgId) {
 // export buttons elsewhere.
 function exportTrafficIcs213(msgId) {
   triggerDownload(`${API}/traffic-messages/${msgId}/ics213`);
+}
+
+// Opens a printable ICS-213 form in a new tab (issue follow-up) -- same
+// fetch-blob-window.open pattern as openICS205 (sessions.js); the browser's
+// own Print dialog (Save as PDF) is what actually produces a PDF, no
+// server-side PDF generation needed.
+async function printTrafficIcs213(msgId) {
+  try {
+    const res = await fetch(`${API}/traffic-messages/${msgId}/ics213-print`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Failed to load ICS-213 (' + res.status + ')');
+    const html = await res.text();
+    const blob = new Blob([html], { type: 'text/html' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 // ============================================================

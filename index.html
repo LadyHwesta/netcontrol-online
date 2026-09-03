@@ -1319,12 +1319,12 @@
                       <option value="health_welfare" data-i18n="Health &amp; Welfare">Health &amp; Welfare</option>
                     </select>
                   </div>
-                  <div class="form-group mb-0" style="flex:1;min-width:120px">
-                    <label style="font-size:11px" data-i18n="Notes">Notes</label>
-                    <input class="form-control" id="tm-notes" placeholder="Optional notes" style="font-size:12px" data-i18n-placeholder="Optional notes" />
-                  </div>
-                  <button class="btn btn-primary btn-sm" onclick="addTrafficMessage()" style="height:33px;margin-bottom:0" data-i18n="+ Log">+ Log</button>
                 </div>
+                <div class="form-group mb-0" style="margin-bottom:10px">
+                  <label style="font-size:11px" data-i18n="Message">Message</label>
+                  <textarea class="form-control" id="tm-notes" rows="3" placeholder="Message body — this is the ICS-213 Message field" style="font-size:12px;resize:vertical" data-i18n-placeholder="Message body — this is the ICS-213 Message field"></textarea>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="addTrafficMessage()" style="margin-bottom:10px" data-i18n="+ Log">+ Log</button>
                 <!-- Message list -->
                 <div id="traffic-log-list" style="max-height:260px;overflow-y:auto;font-size:12px">
                   <p class="text-muted" style="margin:0;font-size:12px" data-i18n="No messages logged yet.">No messages logged yet.</p>
@@ -1606,7 +1606,7 @@
   <script src="/static/js/report.js?v=21"></script>
   <script src="/static/js/nets.js?v=36"></script>
   <script src="/static/js/sessions.js?v=34"></script>
-  <script src="/static/js/checkins.js?v=45"></script>
+  <script src="/static/js/checkins.js?v=46"></script>
   <script src="/static/js/history.js?v=23"></script>
   <script src="/static/js/admin.js?v=47"></script>
   <script src="/static/js/schedules.js?v=24"></script>

@@ -1,8 +1,9 @@
 """
-Tests for traffic message logging + its ICS-213/Winlink export (issue
+Tests for traffic message logging + its ICS-213 export, two ways (issue
 follow-up):
   POST/GET/PATCH/DELETE /sessions/{id}/traffic-messages, /traffic-messages/{id}
-  GET /traffic-messages/{id}/ics213
+  GET /traffic-messages/{id}/ics213         (plain text, for Winlink)
+  GET /traffic-messages/{id}/ics213-print   (printable HTML, for PDF/paper)
 """
 from helpers import auth
 
@@ -90,4 +91,45 @@ class TestIcs213Export:
 
     def test_export_404_for_unknown_message(self, client, admin_headers):
         resp = client.get("/traffic-messages/999999/ics213", headers=admin_headers)
+        assert resp.status_code == 404
+
+
+class TestIcs213Print:
+    def test_print_returns_html(self, client, admin_headers, session):
+        msg = _create_message(client, admin_headers, session["id"])
+        resp = client.get(f"/traffic-messages/{msg['id']}/ics213-print", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["content-type"].startswith("text/html")
+
+    def test_print_contains_ics213_fields(self, client, admin_headers, session, net):
+        msg = _create_message(client, admin_headers, session["id"])
+        resp = client.get(f"/traffic-messages/{msg['id']}/ics213-print", headers=admin_headers)
+        html = resp.text
+        assert "ICS 213" in html
+        assert net["name"] in html
+        assert "K2ABC" in html
+        assert "W1AW" in html
+        assert "Shelter status update" in html
+        assert "Shelter at capacity, requesting additional cots." in html
+        assert "Approved by" in html  # field label always present, even if value is blank
+
+    def test_print_handles_missing_message_text(self, client, admin_headers, session):
+        msg = _create_message(client, admin_headers, session["id"], notes=None)
+        resp = client.get(f"/traffic-messages/{msg['id']}/ics213-print", headers=admin_headers)
+        assert resp.status_code == 200
+        assert "(no message text logged)" in resp.text
+
+    def test_print_escapes_html_in_message_text(self, client, admin_headers, session):
+        msg = _create_message(client, admin_headers, session["id"], notes="<script>alert(1)</script>")
+        resp = client.get(f"/traffic-messages/{msg['id']}/ics213-print", headers=admin_headers)
+        assert "<script>alert(1)</script>" not in resp.text
+        assert "&lt;script&gt;" in resp.text
+
+    def test_non_member_cannot_print(self, client, admin_headers, user_headers, session):
+        msg = _create_message(client, admin_headers, session["id"])
+        resp = client.get(f"/traffic-messages/{msg['id']}/ics213-print", headers=user_headers)
+        assert resp.status_code in (403, 404)
+
+    def test_print_404_for_unknown_message(self, client, admin_headers):
+        resp = client.get("/traffic-messages/999999/ics213-print", headers=admin_headers)
         assert resp.status_code == 404
