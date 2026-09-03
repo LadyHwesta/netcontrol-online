@@ -90,7 +90,7 @@
           <input class="form-control" id="login-pass" type="password" autocomplete="current-password" />
         </div>
         <p id="login-forgot-link" style="display:none;margin:-8px 0 14px;font-size:12px;text-align:right">
-          <a href="#" onclick="showForgotPassword(); return false;" data-i18n="Forgot password?">Forgot password?</a>
+          <a href="#" onclick="showForgotPassword(); return false;" style="color:var(--lc-blue)" data-i18n="Forgot password?">Forgot password?</a>
         </p>
         <div id="login-captcha" style="display:none;margin-bottom:14px"></div>
         <button class="btn btn-primary" style="width:100%" onclick="doLogin()" data-i18n="Sign In">Sign In</button>
@@ -110,7 +110,7 @@
         </div>
         <button class="btn btn-primary" style="width:100%" onclick="doForgotPassword(this)" data-i18n="Send Reset Link">Send Reset Link</button>
         <p style="margin:14px 0 0;text-align:center">
-          <a href="#" onclick="backToLoginFromForgot(); return false;" data-i18n="← Back to Login">← Back to Login</a>
+          <button class="btn btn-ghost btn-sm" onclick="backToLoginFromForgot()" data-i18n="← Back to Login">← Back to Login</button>
         </p>
       </div>
 
