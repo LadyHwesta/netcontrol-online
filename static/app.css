@@ -255,6 +255,27 @@
       min-height: 100vh;
     }
 
+    /* A bare, otherwise-unstyled <a> has no color rule of its own anywhere
+       in this file (only specific selectors like #app-footer a did) --
+       it fell back to the browser's raw default anchor blue (~#0000EE)
+       instead of a theme-aware color, nearly invisible against this app's
+       typically dark/black theme backgrounds. Found and fixed for two
+       forgot-password links first (issue follow-up); this is the same fix
+       applied globally instead of one call site at a time, so a future new
+       link doesn't reintroduce the same bug. Every theme defines --lc-blue
+       with real contrast against its own --bg (confirmed across all eight
+       themes, including light's #FAFAF8 background), so this alone covers
+       the vast majority of links; a link rendered on its own colored
+       surface (an accent-colored badge/button, say) still needs its own
+       override, same as before this rule existed. */
+    a { color: var(--lc-blue); }
+    a:hover { opacity: .85; }
+    /* Checked: leaflet.css's own .leaflet-container a { color: #0078A8 }
+       (same specificity, loaded after this file) already covers every
+       link inside a map -- attribution control (OpenStreetMap/aprs.fi
+       credit) included -- against its own always-light background, so
+       the rule above never actually reaches in there. No override needed. */
+
     /* ===== LAYOUT ===== */
     #app { display: flex; flex-direction: column; min-height: 100vh; }
 
