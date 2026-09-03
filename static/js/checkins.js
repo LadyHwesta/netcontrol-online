@@ -694,7 +694,7 @@ function renderExpectedList() {
   // attendance list entirely with the tactical position roster. A routine
   // session on an ARES net (currentNetIsAres but not currentSessionIsActivation)
   // falls through to the unchanged code below.
-  document.getElementById('expected-panel-title').textContent = currentSessionIsActivation ? t('TACTICAL ASSIGNMENTS') : t('EXPECTED STATIONS');
+  document.getElementById('expected-panel-title').textContent = currentSessionIsActivation ? t('🎯 TACTICAL ASSIGNMENTS') : t('📶 EXPECTED STATIONS');
   document.getElementById('expected-filter-row').style.display = currentSessionIsActivation ? 'none' : '';
   if (currentSessionIsActivation) { renderTacticalAssignments(); return; }
 

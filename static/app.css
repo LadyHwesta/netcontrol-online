@@ -332,13 +332,32 @@
     #sidebar.collapsed .lang-select,
     #sidebar.collapsed .i18n-credit { display: none !important; }
     #sidebar.collapsed #sidebar-logout-btn { width: auto; padding: 8px; }
-    /* Bottom LCARS endcap */
-    #sidebar::after {
-      content: ''; display: block;
-      height: 40px; flex-shrink: 0;
+    /* Bottom LCARS endcap (issue follow-up) -- a real element (previously a
+       content-less ::after, like #sidebar-top's own history) now holding
+       glanceable at-a-glance info: Active Nets always, Pending Accounts for
+       an org/super admin only. Present on every page (unlike the top
+       #sidebar-stats panel below, index.html-only) since it's part of the
+       shared sidebar markup -- always the sidebar's last child, with its
+       own margin-top:auto since only index.html also has a collapse toggle
+       (also margin-top:auto) ahead of it to share the job with. */
+    #sidebar-summary {
+      flex-shrink: 0;
       background: var(--lc-purple);
       border-radius: 0 22px 0 0;
+      padding: 10px 14px;
       margin-top: auto;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    #sidebar-summary a {
+      display: flex; align-items: center; gap: 8px;
+      color: var(--on-accent); text-decoration: none;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    #sidebar-summary a:hover { opacity: .8; }
+    .sb-summary-count {
+      margin-left: auto; background: rgba(0,0,0,.25);
+      border-radius: 10px; padding: 1px 8px; font-size: 11px;
     }
     .sidebar-section {
       padding: 6px 14px; color: var(--lc-blue);
@@ -402,7 +421,8 @@
     #sidebar.collapsed .sidebar-stats,
     #sidebar.collapsed .sidebar-section,
     #sidebar.collapsed .sb-label,
-    #sidebar.collapsed #net-sidebar-section { display: none !important; }
+    #sidebar.collapsed #net-sidebar-section,
+    #sidebar.collapsed #sidebar-summary { display: none !important; }
     #sidebar.collapsed .sidebar-btn {
       width: calc(100% - 6px); margin-left: 3px; padding: 10px 0;
       text-align: center; border-radius: 4px; letter-spacing: 0;

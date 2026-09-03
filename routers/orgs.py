@@ -719,7 +719,9 @@ async def create_org_user(org_id: int, data: OrgUserCreate, admin: User = Depend
 
 @router.get("/stats")
 async def get_stats(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Quick stats for the sidebar dashboard panel."""
+    """Quick stats for the sidebar dashboard panels (issue follow-up: now
+    fed into both the top #sidebar-stats panel, index.html-only, and the
+    bottom #sidebar-summary panel present on every page)."""
     from models import NetShare
 
     # Net IDs the user can see (owned + shared), scoped to their current org (issue #1)
@@ -751,11 +753,28 @@ async def get_stats(current_user: User = Depends(get_current_user), db: AsyncSes
 
     gmrs_row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == "gmrs_db_synced_at"))).scalar_one_or_none()
 
+    # Pending account approvals (issue follow-up) -- org-scoped, only
+    # meaningful (and only computed) for someone who can actually act on
+    # them: an org admin of their current org, or a super admin. null for
+    # everyone else so the sidebar panel below knows to hide it outright
+    # rather than show a permanently-zero count.
+    pending_members = None
+    if current_user.current_org_id is not None:
+        is_org_admin = current_user.is_admin or "admin" in await _org_role_set(current_user.current_org_id, current_user.id, db)
+        if is_org_admin:
+            pending_members = (await db.execute(
+                select(func.count(OrganizationMembership.id)).filter(
+                    OrganizationMembership.org_id == current_user.current_org_id,
+                    OrganizationMembership.approved == False,
+                )
+            )).scalar() or 0
+
     return {
         "total_nets": total_nets,
         "active_sessions": active_sessions,
         "checkins_today": checkins_today,
         "gmrs_synced_at": gmrs_row.value[:10] if gmrs_row and gmrs_row.value else None,
+        "pending_members": pending_members,
     }
 
 

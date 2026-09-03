@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=28">
+  <link rel="stylesheet" href="/static/app.css?v=29">
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=1">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
@@ -324,6 +324,18 @@
 
       <!-- Collapse toggle -->
       <button id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Collapse sidebar">◀</button>
+
+      <!-- Bottom summary panel (issue follow-up) — see loadSidebarSummary() in auth.js -->
+      <div id="sidebar-summary">
+        <a href="/" title="Net sessions currently live, org-wide">
+          <span>📡</span><span data-i18n="Active Nets">Active Nets</span>
+          <span class="sb-summary-count" id="summary-active-nets">—</span>
+        </a>
+        <a id="summary-pending-link" href="/admin" style="display:none" title="Accounts waiting on your approval">
+          <span>⏳</span><span data-i18n="Pending">Pending</span>
+          <span class="sb-summary-count" id="summary-pending-count">—</span>
+        </a>
+      </div>
     </nav>
 
     <!-- Content -->
@@ -1192,12 +1204,12 @@
             </div><!-- /session-sticky-header -->
 
             <!-- Expected / Known Stations collapsible panel -->
-            <div id="expected-stations-wrapper" class="session-checkin-tab-content" style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-              <button onclick="toggleExpectedPanel()" style="width:100%;background:var(--surface);border:none;color:var(--lc-blue);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
-                <span id="expected-panel-title">EXPECTED STATIONS</span>
+            <div id="expected-stations-wrapper" class="session-checkin-tab-content" style="margin-bottom:12px;border:1px solid var(--lc-tan);border-radius:8px;overflow:hidden">
+              <button onclick="toggleExpectedPanel()" style="width:100%;background:rgba(255,204,153,0.15);border:none;color:var(--lc-tan);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
+                <span id="expected-panel-title">📶 EXPECTED STATIONS</span>
                 <span id="expected-toggle-icon">▶</span>
               </button>
-              <div id="expected-panel-body" style="display:none;padding:12px;border-top:1px solid var(--border)">
+              <div id="expected-panel-body" style="display:none;padding:12px;border-top:1px solid var(--lc-tan)">
                 <div id="expected-filter-row" style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px">
                   <div class="form-group" style="margin-bottom:0;width:90px">
                     <label style="font-size:11px" data-i18n="Min. Check-ins">Min. Check-ins</label>
@@ -1253,12 +1265,12 @@
             </div>
 
             <!-- Zone Roster (ARES/ACES nets only) -->
-            <div id="zone-roster-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-orange);border-radius:8px;overflow:hidden">
-              <button onclick="toggleZoneRoster()" style="width:100%;background:rgba(255,153,0,0.12);border:none;color:var(--lc-orange);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
+            <div id="zone-roster-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-gold);border-radius:8px;overflow:hidden">
+              <button onclick="toggleZoneRoster()" style="width:100%;background:rgba(255,204,0,0.12);border:none;color:var(--lc-gold);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
                 <span data-i18n="🗺 EVACUATION ZONE ROSTER">🗺 EVACUATION ZONE ROSTER</span>
                 <span id="zone-roster-toggle-icon">▶</span>
               </button>
-              <div id="zone-roster-body" style="display:none;padding:10px;border-top:1px solid var(--lc-orange)">
+              <div id="zone-roster-body" style="display:none;padding:10px;border-top:1px solid var(--lc-gold)">
                 <div id="zone-roster-list" style="max-height:240px;overflow-y:auto;font-size:13px">
                   <p class="text-muted" style="margin:0;font-size:12px" data-i18n="Loading…">Loading…</p>
                 </div>
@@ -1275,12 +1287,12 @@
             </div>
 
             <!-- Traffic message log (ARES nets only) -->
-            <div id="traffic-log-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-blue);border-radius:8px;overflow:hidden">
-              <button onclick="toggleTrafficLog()" style="width:100%;background:rgba(0,153,255,0.1);border:none;color:var(--lc-blue);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
+            <div id="traffic-log-panel" class="session-checkin-tab-content" style="display:none;margin-bottom:12px;border:1px solid var(--lc-purple);border-radius:8px;overflow:hidden">
+              <button onclick="toggleTrafficLog()" style="width:100%;background:rgba(204,102,255,0.12);border:none;color:var(--lc-purple);padding:10px 14px;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.05em;display:flex;align-items:center;justify-content:space-between">
                 <span><span data-i18n="📋 TRAFFIC MESSAGE LOG">📋 TRAFFIC MESSAGE LOG</span> <span id="traffic-log-count" style="font-weight:400;font-size:11px;opacity:.7"></span></span>
                 <span id="traffic-log-toggle-icon">▶</span>
               </button>
-              <div id="traffic-log-body" style="display:none;padding:10px;border-top:1px solid var(--lc-blue)">
+              <div id="traffic-log-body" style="display:none;padding:10px;border-top:1px solid var(--lc-purple)">
                 <!-- Add message form -->
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:flex-end">
                   <div class="form-group mb-0" style="width:90px">
@@ -1582,7 +1594,7 @@
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=22"></script>
   <script src="/static/js/offline-queue.js?v=2"></script>
-  <script src="/static/js/auth.js?v=37"></script>
+  <script src="/static/js/auth.js?v=38"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/views.js?v=19"></script>
@@ -1590,7 +1602,7 @@
   <script src="/static/js/report.js?v=21"></script>
   <script src="/static/js/nets.js?v=36"></script>
   <script src="/static/js/sessions.js?v=34"></script>
-  <script src="/static/js/checkins.js?v=42"></script>
+  <script src="/static/js/checkins.js?v=43"></script>
   <script src="/static/js/history.js?v=23"></script>
   <script src="/static/js/admin.js?v=47"></script>
   <script src="/static/js/schedules.js?v=24"></script>

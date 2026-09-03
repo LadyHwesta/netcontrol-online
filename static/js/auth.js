@@ -39,6 +39,33 @@ function closeWelcomePopup() {
   document.getElementById('welcome-popup').style.display = 'none';
 }
 
+// ============================================================
+// SIDEBAR BOTTOM SUMMARY (issue follow-up) -- fills the previously
+// content-less purple LCARS endcap with real, glanceable info: Active Nets
+// always, Pending Accounts only when the caller can actually act on them
+// (org/super admin -- GET /stats returns pending_members: null otherwise,
+// see routers/orgs.py's get_stats). Lives here (not app.js, index.html-only
+// with the top #sidebar-stats panel) since the bottom panel is part of the
+// shared sidebar markup present on every page.
+// ============================================================
+async function loadSidebarSummary() {
+  try {
+    const s = await apiFetch('/stats');
+    const activeEl = document.getElementById('summary-active-nets');
+    if (activeEl) activeEl.textContent = s.active_sessions;
+    const pendingLink = document.getElementById('summary-pending-link');
+    const pendingCount = document.getElementById('summary-pending-count');
+    if (pendingLink && pendingCount) {
+      if (s.pending_members === null || s.pending_members === undefined) {
+        pendingLink.style.display = 'none';
+      } else {
+        pendingCount.textContent = s.pending_members;
+        pendingLink.style.display = '';
+      }
+    }
+  } catch { /* non-critical; leave the panel at its loading dashes */ }
+}
+
 function switchAuthTab(tab) {
   document.querySelectorAll('.auth-tab').forEach((el, i) => {
     el.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
@@ -439,6 +466,7 @@ async function enterApp() {
   loadOrgSwitcher();   // fire-and-forget; non-blocking — also decides nav-admin visibility
   await loadNets();
   loadSidebarStats();   // fire-and-forget; non-blocking
+  loadSidebarSummary();   // fire-and-forget; non-blocking
   showView('nets');
 }
 

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%230a0a1a'/%3E%3Cline x1='256' y1='256' x2='256' y2='120' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='146' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Cline x1='256' y1='256' x2='366' y2='336' stroke='%230099ff' stroke-width='16' stroke-linecap='round'/%3E%3Ccircle cx='256' cy='120' r='34' fill='%230099ff'/%3E%3Ccircle cx='146' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='366' cy='336' r='34' fill='%230099ff'/%3E%3Ccircle cx='256' cy='256' r='52' fill='%23ff9900'/%3E%3Ccircle cx='256' cy='256' r='17' fill='%230a0a1a'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/app.css?v=28">
+  <link rel="stylesheet" href="/static/app.css?v=29">
   <link rel="manifest" href="/manifest.json" />
   <meta name="theme-color" content="#0a0a1a" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
@@ -68,6 +68,18 @@
       <a class="sidebar-btn" href="/live" target="_blank" data-i18n="📡 Live Public Page ↗">📡 Live Public Page ↗</a>
       <a class="sidebar-btn" href="/directory" target="_blank" data-i18n="📖 Net Directory ↗">📖 Net Directory ↗</a>
       <a class="sidebar-btn" href="/incident-map" target="_blank" data-i18n="🚨 Public Incident Map ↗">🚨 Public Incident Map ↗</a>
+
+      <!-- Bottom summary panel (issue follow-up) — see loadSidebarSummary() in auth.js -->
+      <div id="sidebar-summary">
+        <a href="/" title="Net sessions currently live, org-wide">
+          <span>📡</span><span data-i18n="Active Nets">Active Nets</span>
+          <span class="sb-summary-count" id="summary-active-nets">—</span>
+        </a>
+        <a id="summary-pending-link" href="/admin" style="display:none" title="Accounts waiting on your approval">
+          <span>⏳</span><span data-i18n="Pending">Pending</span>
+          <span class="sb-summary-count" id="summary-pending-count">—</span>
+        </a>
+      </div>
     </nav>
     <div id="content">
         <h2 class="section-title" data-i18n="Help &amp; Operating Guide">Help &amp; Operating Guide</h2>
@@ -80,6 +92,15 @@
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-03 — UI Polish: Admin Tabs, Panel Colors, Sidebar Summary (v2.44.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Admin → Organization was getting crowded — split into two tabs: <strong>Organization</strong> (identity, branding, Fediverse) and <strong>Operators</strong> (add/approve/list operators, reassign net ownership).</li>
+              <li>The live check-in screen's collapsible panels (Expected Stations/Tactical Assignments, Digital Voice, APRS Map, Evacuation Zone Roster, Traffic Log) each now have their own distinct color instead of several sharing the same one — easier to tell at a glance which is which.</li>
+              <li>The empty purple strip at the bottom of the sidebar now shows <strong>Active Nets</strong> (org-wide, click through to My Nets) and, for an org/super admin, <strong>Pending</strong> account approvals (click through to Admin) — visible on every page, not just the main net-control view.</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-03 — Forgot Password (v2.43.0)</div>
@@ -1669,7 +1690,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
 </div>
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=22"></script>
-  <script src="/static/js/auth.js?v=37"></script>
+  <script src="/static/js/auth.js?v=38"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
@@ -1720,6 +1741,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
       const cs = document.getElementById('sidebar-callsign');
       if (cs) cs.textContent = currentUser.callsign;
       loadOrgSwitcher();   // fire-and-forget; non-blocking -- populates #org-switcher and nav-admin visibility (issue follow-up: the switcher was previously only on the Nets page, and this page's own nav-admin check only covered super admins, not org-scoped ones)
+      loadSidebarSummary();   // fire-and-forget; non-blocking
       await loadBranding();
       loadOrgBanner();   // fire-and-forget; non-blocking
       syncLangFromUser(currentUser);   // fire-and-forget; non-blocking
