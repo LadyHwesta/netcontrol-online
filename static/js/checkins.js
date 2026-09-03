@@ -193,7 +193,7 @@ async function addCheckin() {
   const signal_report = document.getElementById('ci-sig').value.trim() || null;
   const comments = document.getElementById('ci-comments').value.trim() || null;
   const has_traffic = document.getElementById('ci-traffic').checked;
-  const evac_zone = currentNetIsAres ? (document.getElementById('ci-zone').value.trim() || null) : null;
+  const evac_zone = currentNetIsAres ? _resolveZoneInput(document.getElementById('ci-zone').value) : null;
   const currentNet = nets.find(n => n.id === currentNetId);
   const dmr_talkgroup = document.getElementById('ci-dmr-tg').value.trim()
     || (currentNet && currentNet.dmr_talkgroup)
@@ -1171,11 +1171,39 @@ function populateKnownZonesList() {
   if (!dl) return;
   // Merges previously-typed zone names with the synced boundary catalog
   // (issue #27) -- the free-text input itself is unchanged, this only
-  // widens what's offered/autocompleted.
+  // widens what's offered/autocompleted. Each synced boundary's own short
+  // code (external_id, e.g. "SRS-Northeast3") is offered as a second
+  // option alongside its display name (issue follow-up) -- operators used
+  // to reading codes off a roster/memory can type or pick either one, and
+  // _resolveZoneInput() below normalizes a code back to the display name
+  // on submit so it still lines up with the map/roster's name-based match.
   const fromRoster = Object.values(evacZones);
-  const fromBoundaries = evacZoneBoundaries.map(b => (b.name || '').trim() || b.external_id).filter(Boolean);
-  const distinctZones = [...new Set([...fromRoster, ...fromBoundaries])].sort();
-  dl.innerHTML = distinctZones.map(z => `<option value="${esc(z)}">`).join('');
+  const fromBoundaryNames = evacZoneBoundaries.map(b => (b.name || '').trim() || b.external_id).filter(Boolean);
+  const distinctNames = [...new Set([...fromRoster, ...fromBoundaryNames])].sort();
+  const codeOptions = evacZoneBoundaries
+    .filter(b => b.external_id && (b.name || '').trim() && b.external_id.trim().toUpperCase() !== b.name.trim().toUpperCase())
+    .map(b => `<option value="${esc(b.external_id)}">${esc(b.name)}</option>`);
+  dl.innerHTML = distinctNames.map(z => `<option value="${esc(z)}">`).join('') + codeOptions.join('');
+}
+
+// Resolves whatever an operator typed/picked in the Evac Zone field against
+// this net's synced boundary catalog (issue follow-up) -- matches a short
+// code (external_id, e.g. "SRS-Northeast3") OR the display name itself,
+// case/whitespace-insensitive, and returns the boundary's canonical name so
+// it lines up with the map highlighting and zone roster (both match on
+// name -- see computeZoneCheckinCounts' own note). Falls through to the
+// raw trimmed input when nothing matches, same free-text behavior as
+// before this existed -- a zone that isn't in the synced catalog yet is
+// still recorded as typed.
+function _resolveZoneInput(raw) {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return null;
+  const key = trimmed.toUpperCase();
+  const match = evacZoneBoundaries.find(b =>
+    (b.external_id && b.external_id.trim().toUpperCase() === key) ||
+    (b.name && b.name.trim().toUpperCase() === key)
+  );
+  return match ? ((match.name || '').trim() || match.external_id) : trimmed;
 }
 
 // ── Zone boundaries synced from an external GIS API (issue #27) ──────
