@@ -655,7 +655,11 @@ class IncidentStation(Base):
 
 
 class TrafficMessage(Base):
-    """A formal or informal traffic message handled during a net session."""
+    """A formal or informal traffic message handled during a net session.
+    subject + notes (issue follow-up) double as the Subject/Message fields
+    of an ICS-213 General Message export -- see routers/traffic.py's
+    export_traffic_ics213 -- ready to paste into a Winlink message body or
+    attach as a .txt file."""
     __tablename__ = "traffic_messages"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -663,6 +667,7 @@ class TrafficMessage(Base):
     msg_number = Column(String(50), nullable=True)          # e.g. "NTS-001", "ICS-214-7"
     origin_callsign = Column(String(12), nullable=False)
     dest_info = Column(String(200), nullable=True)           # destination callsign or address
+    subject = Column(String(200), nullable=True)             # ICS-213 "Subject" (issue follow-up)
     msg_type = Column(String(20), nullable=False, default="formal")   # formal | informal | health_welfare
     status = Column(String(20), nullable=False, default="received")   # received | relayed | delivered | undeliverable
     notes = Column(Text, nullable=True)

@@ -1344,6 +1344,7 @@ function renderTrafficMessages() {
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Msg #')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Origin')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Destination')}</th>
+      <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Subject')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Type')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Status')}</th>
       <th style="text-align:left;padding:4px 6px;color:var(--text-muted);font-weight:600">${t('Notes')}</th>
@@ -1355,6 +1356,7 @@ function renderTrafficMessages() {
       <td style="padding:4px 6px;font-family:monospace">${esc(m.msg_number || '—')}</td>
       <td style="padding:4px 6px"><span class="callsign" style="font-size:11px">${esc(m.origin_callsign)}</span></td>
       <td style="padding:4px 6px">${esc(m.dest_info || '—')}</td>
+      <td style="padding:4px 6px">${esc(m.subject || '—')}</td>
       <td style="padding:4px 6px">${esc(typeLabels[m.msg_type] || m.msg_type)}</td>
       <td style="padding:4px 6px">
         <select style="font-size:11px;background:var(--bg);color:${statusColors[m.status]||'inherit'};border:1px solid var(--border);border-radius:4px;padding:2px 4px"
@@ -1366,7 +1368,8 @@ function renderTrafficMessages() {
         </select>
       </td>
       <td style="padding:4px 6px;color:var(--text-muted)">${esc(m.notes || '')}</td>
-      <td style="padding:4px 6px">
+      <td style="padding:4px 6px;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="exportTrafficIcs213(${m.id})" title="Export as ICS-213 for Winlink" data-i18n-title="Export as ICS-213 for Winlink" style="padding:1px 6px;font-size:11px">📡</button>
         <button class="btn btn-danger btn-sm" onclick="deleteTrafficMessage(${m.id})" style="padding:1px 6px;font-size:11px">✕</button>
       </td>
     </tr>`).join('')}
@@ -1383,6 +1386,7 @@ async function addTrafficMessage() {
         origin_callsign: origin,
         dest_info: document.getElementById('tm-dest').value.trim() || null,
         msg_number: document.getElementById('tm-number').value.trim() || null,
+        subject: document.getElementById('tm-subject').value.trim() || null,
         msg_type: document.getElementById('tm-type').value,
         notes: document.getElementById('tm-notes').value.trim() || null,
       })
@@ -1390,6 +1394,7 @@ async function addTrafficMessage() {
     document.getElementById('tm-origin').value = '';
     document.getElementById('tm-dest').value = '';
     document.getElementById('tm-number').value = '';
+    document.getElementById('tm-subject').value = '';
     document.getElementById('tm-notes').value = '';
     toast(t('Message logged'), 'success');
     await loadTrafficMessages();
@@ -1409,6 +1414,15 @@ async function deleteTrafficMessage(msgId) {
     await apiFetch(`/traffic-messages/${msgId}`, { method: 'DELETE' });
     await loadTrafficMessages();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// Downloads this message as a plain-text ICS-213 General Message (issue
+// follow-up) -- ready to paste into a Winlink message body, or attach as
+// a .txt file. triggerDownload (sessions.js) handles the authenticated
+// fetch + Content-Disposition filename + blob download, same as the CSV
+// export buttons elsewhere.
+function exportTrafficIcs213(msgId) {
+  triggerDownload(`${API}/traffic-messages/${msgId}/ics213`);
 }
 
 // ============================================================

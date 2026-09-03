@@ -746,6 +746,10 @@ MIGRATIONS = [
      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(64)"),
     ("users: password-reset sent-at",
      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_sent_at TIMESTAMPTZ"),
+
+    # ── Traffic message ICS-213/Winlink export (issue follow-up) ──
+    ("traffic_messages: subject (ICS-213 Subject field)",
+     "ALTER TABLE traffic_messages ADD COLUMN IF NOT EXISTS subject VARCHAR(200)"),
 ]
 
 # ---------------------------------------------------------------------------
