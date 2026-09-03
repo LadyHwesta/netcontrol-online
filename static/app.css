@@ -1138,6 +1138,25 @@
       font-size: 15px;
     }
 
+    /* ===== EVAC ZONE MAP — LIVE CHECK-IN BADGE (issue follow-up) ===== */
+    /* A permanent Leaflet tooltip centered on a zone polygon that has at
+       least one checked-in station reporting from it (evac-zone-map.js) --
+       deliberately not one of _evacZoneColor()'s status colors (order/
+       warning/shelter), a different question ("who's actually reporting"
+       vs. "what's this zone's official status") answered with its own
+       color so the two don't read as the same signal. */
+    .leaflet-tooltip.evac-zone-count-badge {
+      background: var(--lc-green); color: var(--on-accent);
+      border: 2px solid var(--on-accent);
+      border-radius: 50%;
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 13px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.5);
+      padding: 0;
+    }
+    .leaflet-tooltip.evac-zone-count-badge::before { display: none; }
+
     /* History's Printable Report template -- window.print() shows only
        #history-print-area, hiding the rest of the SPA shell (sidebar,
        header, other tabs) regardless of what's scrolled into view. */

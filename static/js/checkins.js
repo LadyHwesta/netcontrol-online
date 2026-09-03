@@ -416,6 +416,13 @@ async function loadCheckins() {
       zones.forEach(z => { evacZones[z.callsign] = z.zone; });
       populateKnownZonesList();
       renderZoneRoster();
+      // Refresh the map's live-check-in highlighting too (issue follow-up)
+      // -- but only if the panel (and so the map) is already visible;
+      // Leaflet needs a real, non-hidden container to size into (see
+      // toggleZoneRoster's own comment), and opening the panel later
+      // already re-renders fresh from current evacZones/evacZoneBoundaries.
+      const zoneRosterBody = document.getElementById('zone-roster-body');
+      if (zoneRosterBody && zoneRosterBody.style.display !== 'none') renderEvacZoneMap();
     } catch {}
   }
   renderCheckins(checkins);
@@ -1186,11 +1193,29 @@ function renderEvacZoneSyncStatus() {
   syncedEl.textContent = `${t('Last synced:')} ${new Date(latest).toLocaleString()}`;
 }
 
+// Zone name (trimmed, uppercased -- same normalization evac-zone-map.js
+// applies to each boundary's own displayed name) -> count of checked-in
+// stations currently reporting from it, per the live Zone Roster (issue
+// follow-up). Free-text-matched, same limitation as the roster list itself
+// and incident_matching.py's own zone_report signal -- a station's typed
+// zone has to actually match a synced boundary's name to line up on the
+// map; the autocomplete list (populateKnownZonesList) is what makes that
+// the common case in practice.
+function computeZoneCheckinCounts() {
+  const counts = {};
+  Object.values(evacZones).forEach(zone => {
+    const key = (zone || '').trim().toUpperCase();
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+}
+
 function renderEvacZoneMap() {
   const container = document.getElementById('evac-zone-map-container');
   if (!container) return;
   container.style.display = evacZoneBoundaries.length ? '' : 'none';
-  if (evacZoneBoundaries.length) initEvacZoneMap('evac-zone-map-container', evacZoneBoundaries);
+  if (evacZoneBoundaries.length) initEvacZoneMap('evac-zone-map-container', evacZoneBoundaries, computeZoneCheckinCounts());
 }
 
 async function syncEvacZoneBoundaries() {

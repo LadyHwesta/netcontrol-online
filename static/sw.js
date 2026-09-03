@@ -56,7 +56,7 @@
 // silently ungated by app-shell caching and unavailable offline. Bumping a
 // shared file's version anywhere means bumping it in this list AND in every
 // one of the five precached pages' own tags, all to the same number.
-const CACHE_NAME = 'netcontrol-online-shell-v93';
+const CACHE_NAME = 'netcontrol-online-shell-v94';
 
 const PRECACHE_URLS = [
   '/',
@@ -67,7 +67,7 @@ const PRECACHE_URLS = [
   '/incidents',
   '/assignments',
   '/static/offline.html',
-  '/static/app.css?v=29',
+  '/static/app.css?v=30',
   '/static/vendor/leaflet/leaflet.css?v=1',
   '/static/vendor/cropperjs/cropper.min.css?v=1',
   '/static/vendor/cropperjs/cropper.min.js?v=1',
@@ -81,7 +81,7 @@ const PRECACHE_URLS = [
   '/static/js/report.js?v=21',
   '/static/js/nets.js?v=36',
   '/static/js/sessions.js?v=34',
-  '/static/js/checkins.js?v=43',
+  '/static/js/checkins.js?v=44',
   '/static/js/history.js?v=23',
   '/static/js/admin.js?v=47',
   '/static/js/schedules.js?v=24',
@@ -90,7 +90,7 @@ const PRECACHE_URLS = [
   '/static/js/dmr.js?v=21',
   '/static/js/aprs.js?v=40',
   '/static/js/aprs-map.js?v=41',
-  '/static/js/evac-zone-map.js?v=1',
+  '/static/js/evac-zone-map.js?v=2',
   '/static/js/incidents.js?v=2',
   '/static/js/assignments.js?v=1',
   '/static/vendor/leaflet/leaflet.js?v=1',
