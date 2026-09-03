@@ -750,6 +750,21 @@ MIGRATIONS = [
     # ── Traffic message ICS-213/Winlink export (issue follow-up) ──
     ("traffic_messages: subject (ICS-213 Subject field)",
      "ALTER TABLE traffic_messages ADD COLUMN IF NOT EXISTS subject VARCHAR(200)"),
+
+    # ── Live hazard feed on the Incidents page (issue follow-up) ── the
+    # fetched items themselves (fires/earthquakes/power outages/weather
+    # alerts, see incident_feed_sources.py) are never stored -- only
+    # what an operator already did with one, so it stops reappearing.
+    ("table: incident_feed_dismissals",
+     """CREATE TABLE IF NOT EXISTS incident_feed_dismissals (
+         id SERIAL PRIMARY KEY,
+         net_id INTEGER NOT NULL REFERENCES nets(id) ON DELETE CASCADE,
+         source VARCHAR(30) NOT NULL,
+         external_id VARCHAR(100) NOT NULL,
+         status VARCHAR(20) NOT NULL,
+         incident_id INTEGER REFERENCES incidents(id) ON DELETE SET NULL,
+         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         UNIQUE (net_id, source, external_id))"""),
 ]
 
 # ---------------------------------------------------------------------------

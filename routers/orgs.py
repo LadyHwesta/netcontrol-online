@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import activitypub_delivery
 import activitypub_signing
 from database import get_db
-from models import ActivityPubFollower, Checkin, EnabledLanguage, Net, NetSession, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, SystemSetting, User
+from models import ActivityPubFollower, Checkin, EnabledLanguage, Incident, Net, NetSession, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, SystemSetting, User
 from routers import helpers
 from routers.deps import get_current_user
 from routers.helpers import ORG_EXTRA_ROLES, SELF_REQUESTABLE_ROLES, _get_or_create_org, _grant_default_net_control_op, _net_to_out, _org_logo_file, _org_role_set
@@ -739,6 +739,7 @@ async def get_stats(current_user: User = Depends(get_current_user), db: AsyncSes
 
     active_sessions = 0
     checkins_today = 0
+    active_incidents = 0
     if all_net_ids:
         active_sessions = (await db.execute(
             select(func.count(NetSession.id))
@@ -749,6 +750,13 @@ async def get_stats(current_user: User = Depends(get_current_user), db: AsyncSes
             select(func.count(Checkin.id))
             .join(NetSession, Checkin.session_id == NetSession.id)
             .filter(NetSession.net_id.in_(all_net_ids), Checkin.checked_in_at >= today_start)
+        )).scalar() or 0
+        # Active (unresolved) Incidents across the user's own nets (issue
+        # follow-up -- fed into the sidebar summary panel alongside Active
+        # Nets/Pending, same "glanceable, org-scoped" purpose).
+        active_incidents = (await db.execute(
+            select(func.count(Incident.id))
+            .filter(Incident.net_id.in_(all_net_ids), Incident.status == "active")
         )).scalar() or 0
 
     gmrs_row = (await db.execute(select(SystemSetting).filter(SystemSetting.key == "gmrs_db_synced_at"))).scalar_one_or_none()
@@ -773,6 +781,7 @@ async def get_stats(current_user: User = Depends(get_current_user), db: AsyncSes
         "total_nets": total_nets,
         "active_sessions": active_sessions,
         "checkins_today": checkins_today,
+        "active_incidents": active_incidents,
         "gmrs_synced_at": gmrs_row.value[:10] if gmrs_row and gmrs_row.value else None,
         "pending_members": pending_members,
     }

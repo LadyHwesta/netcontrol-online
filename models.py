@@ -654,6 +654,39 @@ class IncidentStation(Base):
         return f"<IncidentStation incident_id={self.incident_id} callsign={self.callsign} status={self.status}>"
 
 
+class IncidentFeedDismissal(Base):
+    """Tracks what an operator has already done with one item from the
+    live hazard feed (issue follow-up -- fires/earthquakes/power outages/
+    weather alerts polled live from public sources, see
+    incident_feed_sources.py) so it stops reappearing on the next
+    refresh. Deliberately the ONLY thing this feature persists -- the
+    fetched items themselves are never stored, refetched live every time
+    (same reasoning as EvacZoneBoundary's own "cron would be stale"
+    choice, just more so: see incident_feed_sources.py's module
+    docstring). (net_id, source, external_id) identifies one feed item;
+    status distinguishes "created an Incident from this" (incident_id
+    set) from "not relevant, hide it" (incident_id left null)."""
+    __tablename__ = "incident_feed_dismissals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    net_id = Column(Integer, ForeignKey("nets.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String(30), nullable=False)              # which fetch_* in incident_feed_sources.py produced this item
+    external_id = Column(String(100), nullable=False)        # the source's own stable id for the item
+    status = Column(String(20), nullable=False)               # "dismissed" | "created"
+    incident_id = Column(Integer, ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(UTCDateTime, default=utcnow, nullable=False)
+
+    net = relationship("Net")
+    incident = relationship("Incident")
+
+    __table_args__ = (
+        UniqueConstraint("net_id", "source", "external_id", name="uq_feed_dismissal_net_source_extid"),
+    )
+
+    def __repr__(self):
+        return f"<IncidentFeedDismissal net_id={self.net_id} source={self.source} external_id={self.external_id} status={self.status}>"
+
+
 class TrafficMessage(Base):
     """A formal or informal traffic message handled during a net session.
     subject + notes (issue follow-up) double as the Subject/Message fields

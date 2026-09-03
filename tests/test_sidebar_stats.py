@@ -30,3 +30,17 @@ class TestPendingMembersStat:
     def test_zero_not_null_when_admin_has_no_pending(self, client, admin_headers):
         resp = client.get("/stats", headers=admin_headers)
         assert resp.json()["pending_members"] == 0
+
+
+class TestActiveIncidentsStat:
+    def test_zero_when_none(self, client, admin_headers):
+        resp = client.get("/stats", headers=admin_headers)
+        assert resp.json()["active_incidents"] == 0
+
+    def test_counts_only_active_status(self, client, admin_headers, net):
+        i1 = client.post(f"/nets/{net['id']}/incidents", json={"title": "Fire"}, headers=admin_headers).json()
+        client.post(f"/nets/{net['id']}/incidents", json={"title": "Flood"}, headers=admin_headers)
+        client.patch(f"/incidents/{i1['id']}", json={"status": "resolved"}, headers=admin_headers)
+
+        resp = client.get("/stats", headers=admin_headers)
+        assert resp.json()["active_incidents"] == 1

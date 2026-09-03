@@ -8,6 +8,12 @@ let currentIncidents = [];
 let editingIncidentId = null;   // set while the form is editing an existing incident, else creating
 let openIncidentId = null;      // the incident currently shown in the detail card
 let openIncidentStations = [];
+let currentIncidentFeed = [];          // live hazard feed items for the current net (issue follow-up)
+let incidentFeedSourcesFailed = [];
+let incidentFeedCounty = null;         // null = no feed configured for this net's region
+let pendingFeedItemForCreate = null;   // {source, external_id} the New Incident form was opened from, or null
+
+const INCIDENT_FEED_ICONS = { earthquake: '🌎', wildfire: '🔥', power_outage: '⚡', weather_alert: '⚠️' };
 
 const INCIDENT_STATION_STATUSES = ['not_contacted', 'attempted', 'contacted', 'confirmed_safe', 'needs_assistance'];
 const INCIDENT_STATION_STATUS_LABELS = {
@@ -38,6 +44,7 @@ async function loadIncidentNets() {
     await onIncidentNetChange();
   } else {
     document.getElementById('incident-list-section').style.display = 'none';
+    document.getElementById('incident-feed-section').style.display = 'none';
   }
 }
 
@@ -46,7 +53,98 @@ async function onIncidentNetChange() {
   hideIncidentDetail();
   hideIncidentForm();
   document.getElementById('incident-list-section').style.display = '';
-  await Promise.all([loadIncidentZoneBoundaries(), loadIncidents()]);
+  document.getElementById('incident-feed-section').style.display = '';
+  await Promise.all([loadIncidentZoneBoundaries(), loadIncidents(), loadIncidentFeed()]);
+}
+
+// ── Live hazard feed (issue follow-up) ─────────────────
+async function loadIncidentFeed() {
+  const btn = document.getElementById('incident-feed-refresh-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const result = await apiFetch(`/nets/${currentIncidentNetId}/incident-feed`);
+    currentIncidentFeed = result.items;
+    incidentFeedSourcesFailed = result.sources_failed;
+    incidentFeedCounty = result.county;
+    document.getElementById('incident-feed-fetched-at').textContent =
+      result.county ? `${t('Last checked:')} ${new Date(result.fetched_at).toLocaleTimeString()}` : '';
+  } catch (e) {
+    currentIncidentFeed = [];
+    incidentFeedSourcesFailed = [];
+    incidentFeedCounty = null;
+    toast(e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+  renderIncidentFeed();
+}
+
+function renderIncidentFeed() {
+  const el = document.getElementById('incident-feed-list');
+  const warningEl = document.getElementById('incident-feed-warning');
+
+  if (incidentFeedSourcesFailed.length) {
+    warningEl.style.display = '';
+    warningEl.textContent = `⚠️ ${t('Some sources are unavailable right now — showing the rest.')}`;
+  } else {
+    warningEl.style.display = 'none';
+  }
+
+  if (!incidentFeedCounty) {
+    el.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t("No live hazard feed is configured for this net's region yet.")}</p>`;
+    return;
+  }
+  if (!currentIncidentFeed.length) {
+    el.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0">${t('Nothing significant reported right now.')}</p>`;
+    return;
+  }
+  // Buttons dispatch by array index rather than embedding source/external_id
+  // directly in the onclick string -- an external_id is free text from a
+  // government API and shouldn't have to be JS-string-literal-safe to render.
+  el.innerHTML = currentIncidentFeed.map((item, idx) => `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--lc-border)">
+      <div style="min-width:0">
+        <span style="margin-right:6px">${INCIDENT_FEED_ICONS[item.category] || '📍'}</span>
+        <strong>${esc(item.title)}</strong>
+        ${item.severity ? `<span style="font-size:11px;color:var(--lc-orange);margin-left:6px">${esc(item.severity)}</span>` : ''}
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+          ${item.county ? `${esc(item.county)} — ` : ''}${item.occurred_at ? new Date(item.occurred_at).toLocaleString() : ''}
+          ${item.url ? ` — <a href="${esc(item.url)}" target="_blank" rel="noopener">${t('source')}</a>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" onclick="createIncidentFromFeedItem(${idx})" style="font-size:11px" data-i18n="Create Incident">Create Incident</button>
+        <button class="btn btn-ghost btn-sm" onclick="dismissFeedItemAt(${idx})" title="${esc(t('Dismiss'))}">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function createIncidentFromFeedItem(idx) {
+  const item = currentIncidentFeed[idx];
+  if (!item) return;
+  showNewIncidentForm();
+  document.getElementById('incident-title').value = item.title;
+  document.getElementById('incident-description').value = item.description || '';
+  renderIncidentZoneCheckboxes(item.suggested_zone_ids || []);
+  pendingFeedItemForCreate = { source: item.source, external_id: item.external_id };
+  document.getElementById('incident-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function dismissFeedItemAt(idx) {
+  const item = currentIncidentFeed[idx];
+  if (!item) return;
+  dismissFeedItem(item.source, item.external_id);
+}
+
+async function dismissFeedItem(source, externalId, incidentId = null) {
+  try {
+    await apiFetch(`/nets/${currentIncidentNetId}/incident-feed/dismiss`, {
+      method: 'POST', body: JSON.stringify({ source, external_id: externalId, incident_id: incidentId }),
+    });
+    currentIncidentFeed = currentIncidentFeed.filter(i => !(i.source === source && i.external_id === externalId));
+    renderIncidentFeed();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function loadIncidentZoneBoundaries() {
@@ -83,6 +181,7 @@ async function loadIncidents() {
 // ── Create/edit form ──────────────────────────────────
 function showNewIncidentForm() {
   editingIncidentId = null;
+  pendingFeedItemForCreate = null;
   hideIncidentDetail();
   document.getElementById('incident-form-heading').textContent = t('NEW INCIDENT');
   document.getElementById('incident-title').value = '';
@@ -142,6 +241,7 @@ function cancelIncidentForm() {
 
 function hideIncidentForm() {
   document.getElementById('incident-form-card').style.display = 'none';
+  pendingFeedItemForCreate = null;
 }
 
 async function saveIncident() {
@@ -149,15 +249,20 @@ async function saveIncident() {
   if (!title) return toast(t('Incident title is required'), 'error');
   const description = document.getElementById('incident-description').value.trim() || null;
   const evac_zone_boundary_ids = Array.from(document.querySelectorAll('.incident-zone-checkbox:checked')).map(cb => parseInt(cb.value, 10));
+  const feedItem = pendingFeedItemForCreate;   // captured before hideIncidentForm() clears it
   try {
+    let created = null;
     if (editingIncidentId) {
       await apiFetch(`/incidents/${editingIncidentId}`, { method: 'PATCH', body: JSON.stringify({ title, description, evac_zone_boundary_ids }) });
       toast(t('Incident updated'), 'success');
     } else {
-      await apiFetch(`/nets/${currentIncidentNetId}/incidents`, { method: 'POST', body: JSON.stringify({ title, description, evac_zone_boundary_ids }) });
+      created = await apiFetch(`/nets/${currentIncidentNetId}/incidents`, { method: 'POST', body: JSON.stringify({ title, description, evac_zone_boundary_ids }) });
       toast(t('Incident created'), 'success');
     }
     hideIncidentForm();
+    // Was this created from a live hazard feed item? Mark it handled so
+    // it doesn't reappear (issue follow-up).
+    if (created && feedItem) await dismissFeedItem(feedItem.source, feedItem.external_id, created.id);
     await loadIncidents();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -200,6 +305,7 @@ function editIncident() {
   const incident = currentIncidents.find(i => i.id === openIncidentId);
   if (!incident) return;
   editingIncidentId = incident.id;
+  pendingFeedItemForCreate = null;
   document.getElementById('incident-form-heading').textContent = t('EDIT INCIDENT');
   document.getElementById('incident-title').value = incident.title;
   document.getElementById('incident-description').value = incident.description || '';

@@ -80,6 +80,10 @@
           <span>⏳</span><span data-i18n="Pending">Pending</span>
           <span class="sb-summary-count" id="summary-pending-count">—</span>
         </a>
+        <a href="/incidents" title="Active incidents across your nets">
+          <span>🚨</span><span data-i18n="Active Incidents">Active Incidents</span>
+          <span class="sb-summary-count" id="summary-active-incidents">—</span>
+        </a>
       </div>
     </nav>
     <div id="content">
@@ -92,6 +96,23 @@
         <div class="form-group" style="margin:0;max-width:360px">
           <label data-i18n="Net">Net</label>
           <select class="form-control" id="incident-net-select" onchange="onIncidentNetChange()"></select>
+        </div>
+      </div>
+
+      <div id="incident-feed-section" style="display:none">
+        <div class="card" style="max-width:900px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+            <h3 style="margin:0;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="🌐 LIVE HAZARD FEED">🌐 LIVE HAZARD FEED</h3>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span id="incident-feed-fetched-at" style="font-size:11px;color:var(--text-muted)"></span>
+              <button class="btn btn-ghost btn-sm" id="incident-feed-refresh-btn" onclick="loadIncidentFeed()" style="font-size:11px;padding:1px 8px" data-i18n="🔄 Refresh">🔄 Refresh</button>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--text-muted);margin:0 0 10px" data-i18n="Fires, earthquakes, power outages, and significant weather alerts reported near this net's area — turn one into an Incident in a click, or dismiss it if it's not relevant.">Fires, earthquakes, power outages, and significant weather alerts reported near this net's area — turn one into an Incident in a click, or dismiss it if it's not relevant.</p>
+          <p id="incident-feed-warning" style="display:none;font-size:11px;color:var(--lc-red);margin:0 0 8px"></p>
+          <div id="incident-feed-list">
+            <p class="text-muted" style="font-size:12px;margin:0" data-i18n="Loading…">Loading…</p>
+          </div>
         </div>
       </div>
 
@@ -172,13 +193,13 @@
 </div>
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=22"></script>
-  <script src="/static/js/auth.js?v=38"></script>
+  <script src="/static/js/auth.js?v=39"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/vendor/leaflet/leaflet.js?v=1"></script>
   <script src="/static/js/evac-zone-map.js?v=2"></script>
-  <script src="/static/js/incidents.js?v=2"></script>
+  <script src="/static/js/incidents.js?v=3"></script>
   <script src="/static/js/pwa.js?v=2"></script>
   <script>
     async function initPage() {

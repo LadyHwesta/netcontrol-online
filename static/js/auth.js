@@ -42,9 +42,9 @@ function closeWelcomePopup() {
 // ============================================================
 // SIDEBAR BOTTOM SUMMARY (issue follow-up) -- fills the previously
 // content-less purple LCARS endcap with real, glanceable info: Active Nets
-// always, Pending Accounts only when the caller can actually act on them
-// (org/super admin -- GET /stats returns pending_members: null otherwise,
-// see routers/orgs.py's get_stats). Lives here (not app.js, index.html-only
+// and Active Incidents always, Pending Accounts only when the caller can
+// actually act on them (org/super admin -- GET /stats returns
+// pending_members: null otherwise, see routers/orgs.py's get_stats). Lives here (not app.js, index.html-only
 // with the top #sidebar-stats panel) since the bottom panel is part of the
 // shared sidebar markup present on every page.
 // ============================================================
@@ -53,6 +53,8 @@ async function loadSidebarSummary() {
     const s = await apiFetch('/stats');
     const activeEl = document.getElementById('summary-active-nets');
     if (activeEl) activeEl.textContent = s.active_sessions;
+    const incidentsEl = document.getElementById('summary-active-incidents');
+    if (incidentsEl) incidentsEl.textContent = s.active_incidents;
     const pendingLink = document.getElementById('summary-pending-link');
     const pendingCount = document.getElementById('summary-pending-count');
     if (pendingLink && pendingCount) {
