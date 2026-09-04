@@ -17,6 +17,7 @@ import smtplib
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr, formatdate, make_msgid, parseaddr
 from typing import Optional
 
 import httpx
@@ -106,14 +107,37 @@ def send_email(
     if not to:
         return False
 
-    from_addr = SMTP_FROM or SMTP_USER
+    # SMTP_FROM's own comment documents "Name <addr>" as a valid value, but
+    # that display-name form is only valid in the From: *header* -- passed
+    # as-is to sendmail()'s envelope-sender argument (the raw SMTP `MAIL
+    # FROM:` command), a "Name <addr>" string is malformed there (issue
+    # follow-up: found while investigating a Gmail deliverability report,
+    # this could easily be silently mishandled by a real mail server even
+    # though this app's own tests -- which don't speak real SMTP -- never
+    # would have caught it). parseaddr() splits the two apart so the
+    # header keeps the display name and the envelope gets just the bare
+    # address, however SMTP_FROM was actually formatted.
+    from_display, from_addr = parseaddr(SMTP_FROM) if SMTP_FROM else ("", "")
+    if not from_addr:
+        from_addr = SMTP_USER
+    from_header = formataddr((from_display, from_addr)) if from_display else from_addr
+
+    # A missing Message-ID/Date is itself a spam signal independent of
+    # SPF/DKIM/DMARC (those authenticate the sender, not the message) --
+    # smtplib.sendmail() never adds either automatically the way a real
+    # MTA would, so it's left up to the sender. Message-ID's domain uses
+    # the From address's own domain rather than this server's local
+    # hostname, so it's consistent with whatever's actually sending.
+    msg_id_domain = from_addr.rsplit("@", 1)[-1] if "@" in from_addr else None
 
     if ics_content:
         # multipart/mixed wraps alternative body + ics attachment
         outer = MIMEMultipart("mixed")
-        outer["Subject"] = subject
-        outer["From"]    = from_addr
-        outer["To"]      = ", ".join(to)
+        outer["Subject"]    = subject
+        outer["From"]       = from_header
+        outer["To"]         = ", ".join(to)
+        outer["Date"]       = formatdate(localtime=True)
+        outer["Message-ID"] = make_msgid(domain=msg_id_domain)
 
         alt = MIMEMultipart("alternative")
         if body_text:
@@ -128,9 +152,11 @@ def send_email(
         msg = outer
     else:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"]    = from_addr
-        msg["To"]      = ", ".join(to)
+        msg["Subject"]    = subject
+        msg["From"]       = from_header
+        msg["To"]         = ", ".join(to)
+        msg["Date"]       = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain=msg_id_domain)
         if body_text:
             msg.attach(MIMEText(body_text, "plain"))
         msg.attach(MIMEText(body_html, "html"))

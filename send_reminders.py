@@ -38,6 +38,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr, formatdate, make_msgid, parseaddr
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, or_, select
@@ -90,16 +91,25 @@ def vapid_configured() -> bool:
 
 
 def send_email(to: str, subject: str, body_html: str, body_text: str) -> None:
-    """Minimal standalone mailer — mirrors main.py's send_email() without
-    needing to import the whole FastAPI app just to send a reminder."""
+    """Minimal standalone mailer — mirrors routers/helpers.py's
+    send_email() (issue follow-up: including its From/Message-ID/Date
+    fix, see that function's own comments for why) without needing to
+    import the whole FastAPI app just to send a reminder."""
     if not smtp_configured():
         log(f"SMTP not configured — skipping: {subject}")
         return
-    from_addr = SMTP_FROM or SMTP_USER
+    from_display, from_addr = parseaddr(SMTP_FROM) if SMTP_FROM else ("", "")
+    if not from_addr:
+        from_addr = SMTP_USER
+    from_header = formataddr((from_display, from_addr)) if from_display else from_addr
+    msg_id_domain = from_addr.rsplit("@", 1)[-1] if "@" in from_addr else None
+
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = from_addr
-    msg["To"] = to
+    msg["Subject"]    = subject
+    msg["From"]       = from_header
+    msg["To"]         = to
+    msg["Date"]       = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=msg_id_domain)
     msg.attach(MIMEText(body_text, "plain"))
     msg.attach(MIMEText(body_html, "html"))
     try:

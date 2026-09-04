@@ -98,6 +98,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-04 — Outbound Email: Message-ID/Date Headers + a Real Bug Fix (v2.47.3)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Every outgoing email (registration/verification, password reset, net reminders, support tickets, etc.) now sets proper <strong>Message-ID</strong> and <strong>Date</strong> headers — their absence is itself a spam signal some providers act on, independent of SPF/DKIM/DMARC.</li>
+              <li>Bug fix: if <code style="background:var(--surface);padding:1px 5px;border-radius:3px">SMTP_FROM</code> was set with a display name (e.g. <code style="background:var(--surface);padding:1px 5px;border-radius:3px">Ham Net Tracker &lt;you@example.com&gt;</code> — the exact form <code style="background:var(--surface);padding:1px 5px;border-radius:3px">.env.example</code> shows as an example), that whole string was being sent as the raw SMTP envelope sender too — malformed for that part of the protocol, and something a real mail server could reject or mishandle unpredictably. The display name now stays in the visible From header only; the envelope always gets just the bare address.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-03 — Fix: Weather Alert Feed Item Linked to Raw JSON (v2.47.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Bug fix: a weather alert's "source" link on the Live Hazard Feed opened the National Weather Service's raw JSON API response instead of a page a person could read — that alert data has no per-alert human page (NWS retired the old viewer that used to offer one). It now links to weather.gov's own state-wide Active Alerts page instead, which is real and will show the alert while it's still active. Earthquake and wildfire links were already correct.</li>
