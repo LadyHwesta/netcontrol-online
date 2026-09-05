@@ -28,6 +28,25 @@ async function saveProfile() {
   } catch (e) { toast(e.message, 'error'); }
 }
 
+// ============================================================
+// PASSWORD — self-service change while already logged in (issue follow-up)
+// ============================================================
+async function changePassword() {
+  const current_password = document.getElementById('change-pw-current').value;
+  const new_password = document.getElementById('change-pw-new').value;
+  const confirm = document.getElementById('change-pw-confirm').value;
+  if (!current_password) return toast(t('Current password is required'), 'error');
+  if (new_password.length < 8) return toast(t('New password must be at least 8 characters'), 'error');
+  if (new_password !== confirm) return toast(t('New passwords do not match'), 'error');
+  try {
+    await apiFetch('/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) });
+    document.getElementById('change-pw-current').value = '';
+    document.getElementById('change-pw-new').value = '';
+    document.getElementById('change-pw-confirm').value = '';
+    toast(t('Password changed'));
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 // ---- Photo crop/reposition (issue follow-up) --------------------------
 // Every photo, whether freshly picked or an existing one being adjusted,
 // goes through the same square Cropper.js modal, and confirming a crop
@@ -330,4 +349,5 @@ while True:
 onEnter(['new-token-name'], createApiToken);
 onEnter(['profile-gmrs-callsign'], saveGmrsCallsign);
 onEnter(['profile-name', 'profile-email', 'profile-callsign', 'profile-phone'], saveProfile);
+onEnter(['change-pw-current', 'change-pw-new', 'change-pw-confirm'], changePassword);
 

@@ -137,6 +137,11 @@ class GmrsCallsignUpdate(BaseModel):
     gmrs_callsign: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class ProfileUpdate(BaseModel):
     """Self-service name/email/callsign/phone (issue follow-up) -- one
     combined endpoint (PATCH /auth/profile) rather than a field each,
@@ -674,6 +679,31 @@ async def update_profile(
         )
 
     return current_user
+
+
+@router.post("/auth/change-password", status_code=204)
+@limiter.limit("10/minute")
+async def change_password(
+    request: Request,
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Self-service password change for an already-logged-in user (issue
+    follow-up) -- distinct from /auth/set-password (admin-invite token) and
+    /auth/reset-password (forgot-password link): both of those exist
+    specifically because the caller ISN'T logged in yet, so they prove a
+    token instead. Here the caller already has a valid session; proving the
+    current password is what stands in for that -- unlike update_profile's
+    other self-service fields, a password change is sensitive enough to
+    need it (also stops an attacker who's grabbed an unattended, still-
+    logged-in session from silently locking the real owner out)."""
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(400, "Current password is incorrect")
+    if len(data.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters")
+    current_user.hashed_password = hash_password(data.new_password)
+    await db.commit()
 
 
 @router.post("/auth/photo", status_code=204)
