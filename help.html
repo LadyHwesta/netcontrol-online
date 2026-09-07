@@ -98,6 +98,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Fix: Net Control Callsign Example Was Amateur-Only (v2.49.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Follow-up to v2.49.0: the Net Control rotation's callsign field (both the net edit form's planning tab and the live session's rotation queue) showed an amateur-format example callsign even on a GMRS net. It now shows the right example for the net's own type.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Activation &amp; Incident Response Now Available on GMRS Nets (v2.49.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>What was previously an ARES/ACES-only, ham-only toggle — evacuation zone tracking, Activation Mode (tactical positions, shift sign-on/off, the Net Control rotation schedule), and the traffic message log — is now available on GMRS nets too, under the renamed <strong>Activation &amp; Incident Response</strong> checkbox in the net's Edit form. A GMRS-based CERT or neighborhood-watch net benefits from exactly the same toolset an ARES net does. DMR and the APRS station map remain ham-only, unchanged — neither has a GMRS allocation.</li>

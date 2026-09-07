@@ -27,9 +27,13 @@ async function openNet(netId) {
   // in loadSessionLive, since {{net_control}}/{{broadcaster}} depend on that session's duty.
   currentNetScript = (net && net.script && net.script.trim()) ? net.script : null;
 
-  // Update callsign input placeholder to match net type
+  // Update callsign input placeholders to match net type
   const ciCall = document.getElementById('ci-call');
   if (ciCall) ciCall.placeholder = currentNetIsGmrs ? 'WSMC512' : 'W1AW or suffix';
+  // Net Control rotation queue's callsign example (issue follow-up) --
+  // reachable for a GMRS net now too, same reasoning as ci-call above.
+  const ncShiftCallsign = document.getElementById('nc-shift-callsign');
+  if (ncShiftCallsign) ncShiftCallsign.placeholder = currentNetIsGmrs ? 'WSMC512' : 'W1ABC';
 
   // Load evac zones for this net
   evacZones = {};

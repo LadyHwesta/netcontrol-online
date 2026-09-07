@@ -127,6 +127,12 @@ function onNetTypeChange() {
     document.getElementById('net-aprs-section').style.display = 'none';
     document.getElementById('net-aprs-map-enabled').checked = false;
   }
+  // Net Control rotation planning's callsign example, same net-type-aware
+  // placeholder swap sessions.js's openNet() already does for the live
+  // check-in callsign field (issue follow-up) -- this field is reachable
+  // for a GMRS net now too, so a ham-only example was misleading.
+  const planNcCallsign = document.getElementById('plan-nc-callsign');
+  if (planNcCallsign) planNcCallsign.placeholder = isGmrs ? 'WSMC512' : 'W1ABC';
 }
 
 // Net Script tab (issue #24) — the script editor used to be one cramped field
