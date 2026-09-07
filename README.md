@@ -266,6 +266,22 @@ gunzip -c backups/<service>-<timestamp>.sql.gz | psql "$DATABASE_URL"
 ```
 (onto an empty database — this doesn't clear existing tables first).
 
+#### Nightly deploy
+
+To pick up commits merged to `main` automatically overnight instead of deploying by hand each time, run `deploy.sh --skip-if-unchanged` from cron. That flag makes the very first thing the script does a check of whether `origin/$GIT_BRANCH` has moved at all — if not, it exits immediately, before the database backup, before anything — so a night with nothing new to deploy causes **no service restart**, not even a brief one. Without the flag, a plain `./deploy.sh` always fully deploys and restarts (useful for a manual run — e.g. to pick up a `.env` change git wouldn't see), so this is opt-in per-invocation, not a global behavior change.
+
+```
+0 3 * * * cd /opt/netcontrol && ./deploy.sh --skip-if-unchanged >> /var/log/nettracker/deploy-cron.log 2>&1
+```
+
+Optional: to warn users in-app 30 minutes ahead of a deploy that's about to restart the service, set `DEPLOY_NOTICE_SECRET` in `.env` (any long random string; leave unset to disable this entirely — `/internal/maintenance-notice` 404s unconditionally with it unset) and add a second cron line that fires 30 minutes before the one above, hitting that endpoint with the same secret as a header:
+
+```
+30 2 * * * curl -fsS -X POST -H "X-Deploy-Secret: <same value as DEPLOY_NOTICE_SECRET>" http://127.0.0.1:${PORT}/internal/maintenance-notice >> /var/log/nettracker/deploy-cron.log 2>&1
+```
+
+Every open tab polls `GET /maintenance-notice` (`static/js/utils.js`) and shows a banner while it reports active. That state lives in memory, not the database, specifically so the restart that lands the actual deploy clears it for free — there's no separate "turn the banner off" step anywhere. If `--skip-if-unchanged` finds nothing to deploy and skips the restart, the banner still stops showing on its own a bit under 90 minutes after being armed, so a quiet night never leaves it stuck on.
+
 #### Running the public demo (demo_reset.py)
 
 If you're not running the public demo, you can skip this section entirely — `demo_reset.py` has no reason to exist on a production or testing instance, and the guard below is what stops it from doing anything if it's ever run there by mistake.

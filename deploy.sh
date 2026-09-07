@@ -1,15 +1,28 @@
 #!/bin/bash
 # deploy.sh — pull latest from GitHub and restart the service
 #
-# Usage:  ./deploy.sh [--force-tests]
+# Usage:  ./deploy.sh [--force-tests] [--skip-if-unchanged]
 #
-#   --force-tests   Run the test suite even if GIT_BRANCH isn't "testing".
-#                   By default the suite only runs automatically on a testing
-#                   instance -- a stable (main) instance skips it, since a
-#                   change should already have been proven out on testing
-#                   before being merged to main. Use this flag to run it
-#                   anyway on a main instance (e.g. after a hotfix straight
-#                   to main).
+#   --force-tests        Run the test suite even if GIT_BRANCH isn't
+#                         "testing". By default the suite only runs
+#                         automatically on a testing instance -- a stable
+#                         (main) instance skips it, since a change should
+#                         already have been proven out on testing before
+#                         being merged to main. Use this flag to run it
+#                         anyway on a main instance (e.g. after a hotfix
+#                         straight to main).
+#
+#   --skip-if-unchanged   Exit immediately (before the backup, before
+#                         touching anything) if origin/$GIT_BRANCH has no
+#                         commits beyond what's already checked out. For a
+#                         scheduled/cron deploy, where a plain run would
+#                         otherwise restart the service every single night
+#                         regardless of whether there's anything new -- the
+#                         exact disruption a nightly deploy is meant to
+#                         avoid. Manual deploys leave this off by default so
+#                         "just deploy" always fully deploys and restarts,
+#                         e.g. to pick up a .env change that git wouldn't see.
+#                         See "Nightly deploy" in README.md.
 #
 # Supports running multiple instances of this app from separate checkouts on
 # one server (e.g. a stable instance + a testing instance) — each instance's
@@ -42,12 +55,14 @@ set -e
 set -o pipefail
 
 FORCE_TESTS=false
+SKIP_IF_UNCHANGED=false
 for arg in "$@"; do
   case "$arg" in
     --force-tests) FORCE_TESTS=true ;;
+    --skip-if-unchanged) SKIP_IF_UNCHANGED=true ;;
     *)
       echo "Unknown option: $arg" >&2
-      echo "Usage: $0 [--force-tests]" >&2
+      echo "Usage: $0 [--force-tests] [--skip-if-unchanged]" >&2
       exit 1
       ;;
   esac
@@ -64,6 +79,24 @@ GIT_BRANCH=$(grep -E '^GIT_BRANCH=' .env 2>/dev/null | tail -1 | cut -d= -f2-)
 GIT_BRANCH="${GIT_BRANCH:-main}"
 
 DATABASE_URL=$(grep -E '^DATABASE_URL=' .env 2>/dev/null | tail -1 | cut -d= -f2-)
+
+# --skip-if-unchanged's whole point is to bail before the backup (or
+# anything else) even runs, so this has to come before that section, not
+# just before the restart at the bottom.
+if [ "$SKIP_IF_UNCHANGED" = true ]; then
+  echo "Checking for new commits on $GIT_BRANCH..."
+  git fetch origin "$GIT_BRANCH" --quiet
+  REMOTE_HEAD=$(git rev-parse "origin/$GIT_BRANCH")
+  # Falls back to empty (never equal to REMOTE_HEAD) if the local branch
+  # doesn't exist yet -- e.g. the very first deploy on a fresh checkout --
+  # so that case always falls through to a full deploy, same as before.
+  LOCAL_HEAD=$(git rev-parse "$GIT_BRANCH" 2>/dev/null || echo "")
+  if [ "$LOCAL_HEAD" = "$REMOTE_HEAD" ]; then
+    echo "Already up to date ($REMOTE_HEAD) — nothing to deploy."
+    exit 0
+  fi
+  echo "New commits found on $GIT_BRANCH — proceeding with deploy."
+fi
 
 # Back this instance's database up before anything below can touch it --
 # named with SYSTEMD_SERVICE so multiple instances backing up to the same

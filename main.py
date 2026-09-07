@@ -33,8 +33,8 @@ from routers.helpers import STATIC_DIR, UPLOADS_DIR, _get_setting, _public_base_
 
 from routers import (
     activitypub, admin, aprs, assignments, auth, callsign_lookup, checkins, digital_voice, evac_zones,
-    expected_stations, history, incident_feed, incidents, nets, orgs, public, push, schedules, sessions,
-    support, tactical, traffic, translation,
+    expected_stations, history, incident_feed, incidents, maintenance, nets, orgs, public, push, schedules,
+    sessions, support, tactical, traffic, translation,
 )
 
 load_dotenv()
@@ -79,7 +79,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.49.2", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.50.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -119,6 +119,7 @@ app.include_router(activitypub.router)
 app.include_router(incidents.router)
 app.include_router(incident_feed.router)
 app.include_router(assignments.router)
+app.include_router(maintenance.router)
 
 
 # ---------------------------------------------------------------------------

@@ -63,6 +63,41 @@ function safeHttpUrl(url) {
   new ResizeObserver(setHeaderHeight).observe(header);
 })();
 
+// Scheduled-maintenance banner (nightly deploy cron, see "Nightly deploy" in
+// README.md) -- polls GET /maintenance-notice and shows/hides a fixed banner
+// accordingly. Runs on every page that loads this file, logged in or not,
+// since a restart affects everyone regardless of auth state. No login is
+// required for the endpoint itself, so this works pre-login too.
+(function () {
+  let banner = null;
+  function showBanner(message) {
+    if (banner) return;
+    banner = document.createElement('div');
+    banner.id = 'maintenance-notice';
+    banner.setAttribute('role', 'status');
+    banner.textContent = '🔧 ' + message;
+    document.body.prepend(banner);
+  }
+  function hideBanner() {
+    if (!banner) return;
+    banner.remove();
+    banner = null;
+  }
+  async function poll() {
+    try {
+      const res = await fetch('/maintenance-notice');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.active) showBanner(data.message); else hideBanner();
+    } catch {
+      // Offline or request failed -- leave whatever's currently showing
+      // alone rather than flicker the banner on a transient network blip.
+    }
+  }
+  poll();
+  setInterval(poll, 60000);
+})();
+
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
