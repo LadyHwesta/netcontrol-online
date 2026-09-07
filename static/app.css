@@ -1048,8 +1048,22 @@
       flex: 0 0 340px;
       position: sticky;
       top: 12px;
-      max-height: calc(100vh - 90px);
+      /* height, not max-height (issue follow-up): with only a couple of
+         check-ins this column used to shrink to fit them, ending well
+         short of the left column's form + collapsible panels and leaving
+         a lopsided gap of bare page below it. Always filling the
+         available viewport height reads as a proper full-height roster
+         panel regardless of how many stations are checked in yet, and it
+         still scrolls internally exactly as before once a long roster
+         actually exceeds it. Card-style background/border (previously
+         none at all) is what actually makes that extra height visible
+         instead of just being empty, transparent space. */
+      height: calc(100vh - 90px);
       overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
     }
     @media (max-width: 960px) {
       .session-columns { flex-direction: column; }
@@ -1057,7 +1071,7 @@
         flex: 1 1 auto;
         width: 100%;
         position: static;
-        max-height: none;
+        height: auto;
         overflow-y: visible;
       }
     }
