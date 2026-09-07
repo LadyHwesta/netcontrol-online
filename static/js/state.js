@@ -14,7 +14,7 @@ let currentNetOwnerId = null;
 let currentNetIsAres = false;
 let currentNetIsGmrs = false;
 let currentSessionId = null;
-let currentSessionIsActivation = false;   // ARES/ACES activation session (issue #21)
+let currentSessionIsActivation = false;   // Activation Mode session (issue #21)
 let tacticalPositions = [];   // loaded from /sessions/{id}/tactical-positions when on that tab
 let currentSessionData = null;   // last-fetched session object; re-used to re-render the duty
                                   // bar/net script when a Net Control handoff changes who's on (issue #21 follow-up)

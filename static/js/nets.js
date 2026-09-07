@@ -13,8 +13,11 @@ function renderNets() {
     return;
   }
   el.innerHTML = nets.map(n => {
+    // Badge text stays generic (not "ARES") since this now applies to GMRS
+    // nets too (issue follow-up) -- an is_ares GMRS net isn't affiliated
+    // with ARES at all, so labeling it that way would be actively wrong.
     const aresBadge = n.is_ares
-      ? ' <span style="font-size:11px;background:var(--lc-orange);color:#000;border-radius:10px;padding:2px 8px;font-weight:700;vertical-align:middle">ARES</span>'
+      ? ' <span style="font-size:11px;background:var(--lc-orange);color:#000;border-radius:10px;padding:2px 8px;font-weight:700;vertical-align:middle">ACTIVATION</span>'
       : '';
     const gmrsBadge = n.net_type === 'gmrs'
       ? ' <span style="font-size:11px;background:#22c55e;color:#000;border-radius:10px;padding:2px 8px;font-weight:700;vertical-align:middle">GMRS</span>'
@@ -111,23 +114,18 @@ function onPublicListedToggle() {
 }
 
 function onNetTypeChange() {
+  // Activation & Incident Response (the #net-ares-section checkbox, and the
+  // Activation Roster tab it unlocks) works for both net types (issue
+  // follow-up: previously hidden/force-cleared for GMRS here, matching the
+  // backend's own now-removed forced-False) -- only DMR/APRS stay ham-only
+  // below, since neither has a GMRS allocation.
   const isGmrs = document.querySelector('input[name="net-type"]:checked')?.value === 'gmrs';
-  document.getElementById('net-ares-section').style.display = isGmrs ? 'none' : '';
   document.getElementById('net-dmr-tg-group').style.display = isGmrs ? 'none' : '';
   if (isGmrs) {
-    document.getElementById('net-ares').checked = false;
     document.getElementById('net-dmr-tg').value = '';
-    // DMR/APRS integration sections should also stay hidden for GMRS —
-    // neither has a GMRS allocation.
     document.getElementById('net-dmr-section').style.display = 'none';
     document.getElementById('net-aprs-section').style.display = 'none';
     document.getElementById('net-aprs-map-enabled').checked = false;
-    document.getElementById('net-form-tab-tactical-btn').style.display = 'none';
-    // Bail out of the tactical tab if GMRS was just selected while it was open --
-    // its button is about to disappear.
-    if (document.getElementById('net-form-tactical-panel').style.display !== 'none') {
-      switchNetFormTab('details');
-    }
   }
 }
 
@@ -318,8 +316,8 @@ async function editNet(id) {
   }
   // Activation Roster planning (issue follow-up) — its own tab; same access
   // level as live tactical-position management (plain net access is enough,
-  // not edit-rights specifically), but only worth showing at all for an
-  // ARES/ACES net.
+  // not edit-rights specifically), but only worth showing at all for a net
+  // with Activation & Incident Response enabled.
   document.getElementById('net-form-tab-tactical-btn').style.display = n.is_ares ? '' : 'none';
   if (n.is_ares) await loadActivationSchedules(id);
 }
@@ -331,7 +329,7 @@ async function saveNet() {
   const script = document.getElementById('net-script').value.trim() || null;
   const net_type = document.querySelector('input[name="net-type"]:checked')?.value || 'ham';
   const is_gmrs = net_type === 'gmrs';
-  const is_ares = is_gmrs ? false : document.getElementById('net-ares').checked;
+  const is_ares = document.getElementById('net-ares').checked;
   const dmr_talkgroup = is_gmrs ? null : (document.getElementById('net-dmr-tg').value.trim() || null);
   const has_broadcast = document.getElementById('net-has-broadcast').checked;
   const broadcast_label = has_broadcast ? (document.getElementById('net-broadcast-label').value.trim() || null) : null;
@@ -541,7 +539,8 @@ onEnter(['net-name', 'net-freq', 'net-dmr-tg', 'net-broadcast-label', 'net-remin
 
 // ============================================================
 // ACTIVATION SCHEDULES (issue follow-up) — named, reusable presets of
-// tactical positions / Net Control rotation for an ARES/ACES net, managed
+// tactical positions / Net Control rotation for a net with Activation &
+// Incident Response enabled, managed
 // ahead of any activation session existing. Starting an activation session
 // later picks one from a dropdown (static/js/sessions.js) or none; the
 // backend COPIES the chosen schedule's rows into new live ones for that

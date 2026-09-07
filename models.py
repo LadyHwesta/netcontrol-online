@@ -234,7 +234,7 @@ class Net(Base):
     frequency = Column(String(20), nullable=True)   # e.g. "146.520 MHz"
     description = Column(Text, nullable=True)
     net_type = Column(String(10), nullable=False, default='ham')  # 'ham' | 'gmrs'
-    is_ares = Column(Boolean, default=False, nullable=False)  # ARES/ACES net — enables evac zone tracking (ham only)
+    is_ares = Column(Boolean, default=False, nullable=False)  # Activation & Incident Response toggle — evac zone tracking, tactical positions, traffic log (issue follow-up: both net types, was ham-only)
     dmr_talkgroup = Column(String(20), nullable=True)  # Default DMR talk group for check-ins (ham only)
     script = Column(Text, nullable=True)  # Net control script, shown alongside the check-in screen
     has_broadcast = Column(Boolean, default=False, nullable=False)  # e.g. a Newsline segment carried during the net
@@ -311,10 +311,10 @@ class NetSession(Base):
     # until the net is about to begin (issue #17).
     broadcaster_override_callsign = Column(String(20), nullable=True)
     broadcaster_override_name = Column(String(100), nullable=True)
-    # ARES/ACES activation (issue #21) — set once at session start, immutable after.
-    # A routine session on an ARES net (is_ares=true, is_activation=false) behaves
-    # exactly as before; only an activation session gets tactical positions, shift
-    # sign-on/off, and the simplified roster.
+    # Activation Mode (issue #21) — set once at session start, immutable after.
+    # A routine session on an Activation & Incident Response net (is_ares=true,
+    # is_activation=false) behaves exactly as before; only an activation session
+    # gets tactical positions, shift sign-on/off, and the simplified roster.
     is_activation = Column(Boolean, default=False, nullable=False)
     # Backfilled entry for a net that already happened with no access to the web
     # tool (issue #20) — created already "ended" (started_at/ended_at both set to
@@ -351,7 +351,7 @@ class NetSession(Base):
 
 class ActivationSchedule(Base):
     """A named, reusable preset of tactical positions + Net Control rotation for
-    an ARES/ACES net's activations (issue follow-up) — e.g. "Full Activation",
+    a net's activations (issue follow-up) — e.g. "Full Activation",
     "Weather Watch", "Shelter Ops Only". A net can have several side by side;
     starting an activation session picks one (or none) from a dropdown.
     Applying one COPIES its TacticalPosition/NetControlShift rows into new live
@@ -378,7 +378,7 @@ class ActivationSchedule(Base):
 
 
 class TacticalPosition(Base):
-    """A tactical assignment slot for one ARES/ACES activation session (issue #21)
+    """A tactical assignment slot for one Activation Mode session (issue #21)
     — e.g. "SHELTER 1". Who currently holds it, and its shift history, are
     derived from Checkin rows (tactical_position_id + signed_off_at), not
     stored here.
@@ -480,7 +480,7 @@ class Checkin(Base):
     # recomputed later, so it stays historically accurate even if earlier
     # check-ins are later deleted. Lets net control welcome first-timers.
     is_first_checkin = Column(Boolean, default=False, nullable=False)
-    evac_zone = Column(String(100), nullable=True)   # ARES/ACES evacuation zone
+    evac_zone = Column(String(100), nullable=True)   # Activation & Incident Response evacuation zone
     dmr_talkgroup = Column(String(20), nullable=True)  # DMR talk group, e.g. "3100"
     dmr_region = Column(String(100), nullable=True)    # Region/state/area for DMR nets
     checked_in_at = Column(UTCDateTime, default=utcnow, nullable=False)

@@ -14,7 +14,7 @@ async function openNet(netId) {
   document.getElementById('ci-dmr-tg').value = netDefaultTg;
   document.getElementById('session-net-name').textContent = net ? net.name : 'Net';
 
-  // Show/hide ARES-specific UI elements (ham only)
+  // Show/hide Activation & Incident Response UI elements (both net types)
   document.getElementById('ci-zone-group').style.display = currentNetIsAres ? '' : 'none';
   document.getElementById('zone-roster-panel').style.display = currentNetIsAres ? '' : 'none';
   document.getElementById('traffic-log-panel').style.display = currentNetIsAres ? '' : 'none';
@@ -313,7 +313,8 @@ async function toggleStartSessionForm() {
       document.getElementById('start-session-broadcaster-label').innerHTML =
         `${esc(net.broadcast_label)} ${t('Override')} <span class="text-muted" style="font-size:11px">${t('(optional — overrides today\'s sign-up)')}</span>`;
     }
-    // ARES/ACES activation checkbox — only offered for ARES-enabled nets (issue #21)
+    // Activation Mode checkbox — only offered for nets with Activation &
+    // Incident Response enabled (issue #21)
     document.getElementById('start-session-activation-group').style.display = (net && net.is_ares) ? '' : 'none';
     document.getElementById('new-session-is-activation').checked = false;
     document.getElementById('new-session-schedule-group').style.display = 'none';
@@ -321,7 +322,7 @@ async function toggleStartSessionForm() {
   }
 }
 
-// Reveals the Activation Schedule dropdown once "🚨 ARES/ACES Activation" is
+// Reveals the Activation Schedule dropdown once "🚨 Activation Mode" is
 // checked (issue follow-up) -- populated once when the form opens above, just
 // shown/hidden here rather than re-fetched on every checkbox toggle.
 function onNewSessionActivationToggle() {
@@ -481,7 +482,7 @@ async function loadSessionLive(sessionId) {
     endBtn.textContent = offline ? '🔒 Close Log' : '■ End Session';
     endBtn.style.display = offline ? (offlineLocked ? 'none' : '') : (ended ? 'none' : '');
     document.getElementById('checkin-form-area').style.display = (offline ? offlineLocked : ended) ? 'none' : '';
-    // ARES/ACES activation session-mode tabs (issue #21) — only while live; reset to
+    // Activation Mode session-mode tabs (issue #21) — only while live; reset to
     // the Check-In tab on every (re)load without touching the other panels' own
     // visibility rules (DMR config presence, is_ares, etc.), which are already
     // correctly applied by the code above/below this point.

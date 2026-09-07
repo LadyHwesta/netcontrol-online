@@ -88,7 +88,7 @@ You'll also be asked to create or join an **Organization** — nets, sessions, a
 - Type a callsign into the check-in box and hit Enter — that's a check-in.
 - **■ End Session** when the net's done; you'll get a session summary and a printable ICS-205.
 
-That's the core loop. Everything else — sharing, scheduling, ARES activations, DMR integration, the public directory, PWA install — layers on top of it; see the README's [Features](README.md#features) list for the full picture.
+That's the core loop. Everything else — sharing, scheduling, activations, DMR integration, the public directory, PWA install — layers on top of it; see the README's [Features](README.md#features) list for the full picture.
 
 ## What's next?
 

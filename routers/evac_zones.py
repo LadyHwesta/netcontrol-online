@@ -1,5 +1,5 @@
 """
-Evacuation Zone routes (ARES/ACES) — per-callsign evac zone tracking for a
+Evacuation Zone routes (Activation & Incident Response) — per-callsign evac zone tracking for a
 net. The checkin traffic-toggle endpoints that used to live under this same
 banner in main.py moved to routers/checkins.py, where they actually belong.
 """
@@ -125,7 +125,7 @@ async def sync_evac_zones(net_id: int, current_user: User = Depends(get_current_
     deliberate admin action, not a background side effect."""
     net = await _get_editable_net(net_id, current_user, db)
     if not net.is_ares:
-        raise HTTPException(400, "Evacuation zone sync is only available for ARES/ACES nets")
+        raise HTTPException(400, "Evacuation zone sync is only available when Activation & Incident Response is enabled for this net")
     try:
         count = await evac_zone_sources.sync_net_evac_zones(net, db)
     except evac_zone_sources.UnsupportedSourceError:

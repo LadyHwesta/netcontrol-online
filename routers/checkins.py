@@ -176,7 +176,7 @@ async def _create_checkin(session: NetSession, net: Optional[Net], data: Checkin
     await db.commit()
     await db.refresh(checkin)
 
-    # Auto-upsert evac zone when provided (ARES/ACES nets)
+    # Auto-upsert evac zone when provided (Activation & Incident Response nets)
     if data.evac_zone:
         existing_ez = (await db.execute(select(EvacZone).filter(
             EvacZone.net_id == session.net_id,

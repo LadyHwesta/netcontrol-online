@@ -5,7 +5,8 @@ Covers:
 - net_type field on create/update
 - GMRS nets allow duplicate callsigns (shared family licence)
 - GMRS nets block DMR endpoints
-- ARES flag forced False on GMRS nets
+- Activation & Incident Response (is_ares) works the same for GMRS nets as
+  ham nets (issue follow-up -- previously ham-only, forced False for GMRS)
 """
 
 from helpers import auth
@@ -63,15 +64,25 @@ class TestNetType:
         assert resp.status_code == 200
         assert resp.json()["net_type"] == "gmrs"
 
-    def test_gmrs_ares_forced_false(self, client, admin_headers):
-        """is_ares cannot be set on a GMRS net — it's forced to False."""
+    def test_gmrs_net_can_enable_activation_and_incident_response(self, client, admin_headers):
+        """is_ares works the same for GMRS nets as ham nets (issue
+        follow-up) -- previously forced False, now honored on create."""
         resp = client.post("/nets", json={
-            "name": "GMRS ARES Attempt",
+            "name": "GMRS Activation Net",
             "net_type": "gmrs",
             "is_ares": True,
         }, headers=admin_headers)
         assert resp.status_code == 201
-        assert resp.json()["is_ares"] is False
+        assert resp.json()["is_ares"] is True
+
+    def test_gmrs_net_can_enable_it_via_update_too(self, client, admin_headers):
+        n = make_gmrs_net(client, admin_headers)
+        assert n["is_ares"] is False
+        resp = client.put(f"/nets/{n['id']}", json={
+            "name": n["name"], "net_type": "gmrs", "is_ares": True,
+        }, headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["is_ares"] is True
 
 
 class TestGmrsDuplicateCallsigns:

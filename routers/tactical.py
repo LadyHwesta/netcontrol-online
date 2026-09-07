@@ -1,10 +1,14 @@
 """
-Tactical Positions — ARES/ACES activation mode (issue #21), plus the Net
-Control rotation schedule (issue #21 follow-up).
+Tactical Positions — Activation Mode (issue #21), plus the Net Control
+rotation schedule (issue #21 follow-up). Available to any net with
+Activation & Incident Response enabled (Net.is_ares) -- originally ham/
+ARES-only, opened up to GMRS nets too (issue follow-up); the underlying
+column/field name stayed is_ares, only its meaning/branding broadened.
 
 A live position/shift only ever acts on a session explicitly started as an
-activation (NetSession.is_activation) — a routine session on an ARES net is
-rejected the same as a non-ARES net, so "is_ares" alone never turns this on.
+activation (NetSession.is_activation) — a routine session on an is_ares net
+is rejected the same as one without Activation & Incident Response enabled
+at all, so "is_ares" alone never turns this on.
 
 Named Activation Schedules (issue follow-up): a net can save several
 reusable presets (models.ActivationSchedule — "Full Activation", "Weather
@@ -166,7 +170,7 @@ async def _get_activation_session(session_id: int, user: User, db: AsyncSession)
     session = await _get_session_for_user(session_id, user, db)
     net = (await db.execute(select(Net).filter(Net.id == session.net_id))).scalar_one_or_none()
     if not net or not net.is_ares:
-        raise HTTPException(400, "Tactical positions require an ARES/ACES net")
+        raise HTTPException(400, "Tactical positions require Activation & Incident Response to be enabled for this net")
     if not session.is_activation:
         raise HTTPException(400, "This session is not marked as an activation")
     return session
@@ -181,7 +185,7 @@ async def _get_activation_net(net_id: int, user: User, db: AsyncSession) -> Net:
     filling positions in once the net is live)."""
     net = await _get_net_for_user(net_id, user, db)
     if not net.is_ares:
-        raise HTTPException(400, "Activation schedules require an ARES/ACES net")
+        raise HTTPException(400, "Activation schedules require Activation & Incident Response to be enabled for this net")
     return net
 
 

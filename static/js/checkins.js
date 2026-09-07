@@ -560,17 +560,18 @@ function renderCheckins(checkins) {
 
     // Manual GPS position badge (issue follow-up) -- always clickable, dim
     // when unset, full opacity + colored when a position has been reported.
-    // Shown on both row layouts below since ARES/ACES field team positions
-    // are, if anything, the more likely case to need this.
+    // Shown on both row layouts below since field team positions during an
+    // activation are, if anything, the more likely case to need this.
     const hasPos = c.lat != null && c.lon != null;
     const posBadge = ` <span class="checkin-pos-badge" title="${hasPos ? t('Position reported — click to edit') : t('Set GPS position')}"
       style="cursor:pointer;opacity:${hasPos ? 1 : 0.3}"
       onclick="openCheckinPositionModal(${c.id}, '${esc(c.callsign)}', ${hasPos ? c.lat : 'null'}, ${hasPos ? c.lon : 'null'})">📍</span>`;
 
-    // ARES/ACES activation session (issue #21): Tactical / Callsign / First
+    // Activation Mode session (issue #21): Tactical / Callsign / First
     // Name, no traffic toggle. A station with no tactical assignment shows
     // its evac zone instead, if it has one. Every other session (including
-    // a routine ARES one): unchanged Callsign / Name / Traffic layout.
+    // a routine one on a net with Activation & Incident Response enabled):
+    // unchanged Callsign / Name / Traffic layout.
     if (currentSessionIsActivation) {
       const firstName = (c.name || '').trim().split(/\s+/)[0] || '';
       const tacticalCell = c.tactical_callsign
@@ -671,7 +672,7 @@ function toggleExpectedPanel() {
   const open = body.style.display === 'none';
   body.style.display = open ? '' : 'none';
   icon.textContent = open ? '▼' : '▶';
-  // ARES/ACES activation (issue #21) — this panel pulls from the Station
+  // Activation Mode (issue #21) — this panel pulls from the Station
   // Schedule tab's tactical positions instead of the historical-attendance
   // list; load them the first time it's opened rather than requiring a
   // separate trip to the Schedule tab first.
@@ -697,10 +698,11 @@ function checkedInCallsigns() {
 }
 
 function renderExpectedList() {
-  // ARES/ACES activation session (issue #21) — replaces the historical-
+  // Activation Mode session (issue #21) — replaces the historical-
   // attendance list entirely with the tactical position roster. A routine
-  // session on an ARES net (currentNetIsAres but not currentSessionIsActivation)
-  // falls through to the unchanged code below.
+  // session on a net with Activation & Incident Response enabled
+  // (currentNetIsAres but not currentSessionIsActivation) falls through to
+  // the unchanged code below.
   document.getElementById('expected-panel-title').textContent = currentSessionIsActivation ? t('🎯 TACTICAL ASSIGNMENTS') : t('📶 EXPECTED STATIONS');
   document.getElementById('expected-filter-row').style.display = currentSessionIsActivation ? 'none' : '';
   if (currentSessionIsActivation) { renderTacticalAssignments(); return; }
@@ -763,7 +765,7 @@ function toggleExpectedTraffic(callsign, checked) {
 }
 
 // ============================================================
-// TACTICAL POSITIONS — ARES/ACES activation mode (issue #21)
+// TACTICAL POSITIONS — Activation Mode (issue #21)
 // ============================================================
 // Single load point shared by both surfaces that display this session's
 // positions: the Station Schedule tab (setup) and the Tactical Assignments
@@ -800,7 +802,7 @@ async function addTacticalPosition() {
   const location = document.getElementById('tac-pos-location').value.trim() || null;
   const assigned_callsign = document.getElementById('tac-pos-assigned-callsign').value.trim().toUpperCase() || null;
   const assigned_name = document.getElementById('tac-pos-assigned-name').value.trim() || null;
-  // Month + day only -- the year is always the current one (an ARES/ACES activation
+  // Month + day only -- the year is always the current one (an activation
   // doesn't span into next year), so there's no year picker to fumble with.
   const month = document.getElementById('tac-pos-scheduled-month').value;
   const day = document.getElementById('tac-pos-scheduled-day').value;
@@ -1165,7 +1167,7 @@ async function savePositionEdit(positionId) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-// ── Zone roster (ARES nets) ──────────────────────────────────
+// ── Zone roster (Activation & Incident Response nets) ────────
 function populateKnownZonesList() {
   const dl = document.getElementById('known-zones-list');
   if (!dl) return;

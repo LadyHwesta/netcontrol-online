@@ -1,10 +1,14 @@
 """
-Tests for ARES/ACES tactical positions and shift sign-on/off (issue #21).
+Tests for Activation Mode tactical positions and shift sign-on/off (issue
+#21). Works identically for ham and GMRS nets (issue follow-up -- see
+TestGmrsActivation at the bottom); most of this file uses a ham net purely
+because that's what pre-existed, not because ham is required anywhere.
 
 Gated on the SESSION's is_activation flag, not just net.is_ares -- a
-routine session on an ARES net must reject these exactly like a
-non-ARES net would, and its own behavior (evac zone, expected stations,
-checkins) must stay byte-for-byte unaffected.
+routine session on an is_ares net must reject these exactly like a net
+without Activation & Incident Response enabled at all would, and its own
+behavior (evac zone, expected stations, checkins) must stay byte-for-byte
+unaffected.
 """
 
 
@@ -845,3 +849,48 @@ class TestActivationSchedules:
             json={"callsign": "W1ABC", "scheduled_start": "2026-09-01T14:00:00Z"}, headers=user_headers,
         )
         assert resp.status_code == 403
+
+
+class TestGmrsActivation:
+    """Activation Mode isn't ham-only (issue follow-up) -- a GMRS net with
+    is_ares=True gets the exact same tactical-position/sign-on behavior as
+    a ham one, and a GMRS net WITHOUT it enabled is still rejected exactly
+    like a ham net without it would be."""
+
+    def _gmrs_activation_net(self, client, headers, name="GMRS Activation Net"):
+        resp = client.post("/nets", json={"name": name, "net_type": "gmrs", "is_ares": True}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_activation_can_be_set_on_gmrs_activation_net(self, client, admin_headers):
+        gnet = self._gmrs_activation_net(client, admin_headers)
+        resp = client.post(f"/nets/{gnet['id']}/sessions", json={"is_activation": True}, headers=admin_headers)
+        assert resp.status_code == 201
+        assert resp.json()["is_activation"] is True
+
+    def test_plain_gmrs_net_still_rejects_activation(self, client, admin_headers):
+        """A GMRS net that hasn't enabled Activation & Incident Response
+        is rejected the same way a ham net without it is -- opening this
+        up to GMRS is additive, not a blanket bypass of the gate itself."""
+        resp = client.post("/nets", json={"name": "Plain GMRS Net", "net_type": "gmrs"}, headers=admin_headers)
+        gnet = resp.json()
+        assert gnet["is_ares"] is False
+        resp = client.post(f"/nets/{gnet['id']}/sessions", json={"is_activation": True}, headers=admin_headers)
+        assert resp.json()["is_activation"] is False
+
+    def test_create_and_sign_on_tactical_position_on_gmrs_net(self, client, admin_headers):
+        gnet = self._gmrs_activation_net(client, admin_headers)
+        activation = _activation_session(client, admin_headers, gnet["id"])
+        position = client.post(
+            f"/sessions/{activation['id']}/tactical-positions",
+            json={"tactical_callsign": "SHELTER 1"},
+            headers=admin_headers,
+        ).json()
+        resp = client.post(
+            f"/tactical-positions/{position['id']}/sign-on",
+            json={"callsign": "KJ7ABC", "name": "Alice"},
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["callsign"] == "KJ7ABC"
+        assert resp.json()["tactical_callsign"] == "SHELTER 1"

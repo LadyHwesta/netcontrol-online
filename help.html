@@ -98,6 +98,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Activation &amp; Incident Response Now Available on GMRS Nets (v2.49.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>What was previously an ARES/ACES-only, ham-only toggle — evacuation zone tracking, Activation Mode (tactical positions, shift sign-on/off, the Net Control rotation schedule), and the traffic message log — is now available on GMRS nets too, under the renamed <strong>Activation &amp; Incident Response</strong> checkbox in the net's Edit form. A GMRS-based CERT or neighborhood-watch net benefits from exactly the same toolset an ARES net does. DMR and the APRS station map remain ham-only, unchanged — neither has a GMRS allocation.</li>
+              <li>Wording throughout the app and Help changed from "ARES/ACES" to the neutral "Activation &amp; Incident Response" / "Activation Mode" to reflect that this was never actually restricted to ARES-affiliated nets even for ham radio — it's just a feature toggle.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-06 — Fix: Sidebar Left a Gap on Short Pages (v2.48.3)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Bug fix, follow-up to v2.48.1: the sidebar's own background/border used to stop right after its last nav item on a page with little content, leaving a plain empty gap below the status panel instead of reaching the bottom of the screen. It now always fills exactly to the bottom of the screen — accounting for your organization's own header height (logo/name/tagline), which can vary quite a bit — while still staying safely in view on a long check-in list, same as before.</li>
@@ -1437,10 +1445,10 @@
               </div>
             </div>
             <div>
-              <div style="font-weight:700;color:var(--lc-orange);font-size:12px;margin-bottom:6px;letter-spacing:.04em" data-i18n="🚨 ARES / ACTIVATION">🚨 ARES / ACTIVATION</div>
+              <div style="font-weight:700;color:var(--lc-orange);font-size:12px;margin-bottom:6px;letter-spacing:.04em" data-i18n="🚨 ACTIVATION &amp; INCIDENT RESPONSE">🚨 ACTIVATION &amp; INCIDENT RESPONSE</div>
               <div style="display:flex;flex-direction:column;gap:4px;font-size:12px">
-                <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('ares','help-sec-ares-mode')" data-i18n="ARES/ACES Mode">ARES/ACES Mode</a>
-                <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('ares','help-sec-ares-activation')" data-i18n="ARES/ACES Activation Mode">ARES/ACES Activation Mode</a>
+                <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('ares','help-sec-ares-mode')" data-i18n="Activation &amp; Incident Response">Activation &amp; Incident Response</a>
+                <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('ares','help-sec-ares-activation')" data-i18n="Activation Mode">Activation Mode</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('ares','help-sec-netcontrol-rotation')" data-i18n="Net Control's Rotation Schedule">Net Control's Rotation Schedule</a>
                 <a href="#" style="color:var(--lc-blue)" onclick="return jumpToHelp('ares','help-sec-log-past')" data-i18n="Log a Past Net">Log a Past Net</a>
               </div>
@@ -1475,7 +1483,7 @@
           <button class="tab-btn active" id="help-guide-sub-getting-started" onclick="switchGuideSubTab('getting-started')" data-i18n="🚀 Getting Started">🚀 Getting Started</button>
           <button class="tab-btn" id="help-guide-sub-checkin" onclick="switchGuideSubTab('checkin')" data-i18n="📻 Check-In Workflow">📻 Check-In Workflow</button>
           <button class="tab-btn" id="help-guide-sub-netsetup" onclick="switchGuideSubTab('netsetup')" data-i18n="🛠 Net Setup">🛠 Net Setup</button>
-          <button class="tab-btn" id="help-guide-sub-ares" onclick="switchGuideSubTab('ares')" data-i18n="🚨 ARES / Activation">🚨 ARES / Activation</button>
+          <button class="tab-btn" id="help-guide-sub-ares" onclick="switchGuideSubTab('ares')" data-i18n="🚨 Activation &amp; Incident Response">🚨 Activation &amp; Incident Response</button>
           <button class="tab-btn" id="help-guide-sub-wrapup" onclick="switchGuideSubTab('wrapup')" data-i18n="📊 Session Wrap-Up">📊 Session Wrap-Up</button>
           <button class="tab-btn" id="help-guide-sub-public" onclick="switchGuideSubTab('public')" data-i18n="🌐 Public &amp; Directory">🌐 Public &amp; Directory</button>
           <button class="tab-btn" id="help-guide-sub-admin" onclick="switchGuideSubTab('admin')" style="display:none" data-i18n="🔑 Admin &amp; Server">🔑 Admin &amp; Server</button>
@@ -1538,13 +1546,13 @@
           <p style="margin:0 0 8px">When creating a net, select <strong>GMRS</strong> as the net type. GMRS nets behave like ham nets with a few differences:</p>
           <p style="margin:0 0 8px"><strong>Shared callsigns</strong> — a GMRS licence covers an entire family. The same callsign can check in multiple times in a single session. Use the <strong>Name</strong> field to identify each individual operator (e.g. "Dad", "Mom", "Mobile 1").</p>
           <p style="margin:0 0 8px"><strong>Callsign lookup</strong> — GMRS callsigns (format: 3–4 letters followed by 3–4 digits, e.g. <code style="background:var(--surface);padding:1px 5px;border-radius:3px">WSMC512</code>) are looked up in a local copy of the FCC ULS GMRS database. The database is refreshed daily; new licences may take up to 24 hours to appear.</p>
-          <p style="margin:0">ARES mode, the Digital Voice integration, and the APRS station map are not available for GMRS nets and are hidden automatically.</p>
+          <p style="margin:0">The Digital Voice integration and the APRS station map are ham-only and hidden automatically for GMRS nets — but <strong>Activation & Incident Response</strong> (evacuation zone tracking, tactical positions, the traffic log) works exactly the same for both net types.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px" id="help-sec-expected">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="EXPECTED STATIONS">EXPECTED STATIONS</h3>
           <p style="margin:0 0 8px">Click <strong>Expected Stations</strong> to expand the panel. Set the minimum check-in count and lookback window (weeks), then click <strong>Load List</strong>.</p>
-          <p style="margin:0 0 8px">Each row shows two checkboxes: <strong style="color:var(--lc-orange)">Check In</strong> to log them immediately, and <strong style="color:var(--lc-red)">Traffic</strong> to pre-flag traffic before they're formally logged. On ARES nets, a 📍 zone badge shows their last known evacuation zone.</p>
+          <p style="margin:0 0 8px">Each row shows two checkboxes: <strong style="color:var(--lc-orange)">Check In</strong> to log them immediately, and <strong style="color:var(--lc-red)">Traffic</strong> to pre-flag traffic before they're formally logged. On nets with Activation & Incident Response enabled, a 📍 zone badge shows their last known evacuation zone.</p>
           <p style="margin:0">Already-checked-in stations are greyed out and the list refreshes automatically.</p>
         </div>
 
@@ -1637,16 +1645,16 @@ Thank you all for checking in. This net is now closed.</pre>
 
         <div id="help-guide-panel-ares" class="help-guide-subpanel" style="display:none">
         <div class="card" style="margin-bottom:16px" id="help-sec-ares-mode">
-          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="ARES/ACES MODE">ARES/ACES MODE</h3>
-          <p style="margin:0 0 8px">Enable <strong>ARES/ACS Net</strong> in the net settings to activate evacuation zone tracking. An <strong>Evac Zone</strong> field appears in the check-in form — enter the station's zone (e.g. "Zone A") when they check in.</p>
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="ACTIVATION &amp; INCIDENT RESPONSE">ACTIVATION &amp; INCIDENT RESPONSE</h3>
+          <p style="margin:0 0 8px">Enable <strong>Activation &amp; Incident Response</strong> in the net settings (works for ham and GMRS nets alike) to activate evacuation zone tracking. An <strong>Evac Zone</strong> field appears in the check-in form — enter the station's zone (e.g. "Zone A") when they check in.</p>
           <p style="margin:0 0 8px">The zone is saved automatically to a per-net zone table. In future sessions, the station's last known zone appears as a 📍 badge in the Expected Stations list and is pre-filled when checking them in.</p>
           <p style="margin:0">The <strong>Zone Roster</strong> panel shows all known zones grouped by zone name with their callsigns, sorted by callsign suffix. The Zone column also appears in the check-in table and the ICS-205 export.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px" id="help-sec-ares-activation">
-          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="ARES/ACES ACTIVATION MODE">ARES/ACES ACTIVATION MODE</h3>
-          <p style="margin:0 0 8px">For an actual activation — not a routine weekly net — check <strong>🚨 ARES/ACES Activation</strong> on the <strong>▶ Start New Session</strong> form (only offered for ARES/ACES nets). This switches <em>that one session</em> into tactical mode; leave it unchecked and the session works exactly like a normal net. Other sessions on the same net are unaffected either way.</p>
-          <p style="margin:0 0 8px">Checking it reveals an <strong>Activation Schedule</strong> dropdown — pick a saved preset to pre-fill this session's tactical roster and Net Control rotation, or leave it at <strong>— None —</strong> to start empty. Saved schedules are managed ahead of time under the net's own edit form, in its <strong>🚨 Activation Roster</strong> tab (ARES/ACES nets only): create as many named schedules as you want (e.g. "Full Activation", "Weather Watch"), each with its own tactical positions and NC rotation shifts, using the same forms described below. Applying one at session start <em>copies</em> it in — the saved schedule itself is untouched and ready to use again next time.</p>
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="ACTIVATION MODE">ACTIVATION MODE</h3>
+          <p style="margin:0 0 8px">For an actual activation — not a routine weekly net — check <strong>🚨 Activation Mode</strong> on the <strong>▶ Start New Session</strong> form (only offered for nets with Activation &amp; Incident Response enabled). This switches <em>that one session</em> into tactical mode; leave it unchecked and the session works exactly like a normal net. Other sessions on the same net are unaffected either way.</p>
+          <p style="margin:0 0 8px">Checking it reveals an <strong>Activation Schedule</strong> dropdown — pick a saved preset to pre-fill this session's tactical roster and Net Control rotation, or leave it at <strong>— None —</strong> to start empty. Saved schedules are managed ahead of time under the net's own edit form, in its <strong>🚨 Activation Roster</strong> tab (nets with Activation &amp; Incident Response enabled only): create as many named schedules as you want (e.g. "Full Activation", "Weather Watch"), each with its own tactical positions and NC rotation shifts, using the same forms described below. Applying one at session start <em>copies</em> it in — the saved schedule itself is untouched and ready to use again next time.</p>
           <p style="margin:0 0 8px">An activation session shows two tabs at the top of the screen: <strong>📻 Check-In</strong> and <strong>🗓 Station Schedule</strong>. Station Schedule is itself split into two sub-tabs: <strong>🎯 Tactical Stations</strong> and <strong>🎙 Net Control</strong> — Net Control hands off on its own rotation, separate from one-off field positions, so it gets its own planning surface (see below).</p>
           <p style="margin:0 0 8px"><strong>🎯 Tactical Stations</strong> is where you define one-off field positions for this activation — a tactical callsign (e.g. "SHELTER 1"), an optional location, an optional planned operator, and an optional <strong>Scheduled Sign-On</strong> (month, day, and time — defaults to today, and always this year, so there's rarely anything to change). Click <strong>✏️ Edit</strong> on any position at any time to change its plan.</p>
           <p style="margin:0 0 8px"><strong>Check-In → TACTICAL ASSIGNMENTS</strong> (replaces the usual Expected Stations panel on an activation session) is where operators sign on and off tactical stations day-to-day. A vacant position shows <strong>Sign On</strong> — pre-filled with the planned operator if one was set, but fully editable if someone else shows up instead. An occupied position shows <strong>Sign Off &amp; Replace</strong> (hand it to a new operator in one step) and <strong>Sign Off</strong> (vacate with nobody lined up yet). <strong>🕐 History</strong> lists every operator who's held that position and when.</p>
@@ -1682,7 +1690,7 @@ Thank you all for checking in. This net is now closed.</pre>
         <div class="card" style="margin-bottom:16px" id="help-sec-history">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="SESSION HISTORY">SESSION HISTORY</h3>
           <p style="margin:0 0 8px">The <strong>History</strong> view shows every callsign that has checked into the selected net, with check-in counts for the past 2 weeks, 4 weeks, and all time.</p>
-          <p style="margin:0 0 8px">Use the filter dropdown to find: <strong>Last Net</strong>, <strong>Missed Last Net</strong>, <strong>Active (2 wks)</strong>, <strong>Regular (4 wks, ≥2)</strong>, <strong>Frequent (4 wks, ≥3)</strong>, or <strong>Inactive (4 wks)</strong>. Combine it with the text search box, a <strong>minimum check-in count</strong>, a <strong>last check-in date range</strong>, and — on ARES/ACES nets — a <strong>zone</strong> filter, for further narrowing.</p>
+          <p style="margin:0 0 8px">Use the filter dropdown to find: <strong>Last Net</strong>, <strong>Missed Last Net</strong>, <strong>Active (2 wks)</strong>, <strong>Regular (4 wks, ≥2)</strong>, <strong>Frequent (4 wks, ≥3)</strong>, or <strong>Inactive (4 wks)</strong>. Combine it with the text search box, a <strong>minimum check-in count</strong>, a <strong>last check-in date range</strong>, and — on nets with Activation &amp; Incident Response enabled — a <strong>zone</strong> filter, for further narrowing.</p>
           <p style="margin:0 0 8px">Three <strong>report templates</strong> sit above the table: <strong>📋 Roster</strong> (the full per-callsign table, the default), <strong>📊 Summary Stats</strong> (aggregate cards — operators shown, combined check-ins, average per operator, sessions logged — plus a compact attendance table), and <strong>🖨 Printable Report</strong> (a clean, print-ready layout with its own <strong>Print</strong> button). All three, and the <strong>⬇ CSV</strong> export, reflect whatever filters are currently active.</p>
           <p style="margin:0">CSV export has three column presets, picked from the dropdown next to the button: <strong>Full</strong> (everything, including License/State/Grid if already looked up), <strong>Minimal</strong> (Callsign, Name, Total Check-ins only), and <strong>License Detail</strong> (Callsign, Name, License Class, State, Grid).</p>
         </div>

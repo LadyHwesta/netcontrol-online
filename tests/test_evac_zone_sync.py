@@ -339,6 +339,17 @@ class TestSyncEndpoint:
         resp = client.post(f"/nets/{n['id']}/evac-zone-sync", headers=admin_headers)
         assert resp.status_code == 400
 
+    def test_works_for_gmrs_net_too(self, client, admin_headers, mock_ca_fetch):
+        """Evac zone sync isn't ham-only (issue follow-up) -- a GMRS net
+        with is_ares=True syncs exactly the same as a ham one."""
+        n = client.post("/nets", json={
+            "name": "GMRS Activation Net", "net_type": "gmrs", "is_ares": True, "state": "CA",
+        }, headers=admin_headers).json()
+        assert n["net_type"] == "gmrs" and n["is_ares"] is True
+        resp = client.post(f"/nets/{n['id']}/evac-zone-sync", headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["count"] == 2
+
     def test_county_source_works_even_with_unsupported_state(self, client, admin_headers, mock_ca_fetch):
         """A net whose State doesn't match any state-level source can
         still sync purely from county-level sources -- these match

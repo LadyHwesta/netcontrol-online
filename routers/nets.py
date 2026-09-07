@@ -39,7 +39,7 @@ class NetCreate(BaseModel):
     frequency: Optional[str] = None
     description: Optional[str] = None
     net_type: str = "ham"       # "ham" | "gmrs"
-    is_ares: bool = False       # ham only; ignored (forced False) for GMRS nets
+    is_ares: bool = False       # Activation & Incident Response toggle -- works for both net types (issue follow-up: previously ham-only, forced False for GMRS)
     dmr_talkgroup: Optional[str] = None   # ham only
     script: Optional[str] = None   # net control script, shown alongside the check-in screen
     has_broadcast: bool = False    # e.g. a Newsline segment carried during the net
@@ -156,7 +156,7 @@ async def create_net(data: NetCreate, current_user: User = Depends(get_current_u
         frequency=data.frequency,
         description=data.description,
         net_type=net_type,
-        is_ares=data.is_ares if net_type == "ham" else False,
+        is_ares=data.is_ares,
         dmr_talkgroup=data.dmr_talkgroup or None if net_type == "ham" else None,
         script=data.script,
         has_broadcast=data.has_broadcast,
@@ -196,7 +196,7 @@ async def update_net(net_id: int, data: NetCreate, current_user: User = Depends(
     net.frequency = data.frequency
     net.description = data.description
     net.net_type = net_type
-    net.is_ares = data.is_ares if net_type == "ham" else False
+    net.is_ares = data.is_ares
     net.dmr_talkgroup = data.dmr_talkgroup or None if net_type == "ham" else None
     net.script = data.script
     net.has_broadcast = data.has_broadcast

@@ -30,7 +30,7 @@ class SessionCreate(BaseModel):
     # schedule sign-up for the session's date (issue #17).
     broadcaster_override_callsign: Optional[str] = None
     broadcaster_override_name: Optional[str] = None
-    # ARES/ACES activation (issue #21) — forced False server-side unless the net
+    # Activation Mode (issue #21) — forced False server-side unless the net
     # is is_ares. Set once at start; enables tactical positions and the
     # simplified roster for this session only, not every session on the net.
     is_activation: bool = False
