@@ -315,12 +315,27 @@
     main { display: flex; flex: 1; }
 
     /* ===== SIDEBAR ===== */
+    /* align-self: flex-start overrides main's default align-items:stretch,
+       which otherwise forces #sidebar to match #content's own height --
+       harmless on a short page, but on a long check-in roster (or any
+       tall list) it stretched the sidebar far past the viewport, taking
+       #sidebar-summary and #sidebar-collapse-btn with it (both pinned to
+       the sidebar's *bottom* via margin-top:auto below) -- neither was
+       reachable without scrolling all the way down past the list first
+       (issue follow-up: reported exactly this way). position:sticky keeps
+       the now-natural-height sidebar docked to the viewport as the page
+       scrolls instead of scrolling away with it; max-height/overflow-y is
+       a fallback for a viewport too short for the sidebar's own content,
+       so its own scrollbar (not the page's) is what clips in that case.
+       Mobile's own off-canvas drawer below overrides position/height. */
     #sidebar {
       width: 220px; min-width: 220px;
       background: var(--bg);
       border-right: 3px solid var(--lc-orange);
       padding: 0;
       display: flex; flex-direction: column;
+      position: sticky; top: 0; align-self: flex-start;
+      max-height: 100vh; overflow-y: auto;
     }
     /* Top LCARS endcap -- a real element (previously a content-less
        ::before) now holding the signed-in-as/org-switcher/theme/language/
