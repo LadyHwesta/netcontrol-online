@@ -699,6 +699,102 @@ class TestOrgMemberRoles:
         assert resp.status_code == 404
 
 
+class TestOrgMemberNotify:
+    """PATCH /orgs/{id}/members/{user_id}/notify (issue follow-up) -- an
+    org-admin-only account had no way at all to opt in to new-registration
+    emails for their own org before this existed: routers/admin.py's
+    equivalent toggle is require_admin-gated (super admin only) and
+    additionally rejects any target whose User.is_admin is False, so the
+    checkbox literally couldn't be set to True for a pure org admin no
+    matter what. The last test below proves the actual end-to-end bug is
+    fixed, not just that the toggle flips a column."""
+
+    def test_org_admin_can_toggle_own_notify(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        owner_id = client.get("/auth/me", headers=auth(owner_token)).json()["id"]
+
+        resp = client.patch(f"/orgs/{org_id}/members/{owner_id}/notify", headers=auth(owner_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["notify_new_registrations"] is True
+
+        # Toggles back off on a second call.
+        resp2 = client.patch(f"/orgs/{org_id}/members/{owner_id}/notify", headers=auth(owner_token))
+        assert resp2.json()["notify_new_registrations"] is False
+
+    def test_org_admin_can_toggle_another_admins_notify(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "W2MEM", "email": "w2mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(owner_token))
+        client.patch(f"/orgs/{org_id}/members/{member_id}/role", json={"role": "admin"}, headers=auth(owner_token))
+
+        resp = client.patch(f"/orgs/{org_id}/members/{member_id}/notify", headers=auth(owner_token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["notify_new_registrations"] is True
+
+    def test_cannot_enable_notify_for_a_plain_member(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "W2MEM", "email": "w2mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(owner_token))
+
+        resp = client.patch(f"/orgs/{org_id}/members/{member_id}/notify", headers=auth(owner_token))
+        assert resp.status_code == 400
+
+    def test_non_admin_cannot_toggle_notify(self, client):
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        owner_id = client.get("/auth/me", headers=auth(owner_token)).json()["id"]
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2MEM", "name": "W2MEM", "email": "w2mem@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        member_id = resp.json()["id"]
+        client.patch(f"/orgs/{org_id}/members/{member_id}/approve", headers=auth(owner_token))
+        member_token = login(client, "W2MEM")
+
+        resp = client.patch(f"/orgs/{org_id}/members/{owner_id}/notify", headers=auth(member_token))
+        assert resp.status_code == 403
+
+    def test_enabling_notify_actually_delivers_new_registration_email(self, client, smtp_configured, sent_emails):
+        """End-to-end: this is the actual bug report -- an org admin turns
+        the toggle on, then a third party registers to join that org, and
+        the org admin should get an email about it."""
+        super_token = _bootstrap_super_admin(client)
+        owner_token = _org_owner(client, super_token, "W1AORG", "orga", "Org A")
+        org_id = client.get("/auth/me", headers=auth(owner_token)).json()["current_org_id"]
+        owner_id = client.get("/auth/me", headers=auth(owner_token)).json()["id"]
+
+        client.patch(f"/orgs/{org_id}/members/{owner_id}/notify", headers=auth(owner_token))
+        sent_emails.clear()  # discard whatever the setup above already sent
+
+        resp = client.post("/auth/register", json={
+            "callsign": "W2NEW", "name": "New Guy", "email": "w2new@example.com",
+            "password": "testpass123", "org_slug": "orga",
+        })
+        assert resp.status_code == 201, resp.text
+
+        notify_emails = [e for e in sent_emails if e["subject"] == "[NetControl Online] New Registration: W2NEW"]
+        assert len(notify_emails) == 1
+        assert notify_emails[0]["to"] == ["w1aorg@example.com"]
+
+
 class TestOrgSwitching:
     def test_orgs_mine_lists_approved_orgs(self, client):
         register(client, "W1OWN", "Owner", "owner@example.com")

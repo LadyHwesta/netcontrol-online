@@ -57,6 +57,10 @@ class OrgMemberOut(BaseModel):
     requested_roles: list[str] = []
     approved: bool
     requested_at: datetime
+    # Issue follow-up: only ever meaningful for an org admin (role=="admin")
+    # -- see PATCH .../notify below for why this needed its own org-scoped
+    # endpoint rather than reusing routers/admin.py's existing one.
+    notify_new_registrations: bool = False
 
 
 class MyOrgOut(OrganizationOut):
@@ -494,6 +498,7 @@ async def _org_member_out_rows(rows: list, db: AsyncSession) -> list[OrgMemberOu
             user_id=u.id, callsign=u.callsign, name=u.name, email=u.email,
             role=m.role, roles=sorted(roles), requested_roles=requested,
             approved=m.approved, requested_at=m.created_at,
+            notify_new_registrations=u.notify_new_registrations,
         ))
     return out
 
@@ -637,6 +642,41 @@ async def update_org_member_role(
     await db.commit()
 
     user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+    rows = await _org_member_out_rows([(membership, user)], db)
+    return rows[0]
+
+
+@router.patch("/orgs/{org_id}/members/{user_id}/notify", response_model=OrgMemberOut)
+async def toggle_org_member_notify(
+    org_id: int, user_id: int,
+    admin: User = Depends(require_org_admin), db: AsyncSession = Depends(get_db),
+):
+    """Toggle an org admin's opt-in for new-registration emails (issue
+    follow-up) -- the org-scoped equivalent of routers/admin.py's existing
+    PATCH /admin/users/{id}/notify, which is require_admin-gated (super
+    admin only) and additionally rejects any target whose User.is_admin
+    is False. An org-admin-only account (never a super admin) therefore
+    had NO way to ever set this on themselves -- not from the UI (the
+    Operators table's Notify column was a hardcoded "—" for this view, see
+    static/js/admin.js's loadOrgOperators()) and not via the API either.
+    Meanwhile routers/auth.py's own "notify this org's admins" query on
+    registration filters on this exact flag, so it could never actually
+    find anyone to email for an org with no super-admin members. Any org
+    admin can toggle any other org admin's own preference here, including
+    their own -- unlike role changes, there's no "zero admins left" risk
+    to guard against, so no self-action restriction."""
+    membership = (await db.execute(select(OrganizationMembership).filter(
+        OrganizationMembership.org_id == org_id,
+        OrganizationMembership.user_id == user_id,
+        OrganizationMembership.approved == True,
+    ))).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(404, "Membership not found")
+    if membership.role != "admin":
+        raise HTTPException(400, "Only org admins can receive new-registration notifications")
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+    user.notify_new_registrations = not user.notify_new_registrations
+    await db.commit()
     rows = await _org_member_out_rows([(membership, user)], db)
     return rows[0]
 

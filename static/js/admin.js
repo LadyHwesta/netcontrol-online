@@ -501,13 +501,24 @@ async function loadOrgOperators() {
       return `<span class="badge ${held ? 'badge-green' : 'badge-gray'}" style="cursor:pointer" title="${t('Click to toggle')}"
         onclick="orgToggleExtraRole(${orgId}, ${m.user_id}, '${r}', ${held}, '${esc(m.callsign)}')">${held ? '✓ ' : ''}${label}</span>`;
     }).join(' ');
+    // Notify toggle — only meaningful for an org admin (issue follow-up:
+    // previously a hardcoded "—" here, with no way at all for an org-admin-
+    // only account to opt in to new-registration emails for their own org —
+    // routers/admin.py's equivalent toggle only ever worked for a super admin).
+    const notifyCell = m.role === 'admin'
+      ? `<button class="btn btn-sm ${m.notify_new_registrations ? 'btn-primary' : 'btn-ghost'}"
+           title="${m.notify_new_registrations ? t('Click to stop notifications') : t('Click to receive registration emails')}"
+           onclick="orgToggleNotify(${orgId}, ${m.user_id})" style="font-size:12px;padding:3px 8px">
+           ${m.notify_new_registrations ? '📧 ' + t('On') : '✉ ' + t('Off')}
+         </button>`
+      : '<span class="text-muted" style="font-size:11px">—</span>';
     return `<tr>
     <td><span class="callsign">${esc(m.callsign)}</span></td>
     <td>${esc(m.name)}</td>
     <td class="text-muted" style="font-size:12px">${esc(m.email)}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap">${baseBadge} ${extraBadges}</td>
     <td><span class="badge badge-green">${t('Active')}</span></td>
-    <td class="text-muted" style="font-size:11px;text-align:center">—</td>
+    <td style="text-align:center">${notifyCell}</td>
     <td class="text-muted" style="font-size:12px">${fmt(m.requested_at)}</td>
     <td>${roleAction}</td>
   </tr>`;
@@ -525,6 +536,13 @@ async function orgToggleExtraRole(orgId, userId, role, currentlyHeld, callsign) 
   try {
     await apiFetch(`/orgs/${orgId}/members/${userId}/extra-roles`, { method: 'PUT', body: JSON.stringify({ roles: [...current] }) });
     toast(`${callsign} ${currentlyHeld ? t('role removed') : t('role granted')}`, 'success');
+    loadOrgOperators();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function orgToggleNotify(orgId, userId) {
+  try {
+    await apiFetch(`/orgs/${orgId}/members/${userId}/notify`, { method: 'PATCH' });
     loadOrgOperators();
   } catch (e) { toast(e.message, 'error'); }
 }
