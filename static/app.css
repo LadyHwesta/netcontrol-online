@@ -1,6 +1,10 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
+      /* Fallback only, until static/js/utils.js's ResizeObserver measures
+         the header's real (branding-dependent) height -- see #sidebar's
+         own comment for why this can't just be a fixed value. */
+      --header-h: 52px;
       /* LCARS palette */
       --lc-orange: #FF9900;
       --lc-gold:   #FFCC00;
@@ -317,17 +321,32 @@
     /* ===== SIDEBAR ===== */
     /* align-self: flex-start overrides main's default align-items:stretch,
        which otherwise forces #sidebar to match #content's own height --
-       harmless on a short page, but on a long check-in roster (or any
-       tall list) it stretched the sidebar far past the viewport, taking
-       #sidebar-summary and #sidebar-collapse-btn with it (both pinned to
-       the sidebar's *bottom* via margin-top:auto below) -- neither was
-       reachable without scrolling all the way down past the list first
-       (issue follow-up: reported exactly this way). position:sticky keeps
-       the now-natural-height sidebar docked to the viewport as the page
-       scrolls instead of scrolling away with it; max-height/overflow-y is
-       a fallback for a viewport too short for the sidebar's own content,
-       so its own scrollbar (not the page's) is what clips in that case.
-       Mobile's own off-canvas drawer below overrides position/height. */
+       tying its height to arbitrary page content is exactly wrong either
+       direction: a long check-in roster used to stretch it far past the
+       viewport (taking #sidebar-summary/#sidebar-collapse-btn, both
+       pinned to its bottom via margin-top:auto, out of reach with it --
+       issue follow-up, reported exactly this way), while a SHORT page
+       left it ending right after its own last nav item, well short of
+       the screen, with nothing but bare page background below it (issue
+       follow-up again). height:100vh fixes both at once -- always
+       exactly the viewport's height regardless of either side's own
+       content, so the auto-margin group always sits flush at the actual
+       bottom of the screen. position:sticky keeps it docked there as the
+       page scrolls instead of scrolling away with it; overflow-y is a
+       fallback for a viewport too short for the sidebar's OWN content
+       (many nav items, or a busy #net-sessions-list), so its own
+       scrollbar clips in that case, not the outer page's. Mobile's own
+       off-canvas drawer below overrides position/height.
+
+       height subtracts --header-h (static/js/utils.js keeps it in sync
+       with the header's real rendered height) rather than a flat 100vh --
+       header sits above #sidebar in normal document flow, un-stickied, so
+       a sticky element starting there and sized to the FULL viewport
+       height always overflows past the bottom by exactly the header's own
+       height until scrolled past it, forcing a needless page scroll on
+       every load. And the header's height genuinely isn't a constant: an
+       org's own logo/name/tagline branding can render it well past 300px,
+       confirmed live, vs. ~52px with none configured. */
     #sidebar {
       width: 220px; min-width: 220px;
       background: var(--bg);
@@ -335,7 +354,7 @@
       padding: 0;
       display: flex; flex-direction: column;
       position: sticky; top: 0; align-self: flex-start;
-      max-height: 100vh; overflow-y: auto;
+      height: calc(100vh - var(--header-h)); overflow-y: auto;
     }
     /* Top LCARS endcap -- a real element (previously a content-less
        ::before) now holding the signed-in-as/org-switcher/theme/language/

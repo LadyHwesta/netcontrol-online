@@ -37,6 +37,32 @@ function safeHttpUrl(url) {
   return /^https?:\/\//i.test(String(url || ''));
 }
 
+// Keeps --header-h in sync with the header's actual rendered height (issue
+// follow-up) -- needed so #sidebar's height:calc(100vh - var(--header-h))
+// can fill exactly to the bottom of the screen without either overflowing
+// past it (forcing an unwanted page scroll on every load) or falling short
+// of it. Can't just hardcode a pixel value: an org's own logo/tagline/name
+// in the header (#org-banner, custom logo image) makes its real height
+// vary per org, not a fixed constant -- confirmed live, one org's branded
+// header rendered at over 300px, nowhere near the base 52px. ResizeObserver
+// (rather than a resize listener alone) catches every cause of that height
+// changing, not just window resizes -- a logo image finishing its load,
+// a banner's text wrapping differently, a language switch changing string
+// lengths -- all fire it automatically.
+(function () {
+  // #app > header specifically -- index.html also has a separate, hidden
+  // #auth-header for the pre-login screen that stays in the DOM after
+  // login; a bare 'header' selector matches that one first (it's earlier
+  // in the document) and measures 0, not the real app header.
+  const header = document.querySelector('#app > header');
+  if (!header || !window.ResizeObserver) return;
+  const setHeaderHeight = () => {
+    document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+  };
+  setHeaderHeight();
+  new ResizeObserver(setHeaderHeight).observe(header);
+})();
+
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
