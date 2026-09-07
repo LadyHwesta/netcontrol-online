@@ -98,6 +98,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Revoke Super Admin Access (v2.51.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New: a <strong>Remove Admin</strong> button next to any super admin in <strong>Admin → Operators</strong>, alongside the existing Make Admin — revokes super admin access without touching the rest of their account (they keep logging in as a regular operator). You can't remove your own admin access, so there's always at least one super admin left.</li>
+              <li>Reminder: <strong>Make Admin</strong> (already existed) is how you grant a second, third, etc. super admin in the first place — find the person in Admin → Operators and click it.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Nightly Deploy + Scheduled-Update Banner (v2.50.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New: <code>deploy.sh --skip-if-unchanged</code>, for running deploys from cron — it exits before touching anything (no database backup, no service restart) on a night with nothing new to deploy, so an automated nightly deploy on <strong>main</strong> can't cause a disruptive restart for no reason. See "Nightly deploy" in the README.</li>

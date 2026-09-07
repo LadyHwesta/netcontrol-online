@@ -251,6 +251,25 @@ async def admin_make_admin(user_id: int, admin: User = Depends(require_admin), d
     return user
 
 
+@router.patch("/admin/users/{user_id}/remove-admin", response_model=UserOut)
+async def admin_remove_admin(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Revoke admin privileges from a user (issue follow-up to make-admin,
+    which had no undo). Self-action is blocked, same as deactivate/delete
+    below -- since that's the only way this endpoint could ever be called,
+    it also means a super admin can never end up locking every super admin
+    out: whoever calls this always keeps their own admin status, so at
+    least one super admin remains after every call."""
+    user = (await db.execute(select(User).filter(User.id == user_id))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if user.id == admin.id:
+        raise HTTPException(400, "Cannot remove your own admin access")
+    user.is_admin = False
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 @router.delete("/admin/users/{user_id}", status_code=204)
 async def admin_delete_user(user_id: int, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
     """Permanently delete a user account."""

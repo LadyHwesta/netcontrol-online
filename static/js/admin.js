@@ -304,6 +304,7 @@ async function loadAdminUsers() {
           ${!u.is_active ? `<button class="btn btn-primary btn-sm" onclick="adminApprove(${u.id}, this)">${t('Approve')}</button>` : ''}
           ${u.is_active  ? `<button class="btn btn-ghost btn-sm" onclick="adminDeactivate(${u.id})">${t('Deactivate')}</button>` : ''}
           ${!u.is_admin  ? `<button class="btn btn-ghost btn-sm" onclick="adminMakeAdmin(${u.id})">${t('Make Admin')}</button>` : ''}
+          ${u.is_admin   ? `<button class="btn btn-ghost btn-sm" onclick="adminRemoveAdmin(${u.id})">${t('Remove Admin')}</button>` : ''}
           <button class="btn btn-danger btn-sm" onclick="adminDelete(${u.id})">${t('Delete')}</button>
         </div>`;
     return `<tr>
@@ -352,6 +353,15 @@ async function adminMakeAdmin(userId) {
   try {
     await apiFetch(`/admin/users/${userId}/make-admin`, { method: 'PATCH' });
     toast(t('Admin access granted'), 'success');
+    loadAdminUsers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function adminRemoveAdmin(userId) {
+  if (!confirm(t('Revoke super admin access from this operator? They will keep their account, just without admin privileges.'))) return;
+  try {
+    await apiFetch(`/admin/users/${userId}/remove-admin`, { method: 'PATCH' });
+    toast(t('Admin access revoked'), 'success');
     loadAdminUsers();
   } catch (e) { toast(e.message, 'error'); }
 }
