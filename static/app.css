@@ -71,6 +71,49 @@
       --accent-tint: rgba(201,116,0,.12);
     }
 
+    /* Dark and Light are meant to read as an actual light/dark MODE, not a
+       differently-colored LCARS skin -- unlike every other theme here
+       (which all lean into a saturated identity on purpose), these two
+       swap the structural LCARS fills (header band, top/bottom sidebar
+       endcaps, non-active nav buttons, table headers, the check-in list's
+       column header, the auth-screen bar) from a solid --lc-orange/
+       --lc-blue/--lc-purple block to a neutral surface tone -- otherwise
+       switching between them was just an inverted page background behind
+       the exact same rainbow of solid-color chrome, barely registering as
+       a different mode (issue follow-up). --lc-orange stays reserved for
+       what genuinely warrants an accent: the active nav item, primary
+       buttons, links, and small highlights (card edges, stat numbers) --
+       same "sparing accent" precedent the matrix theme's own override
+       block above already established for its non-active nav buttons,
+       just applied more broadly here since matrix only needed to fix the
+       one fill that clashed with its all-green text. */
+    [data-theme="dark"] .header-lcars, [data-theme="light"] .header-lcars,
+    [data-theme="dark"] #sidebar-top, [data-theme="light"] #sidebar-top,
+    [data-theme="dark"] #sidebar-summary, [data-theme="light"] #sidebar-summary,
+    [data-theme="dark"] .tbl th, [data-theme="light"] .tbl th,
+    [data-theme="dark"] .checkin-row-header, [data-theme="light"] .checkin-row-header,
+    [data-theme="dark"] .auth-lcars-bar, [data-theme="light"] .auth-lcars-bar {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+    [data-theme="dark"] header h1, [data-theme="light"] header h1,
+    [data-theme="dark"] header h1 span, [data-theme="light"] header h1 span,
+    [data-theme="dark"] #sidebar-user-info, [data-theme="light"] #sidebar-user-info,
+    [data-theme="dark"] #sidebar-top .i18n-credit, [data-theme="light"] #sidebar-top .i18n-credit,
+    [data-theme="dark"] #sidebar-summary a, [data-theme="light"] #sidebar-summary a,
+    [data-theme="dark"] .tbl th, [data-theme="light"] .tbl th,
+    [data-theme="dark"] .checkin-row-header, [data-theme="light"] .checkin-row-header,
+    [data-theme="dark"] .auth-lcars-bar, [data-theme="light"] .auth-lcars-bar {
+      color: var(--text);
+    }
+    [data-theme="dark"] .sidebar-btn:not(.active), [data-theme="light"] .sidebar-btn:not(.active) {
+      background: var(--overlay-weak);
+      color: var(--text);
+    }
+    [data-theme="dark"] .sidebar-btn:not(.active):hover, [data-theme="light"] .sidebar-btn:not(.active):hover {
+      background: var(--overlay-med);
+    }
+
     [data-theme="high-contrast"] {
       --lc-orange: #FFB000; --lc-gold: #FFE000; --lc-tan: #FFD9A0; --lc-blue: #66B2FF;
       --lc-purple: #E0A0FF; --lc-red: #FF6B4A; --lc-green: #5CFF9E;
