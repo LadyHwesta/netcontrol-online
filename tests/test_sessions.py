@@ -188,6 +188,20 @@ class TestOfflineNetEntry:
         assert data["ncs_callsign"] == "W1ABC"
         assert data["ncs_name"] == "Alice"
 
+    def test_ncs_override_also_works_for_a_live_session(self, client, admin_headers, net):
+        """The override isn't offline-only (issue follow-up) -- covers the
+        scheduled NCO being unable to get online for a session actually
+        starting now, not just backfilling one that already happened."""
+        created = client.post(f"/nets/{net['id']}/sessions", json={
+            "ncs_override_callsign": "w1abc", "ncs_override_name": "Alice",
+        }, headers=admin_headers).json()
+        assert created["is_offline"] is False
+        resp = client.get(f"/sessions/{created['id']}", headers=admin_headers)
+        data = resp.json()
+        assert data["ncs_callsign"] == "W1ABC"
+        assert data["ncs_name"] == "Alice"
+
+
     def test_broadcaster_override_still_works_for_offline_entry(self, client, admin_headers, net):
         # has_broadcast isn't required for the override field to be stored/resolved --
         # matches the existing (issue #17) broadcaster-override behavior generally.

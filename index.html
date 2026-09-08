@@ -875,6 +875,24 @@
               <label><span data-i18n="Session Name">Session Name</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional)">(optional)</span></label>
               <input class="form-control" id="new-session-name" placeholder="e.g. Monday Night Net — July 14" />
             </div>
+            <!-- Net Control override (issue follow-up) — covers the scheduled NCO
+                 being unable to get online themselves: whoever actually starts the
+                 session can record who's really running it here. Leave blank to
+                 fall back to the Schedule sign-up, same as before this existed.
+                 Always shown (unlike the broadcaster override below, which only
+                 applies to nets with an extra broadcast segment) -- every net has
+                 a Net Control role. -->
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+              <label style="font-size:12px"><span data-i18n="Net Control Override">Net Control Override</span> <span class="text-muted" style="font-size:11px" data-i18n="(optional — overrides today's sign-up)">(optional — overrides today's sign-up)</span></label>
+              <div class="form-row" style="margin-top:4px">
+                <div class="form-group mb-0">
+                  <input class="form-control mono" id="new-session-ncs-callsign" placeholder="Optional" style="text-transform:uppercase;font-size:13px" data-i18n-placeholder="Optional" />
+                </div>
+                <div class="form-group mb-0">
+                  <input class="form-control" id="new-session-ncs-name" placeholder="Optional" style="font-size:13px" data-i18n-placeholder="Optional" />
+                </div>
+              </div>
+            </div>
             <!-- Broadcaster override — only shown for nets with an additional broadcast segment.
                  Covers a broadcaster not known until the net is about to begin (issue #17);
                  leave blank to use whoever is scheduled via Sign-Up. -->
@@ -1616,7 +1634,7 @@
   <script src="/static/js/branding.js?v=25"></script>
   <script src="/static/js/report.js?v=21"></script>
   <script src="/static/js/nets.js?v=38"></script>
-  <script src="/static/js/sessions.js?v=35"></script>
+  <script src="/static/js/sessions.js?v=36"></script>
   <script src="/static/js/checkins.js?v=47"></script>
   <script src="/static/js/history.js?v=23"></script>
   <script src="/static/js/admin.js?v=49"></script>

@@ -350,6 +350,8 @@ async function populateNewSessionScheduleSelect(netId) {
 
 async function startSession() {
   const name = document.getElementById('new-session-name').value.trim() || null;
+  const ncs_override_callsign = document.getElementById('new-session-ncs-callsign').value.trim().toUpperCase() || null;
+  const ncs_override_name = document.getElementById('new-session-ncs-name').value.trim() || null;
   const broadcaster_override_callsign = document.getElementById('new-session-broadcaster-callsign').value.trim().toUpperCase() || null;
   const broadcaster_override_name = document.getElementById('new-session-broadcaster-name').value.trim() || null;
   const is_activation = document.getElementById('new-session-is-activation').checked;
@@ -359,9 +361,11 @@ async function startSession() {
   try {
     const s = await apiFetch(`/nets/${currentNetId}/sessions`, {
       method: 'POST',
-      body: JSON.stringify({ name, broadcaster_override_callsign, broadcaster_override_name, is_activation, activation_schedule_id }),
+      body: JSON.stringify({ name, ncs_override_callsign, ncs_override_name, broadcaster_override_callsign, broadcaster_override_name, is_activation, activation_schedule_id }),
     });
     document.getElementById('new-session-name').value = '';
+    document.getElementById('new-session-ncs-callsign').value = '';
+    document.getElementById('new-session-ncs-name').value = '';
     document.getElementById('new-session-broadcaster-callsign').value = '';
     document.getElementById('new-session-broadcaster-name').value = '';
     document.getElementById('new-session-is-activation').checked = false;

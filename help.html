@@ -165,6 +165,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-08 — Net Control Override on New Sessions (v2.54.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Starting a new (live) session now has a <strong>Net Control Override</strong> field, same as Log a Past Net already had — covers the scheduled Net Control Op being unable to get online themselves: whoever actually starts the session can record who's really running it, so the roster header, script variables, and ICS-205 all show the right name instead of whoever happened to click Start. Leave it blank to keep using the Schedule sign-up, same as before.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Fix: Header Tagline Unreadable in Dark/Light/Matrix (v2.53.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Follow-up to the last two theme changes: an organization's Branding tagline, shown under its name in the header, was hardcoded to near-black text on every page — invisible once Dark, Light, and Matrix stopped filling the header with a bright color. Now uses the correct theme-aware color everywhere.</li>
