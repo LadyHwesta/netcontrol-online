@@ -79,7 +79,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.51.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.52.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -159,6 +159,16 @@ def serve_help():
 @app.get("/report", response_class=HTMLResponse, include_in_schema=False)
 def serve_report():
     return _serve_html("report.html")
+
+
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+def serve_privacy():
+    """Standalone, unauthenticated page (unlike every other _serve_html page
+    above, which all redirect to / client-side without a token) -- linked
+    from the login/register screen precisely so a visitor can read it before
+    creating an account. See help.html's "Privacy" tab for the same content
+    shown to already-logged-in users browsing Help."""
+    return _serve_html("privacy.html")
 
 
 @app.get("/incidents", response_class=HTMLResponse, include_in_schema=False)

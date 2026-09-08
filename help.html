@@ -91,11 +91,86 @@
         <div class="tab-bar">
           <button class="tab-btn active" id="help-tab-guide" onclick="switchHelpTab('guide')" data-i18n="📖 Guide">📖 Guide</button>
           <button class="tab-btn" id="help-tab-changelog" onclick="switchHelpTab('changelog')" data-i18n="📋 Changelog">📋 Changelog</button>
+          <button class="tab-btn" id="help-tab-privacy" onclick="switchHelpTab('privacy')" data-i18n="🔒 Privacy">🔒 Privacy</button>
         </div>
+
+        <!-- Kept identical to privacy.html's own copy (the public, logged-out
+             version linked from the login/register screen) -- there's no
+             login-gated way to reuse one canonical copy across both without
+             a build step, so this content is duplicated deliberately.
+             Update both together if the policy ever changes. -->
+        <div id="help-panel-privacy" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em">PRIVACY POLICY</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Last updated 2026-09-07</p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Who runs this</h4>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7">
+            NetControl Online is free, open-source software (<a href="https://github.com/LadyHwesta/netcontrol-online" target="_blank" rel="noopener">GPLv3</a>) that clubs, ARES sections, and GMRS groups download and run on their own server — this install is one such copy. The organization running it, not the software project, is the one holding your data and responsible for it. If you're not sure who that is for the site you're on, ask whoever invited you to register, or use the <strong>Report / Request</strong> page after logging in.
+          </p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Information we collect</h4>
+          <p style="margin:0 0 8px;font-size:13px;line-height:1.7"><strong>Account information</strong> — callsign, name, email address, and the password you choose (stored only as a one-way hash — nobody, including an admin, can recover the original). Phone number and GMRS callsign are optional, provided by you.</p>
+          <p style="margin:0 0 8px;font-size:13px;line-height:1.7"><strong>Organization information</strong> — if you found a new organization, its name and website are visible to the admin approving your registration and, if you opt a net into the public directory, to the public.</p>
+          <p style="margin:0 0 8px;font-size:13px;line-height:1.7"><strong>Net and check-in data</strong> — the callsign, name, signal report, and comments logged for each check-in; whether you're carrying traffic; and, during an Activation & Incident Response session, your reported evacuation zone and — only if you or your net's APRS integration provides it — a GPS position. Manual position entry is opt-in per check-in; APRS-derived positions only appear for a net an admin has specifically configured to track them.</p>
+          <p style="margin:0 0 8px;font-size:13px;line-height:1.7"><strong>Uploaded files</strong> — a profile photo, if you add one, and an organization logo, if an admin uploads one.</p>
+          <p style="margin:0 0 8px;font-size:13px;line-height:1.7"><strong>Device information</strong> — if you enable browser push notifications, the subscription your browser generates (not tied to your identity beyond your account) and a general browser/OS string, so a reminder can be delivered to that device. Your login session is a token kept in your browser's local storage, not a tracking cookie — nothing about your visit is shared with anyone else through it.</p>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7"><strong>Anything you send us directly</strong> — a bug report or feature request submitted through the Report / Request page, or a message to support.</p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">How it's used</h4>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7">
+            To run the net check-in log itself; to email you about account approval, password resets, and (if you opt in) new registrations or upcoming shifts; to send a push notification if you've enabled one; and to respond to reports you send us. We don't sell data, and we don't use it for advertising — there isn't any advertising here.
+          </p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Services this app may talk to</h4>
+          <p style="margin:0 0 8px;font-size:13px;line-height:1.7">Only the pieces your organization's admin has actually turned on send anything outside this server:</p>
+          <ul style="margin:0 0 16px;padding-left:18px;font-size:13px;line-height:1.8">
+            <li><strong>Outgoing email</strong> — sent through whatever mail provider the operator configured (e.g. Gmail, SendGrid), which sees the message like any email provider would.</li>
+            <li><strong>Bot-check widget</strong>, if enabled on registration/login — Cloudflare Turnstile or Google reCAPTCHA, each under its own privacy policy; or ALTCHA, which runs entirely on this server and contacts no one.</li>
+            <li><strong>aprs.fi</strong>, only for a net an admin has connected to it — your callsign is sent to look up its last reported APRS position.</li>
+            <li><strong>The Fediverse</strong>, only if an admin turns on ActivityPub federation for this organization — net/session updates are then published publicly to whoever follows that organization's feed.</li>
+            <li><strong>The community Net Repository</strong>, only for a net an admin opts into the public directory — this shares that net's name, frequency, and schedule, never check-in rosters or personal data.</li>
+            <li><strong>Public amateur/GMRS license lookups</strong> (FCC ULS, HamDB, callook.info) — used to look up publicly-available license information for a callsign you search, and cached locally to avoid repeat lookups.</li>
+          </ul>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">How long we keep it</h4>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7">
+            Net and check-in history is kept indefinitely by default, since it's the operating log the software exists to maintain — an admin can delete individual sessions or check-ins at any time. Deleting your account removes your profile; check-ins you logged stay attached to the net's history under the callsign you used, the same way a paper net log would.
+          </p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Your choices</h4>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7">
+            Update your name, phone, photo, and notification preferences any time from <strong>Account</strong>. Ask your organization's admin to correct, export, or delete your account — or, if you're the only admin, use the Admin panel yourself. Browser push and email notifications are opt-in and can be turned off from Account at any time.
+          </p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Children's privacy</h4>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7">
+            This app is built for licensed radio operators and isn't directed at children. We don't knowingly collect information from anyone under 13.
+          </p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Security</h4>
+          <p style="margin:0 0 16px;font-size:13px;line-height:1.7">
+            Passwords are hashed, never stored or emailed in plain text. Long-lived API tokens are only ever shown once, at creation. No system is perfectly secure, but there's nothing here designed to be sold or mined — it's a net log, not a data business.
+          </p>
+
+          <h4 style="margin:0 0 8px;font-size:13px;color:var(--lc-orange)">Changes to this policy</h4>
+          <p style="margin:0 0 0;font-size:13px;line-height:1.7">
+            If this policy changes in a meaningful way, the "Last updated" date above will change too. Because this is self-hosted software each operator runs independently, check with your specific organization's admin if you have questions about how they've configured it.
+          </p>
+        </div>
+        </div><!-- /help-panel-privacy -->
 
         <div id="help-panel-changelog" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Privacy Policy (v2.52.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>New: a <strong>Privacy</strong> tab on this Help page covering what's collected (account info, check-in data, optional location, uploaded photos), why, and which third-party services (email provider, aprs.fi, Fediverse, Net Repository, bot-check widgets, public callsign lookups) only come into play if an admin turns them on.</li>
+              <li>The same policy is also reachable without logging in, via a <strong>Privacy Policy</strong> link on the login/register screen — useful before creating an account, not just after.</li>
+            </ul>
+          </div>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-07 — Revoke Super Admin Access (v2.51.0)</div>
@@ -1827,7 +1902,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
 
   <script>
     function switchHelpTab(tab) {
-      ['guide', 'changelog'].forEach(t => {
+      ['guide', 'changelog', 'privacy'].forEach(t => {
         document.getElementById('help-panel-' + t).style.display = t === tab ? '' : 'none';
         document.getElementById('help-tab-' + t).classList.toggle('active', t === tab);
       });
