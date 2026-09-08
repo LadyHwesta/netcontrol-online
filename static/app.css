@@ -204,19 +204,50 @@
          contrast formula (see the theme's PR/commit message for the
          numbers): body text on bg 4.80:1, on surface 4.69:1, on surface2
          4.60:1 -- all clear AA's 4.5:1 floor; the darkened UI elements'
-         bright-green text sits at 9.46:1 against their #003B00 fill. */
-      --lc-orange: #00FF41; --lc-gold: #FFD700; --lc-tan: #8AFF9E; --lc-blue: #00FFD1;
+         bright-green text sits at 9.46:1 against their #003B00 fill.
+
+         Re-tuned again (issue follow-up: "too bright... wanted that dark
+         green overlay with a hacker feel") -- the bug above was real
+         (--border was the same full-brightness #00FF41 as the accent
+         itself, so literally every card/input/table cell in the app got a
+         glowing neon outline, on top of which #sidebar-summary had been
+         missed entirely by the "darken structural fills" pass below and
+         was still rendering in bright magenta --lc-purple, the single
+         most jarring thing on screen). --border drops to a dim, desaturated
+         forest green -- thin definition without the glow -- reserving
+         actual #00FF41 brightness for text, the deliberate small handful
+         of structural highlights below, and .card's existing thin
+         left-edge accent stripe. --bg/--surface/--surface2 shift slightly
+         toward a consistent green-black cast (previously closer to a
+         brownish near-black, an unintentional mismatch with a "green"
+         theme). --lc-blue dims from a shade that read as pure neon cyan to
+         a more subdued teal-green so the sidebar's secondary nav-button
+         text doesn't compete with the primary accent as its own separate
+         bright hue. */
+      --lc-orange: #00FF41; --lc-gold: #FFD700; --lc-tan: #8AFF9E; --lc-blue: #00B894;
       --lc-purple: #FF2AFF; --lc-red: #FF2222; --lc-green: #00FF41;
-      --bg: #0D0208; --surface: #0C0807; --surface2: #0A0D06; --border: #00FF41;
+      --bg: #030A04; --surface: #04120A; --surface2: #071C0E; --border: #0F4A24;
       --accent-hover: #39FF6E; --success: #00FF41;
       --text: #008F11; --muted: #008F11; --radius: 2px;
-      --text-muted: #008F11; --lc-border: #00FF41; --lc-muted: #008F11;
+      --text-muted: #008F11; --lc-border: #0F4A24; --lc-muted: #008F11;
       --on-accent: #000000;
       --overlay-weak: rgba(0,255,65,.06); --overlay-med: rgba(0,255,65,.10);
       --overlay-strong: rgba(0,255,65,.43); --hairline: rgba(0,255,65,.12);
       --badge-green-bg: #05230f; --badge-blue-bg: #04241f; --badge-orange-bg: #052a12;
       --badge-purple-bg: #2a0526;
       --accent-tint: rgba(0,255,65,.16);
+    }
+    /* CRT scanline + green vignette wash, fixed to the viewport -- the
+       literal "dark green overlay" asked for, on top of the palette
+       retuning above. Kept faint (5%/6% peak alpha) so it reads as
+       ambient screen texture, not a visible stripe pattern sitting on top
+       of content; respects reduced-motion implicitly by not animating at
+       all -- this is a static background-image, no keyframes involved. */
+    [data-theme="matrix"] body {
+      background-image:
+        repeating-linear-gradient(rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,255,65,.05) 3px),
+        radial-gradient(ellipse at 50% 0%, rgba(0,255,65,.06) 0%, rgba(0,0,0,0) 60%);
+      background-attachment: fixed;
     }
     /* The structural LCARS bars (header band, active nav item, primary
        button, table header row, auth-screen bar, check-in row header) fill
@@ -229,9 +260,14 @@
        stays bright), and --on-accent is shared with --lc-green/--lc-gold
        fills (btn-success/btn-warn) that are still bright and still need
        dark text -- so both stay put and only these specific fills/their
-       own text are overridden together. */
+       own text are overridden together. #sidebar-summary joins this list
+       as of the "too bright" re-tune above -- it was missed the first
+       time around and was the one panel still rendering in raw
+       --lc-purple (bright magenta), the most visibly out-of-place thing
+       on screen in a theme that's supposed to read as monochrome green. */
     [data-theme="matrix"] .header-lcars,
     [data-theme="matrix"] #sidebar-top,
+    [data-theme="matrix"] #sidebar-summary,
     [data-theme="matrix"] .sidebar-btn.active,
     [data-theme="matrix"] .btn-primary,
     [data-theme="matrix"] .tbl th,
@@ -244,6 +280,7 @@
     [data-theme="matrix"] header h1 span,
     [data-theme="matrix"] #sidebar-user-info,
     [data-theme="matrix"] #sidebar-top .i18n-credit,
+    [data-theme="matrix"] #sidebar-summary a,
     [data-theme="matrix"] .sidebar-btn.active,
     [data-theme="matrix"] .btn-primary,
     [data-theme="matrix"] .tbl th,
