@@ -98,6 +98,7 @@
     }
     [data-theme="dark"] header h1, [data-theme="light"] header h1,
     [data-theme="dark"] header h1 span, [data-theme="light"] header h1 span,
+    [data-theme="dark"] #header-tagline, [data-theme="light"] #header-tagline,
     [data-theme="dark"] #sidebar-user-info, [data-theme="light"] #sidebar-user-info,
     [data-theme="dark"] #sidebar-top .i18n-credit, [data-theme="light"] #sidebar-top .i18n-credit,
     [data-theme="dark"] #sidebar-summary a, [data-theme="light"] #sidebar-summary a,
@@ -278,6 +279,7 @@
     }
     [data-theme="matrix"] header h1,
     [data-theme="matrix"] header h1 span,
+    [data-theme="matrix"] #header-tagline,
     [data-theme="matrix"] #sidebar-user-info,
     [data-theme="matrix"] #sidebar-top .i18n-credit,
     [data-theme="matrix"] #sidebar-summary a,
@@ -381,6 +383,15 @@
     }
     header h1 { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; color: var(--on-accent); }
     header h1 span { color: var(--on-accent); }
+    /* Org-admin-set tagline (Branding), shown under the header title when
+       set -- was hardcoded rgba(0,0,0,.6) inline in every page (issue
+       follow-up: unreadable in Dark/Light/Matrix, whose header no longer
+       fills with a bright accent color -- see those themes' own overrides
+       below). --on-accent is the right default everywhere the header
+       still IS a bright accent fill (LCARS, High Contrast, Pink, Purple,
+       Blue, Earth); it's still real text, just dimmed via opacity to stay
+       a visually secondary line under the bold title above it. */
+    #header-tagline { color: var(--on-accent); opacity: .7; }
     /* Org-admin-set banner (issue follow-up) -- moved into the header row
        itself, next to the logo, now that the header's right side is free
        of the per-user controls that used to live in #header-user (moved to
