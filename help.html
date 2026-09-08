@@ -165,6 +165,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-08 — Fix: Net Control Override Fields Showed "Optional" as Sample Text (v2.54.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The Net Control Override callsign/name fields (both the new-session form and Log a Past Net) showed "Optional" as their placeholder text, which didn't say what to actually type. Now shows "Callsign" and "Name (optional)", matching the Broadcaster Override fields right next to them.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-08 — Net Control Override on New Sessions (v2.54.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Starting a new (live) session now has a <strong>Net Control Override</strong> field, same as Log a Past Net already had — covers the scheduled Net Control Op being unable to get online themselves: whoever actually starts the session can record who's really running it, so the roster header, script variables, and ICS-205 all show the right name instead of whoever happened to click Start. Leave it blank to keep using the Schedule sign-up, same as before.</li>
