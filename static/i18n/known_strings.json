@@ -179,6 +179,7 @@
   "Ham Radio",
   "Operator Login",
   "See replies and Likes your organization's Fediverse posts receive, reply and Like back, and post an ad-hoc update — all from your organization's own account. Turning the account on/off and its hashtags are managed by an org admin under Admin → Organization.",
+  "📡 Offline — this needs a connection. Replying, Liking, and posting all reach the wider Fediverse in real time, so there's nothing to queue for later the way check-ins do. Reconnect and this page will pick back up automatically.",
   "Not available. Either your organization hasn't turned on Fediverse participation yet (Admin → Organization), or you don't hold the Fediverse Operator role. Ask your organization admin if you're expecting to see something here.",
   "📝 NEW POST",
   "Post",

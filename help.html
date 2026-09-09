@@ -166,6 +166,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-09 — Fix: Fediverse Page Now Disables Itself Offline (v2.56.1)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>The new 🐘 Fediverse page now shows a plain "you're offline" notice instead of its Reply/Like/Post controls whenever there's no connection — every action there reaches a remote Fediverse server in real time, so unlike a check-in there's nothing to queue for later. Reconnecting picks the page back up automatically, no reload needed.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-09 — Fediverse Interaction Client + Fediverse Operator Role (v2.56.0)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>New <strong>🐘 Fediverse</strong> page — reply to and Like the comments your organization's Fediverse posts receive, and post an ad-hoc update, all without leaving the app. Replies/Likes now get saved when they come in (previously silently dropped) so they're there to act on whenever you check.</li>

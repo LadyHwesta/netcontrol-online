@@ -6,6 +6,20 @@
 // #fediverse-not-available card instead, same 403-caught-into-a-friendly-
 // empty-state precedent as other role-gated pages.
 //
+// Offline handling (issue follow-up): unlike a check-in, every action here
+// (reply/Like/post) is a live call out to a remote Fediverse server with
+// nothing sensible to queue for later -- so rather than let a reply/Like/
+// post silently fail with a network-error toast, the whole interactive
+// section is swapped for #fediverse-offline whenever navigator.onLine is
+// false, same "plain online/offline events, no polling" convention
+// static/js/app.js's #app-offline-banner and checkins.js's offline queue
+// already use. Checked both up front (loadFediverseClient, so opening the
+// page while offline shows the right message instead of a misleading
+// "not available" permission-style one) and live via the 'online'/
+// 'offline' listeners below, so losing/regaining connectivity mid-session
+// swaps the view immediately rather than leaving stale data with dead
+// buttons.
+//
 // IMPORTANT: an interaction's content_html (a reply someone left on our
 // post) is PLAIN TEXT, already sanitized server-side
 // (activitypub_delivery.sanitize_remote_content — see its own docstring
@@ -19,9 +33,26 @@
 let fediverseOrgId = null;
 
 async function loadFediverseClient() {
-  fediverseOrgId = currentUser.current_org_id;
+  const offline = document.getElementById('fediverse-offline');
   const notAvailable = document.getElementById('fediverse-not-available');
   const content = document.getElementById('fediverse-content');
+
+  if (!navigator.onLine) {
+    offline.style.display = '';
+    notAvailable.style.display = 'none';
+    content.style.display = 'none';
+    return;
+  }
+  offline.style.display = 'none';
+
+  // currentUser isn't set until initPage()'s own auth check resolves -- the
+  // 'online'/'offline' listeners below are registered at script load, so a
+  // stray event firing in that brief window (unusual, but not impossible)
+  // should just no-op rather than throw; initPage() calls this again once
+  // currentUser is actually populated.
+  if (!currentUser) return;
+
+  fediverseOrgId = currentUser.current_org_id;
   if (!fediverseOrgId) {
     notAvailable.style.display = '';
     content.style.display = 'none';
@@ -43,6 +74,14 @@ async function loadFediverseClient() {
     content.style.display = 'none';
   }
 }
+
+// Re-evaluate immediately on either transition -- going offline mid-
+// session swaps live content for the offline card right away rather than
+// leaving stale data on screen with buttons that would just fail; coming
+// back online re-fetches automatically instead of waiting for a manual
+// reload.
+window.addEventListener('online', loadFediverseClient);
+window.addEventListener('offline', loadFediverseClient);
 
 function renderFediverseInteractions(interactions) {
   const list = document.getElementById('fediverse-interactions-list');
