@@ -166,6 +166,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-09 — Fix: Every Page Now Stays Usable Offline, Not Just My Nets (v2.56.2)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Admin, Account, Help, Report, Incidents, My Assignments, and Fediverse previously bounced straight to the login screen if opened (or reloaded) with no connection, even for an already-signed-in operator — the login screen also can't work offline, so this was a dead end. They now reuse the same "stay signed in with the last-verified identity" fallback the main My Nets page has always used, matching it exactly.</li>
+              <li>Fediverse specifically: its own "you're offline" message (added last update) now also shows correctly on a lying/flaky connection — one that reports as connected but can't actually reach the server — not just a fully airplane-mode one.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-09 — Fix: Fediverse Page Now Disables Itself Offline (v2.56.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The new 🐘 Fediverse page now shows a plain "you're offline" notice instead of its Reply/Like/Post controls whenever there's no connection — every action there reaches a remote Fediverse server in real time, so unlike a check-in there's nothing to queue for later. Reconnecting picks the page back up automatically, no reload needed.</li>
@@ -1955,7 +1963,7 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
 </div>
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=24"></script>
-  <script src="/static/js/auth.js?v=40"></script>
+  <script src="/static/js/auth.js?v=41"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
@@ -1999,8 +2007,8 @@ sudo -u postgres psql -d ham_net_tracker -c "CREATE EXTENSION pg_stat_statements
 
     async function initPage() {
       if (!token) { window.location.href = '/'; return; }
-      try { currentUser = await apiFetch('/auth/me'); }
-      catch { window.location.href = '/'; return; }
+      currentUser = await resolveCurrentUserOffline();
+      if (!currentUser) { window.location.href = '/'; return; }
 
       syncThemeFromUser(currentUser);
       const cs = document.getElementById('sidebar-callsign');

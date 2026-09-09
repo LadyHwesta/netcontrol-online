@@ -238,7 +238,7 @@
 </div>
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=24"></script>
-  <script src="/static/js/auth.js?v=40"></script>
+  <script src="/static/js/auth.js?v=41"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/branding.js?v=25"></script>
@@ -249,8 +249,8 @@
   <script>
     async function initPage() {
       if (!token) { window.location.href = '/'; return; }
-      try { currentUser = await apiFetch('/auth/me'); }
-      catch { window.location.href = '/'; return; }
+      currentUser = await resolveCurrentUserOffline();
+      if (!currentUser) { window.location.href = '/'; return; }
 
       syncThemeFromUser(currentUser);
       const cs = document.getElementById('sidebar-callsign');

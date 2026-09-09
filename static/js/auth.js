@@ -427,32 +427,49 @@ function logout() {
   location.reload();
 }
 
+// Resolves the current user the offline-tolerant way, shared by every page
+// that needs to boot from a stored token (issue follow-up -- previously
+// only the SPA's own enterApp() below had this; every standalone page
+// (Admin, Account, Help, Report, Incidents, My Assignments, Fediverse) just
+// bounced to '/' on ANY /auth/me failure, offline included, which for
+// Fediverse specifically defeated its own new offline handling -- a page
+// that gracefully disables itself once loaded, but couldn't be *reached*
+// at all with no connection). A plain fetch() failure (no network
+// reachable at all) throws TypeError, before apiFetch ever sees a response
+// to reject on -- distinct from apiFetch's own `throw new Error(...)` for
+// a real rejection from the server (401 = expired/invalid token). Only a
+// real rejection should ever be treated as "log this person out" --
+// reloading the app, or opening any page, with no connection used to
+// discard a perfectly valid token just because it couldn't be
+// re-verified, bouncing to a login screen that also can't work offline.
+// Returns the resolved user (freshly fetched, or the identity cached at
+// the last successful fetch), or null if there's truly nothing to work
+// from -- never logged in successfully in this browser, or the token was
+// actually rejected. Callers redirect to '/' on null; deliberately doesn't
+// call logout()/clear the token itself for a real rejection -- landing on
+// '/' re-runs this exact check via enterApp(), which already handles that
+// case (clears the stale token, shows the login screen) once for the
+// whole app rather than duplicating that side effect on every page.
+async function resolveCurrentUserOffline() {
+  try {
+    const user = await apiFetch('/auth/me');
+    // Cached purely so a later offline load (here or on another page) has
+    // something to fall back to -- never read except in the TypeError path.
+    localStorage.setItem('nt_last_user', JSON.stringify(user));
+    return user;
+  } catch (e) {
+    if (e instanceof TypeError) {
+      const cached = localStorage.getItem('nt_last_user');
+      if (cached) return JSON.parse(cached);
+    }
+    return null;
+  }
+}
+
 async function enterApp() {
   if (!currentUser) {
-    try {
-      currentUser = await apiFetch('/auth/me');
-      // Cached purely so a later offline reload (below) has something to
-      // fall back to -- never read except in that one failure path.
-      localStorage.setItem('nt_last_user', JSON.stringify(currentUser));
-    } catch (e) {
-      // A plain fetch() failure (no network reachable at all) throws
-      // TypeError, before apiFetch ever sees a response to reject on --
-      // distinct from apiFetch's own `throw new Error(...)` for a real
-      // rejection from the server (401 = expired/invalid token). Only the
-      // latter should log the user out. Reloading the app, or relaunching
-      // it as an installed PWA, with no connection used to clear a
-      // perfectly valid token here just because it couldn't be re-verified
-      // -- bouncing to a login screen that also can't work offline, and
-      // defeating the whole point of the offline check-in queue below.
-      if (e instanceof TypeError) {
-        const cached = localStorage.getItem('nt_last_user');
-        if (!cached) { logout(); return; }  // never verified in this browser -- nothing to fall back to
-        currentUser = JSON.parse(cached);
-      } else {
-        logout();
-        return;
-      }
-    }
+    currentUser = await resolveCurrentUserOffline();
+    if (!currentUser) { logout(); return; }
   }
   syncThemeFromUser(currentUser);
   document.getElementById('auth-page').style.display = 'none';
