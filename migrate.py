@@ -773,6 +773,32 @@ MIGRATIONS = [
      "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS activitypub_hashtags VARCHAR(300)"),
     ("nets: activitypub_hashtags column",
      "ALTER TABLE nets ADD COLUMN IF NOT EXISTS activitypub_hashtags VARCHAR(200)"),
+
+    # ── Fediverse interaction client + fediverse_operator role (issue
+    # follow-up) -- reply to/Like a comment left on one of the org's own
+    # posts, and compose ad-hoc posts, without needing org-admin access.
+    # No column-width migration needed for the new role itself --
+    # OrganizationMembershipRole.role is already VARCHAR(20), and
+    # 'fediverse_operator' (19 chars) fits. ──
+    ("activitypub_posts: in_reply_to columns",
+     """ALTER TABLE activitypub_posts
+         ADD COLUMN IF NOT EXISTS in_reply_to VARCHAR(500),
+         ADD COLUMN IF NOT EXISTS in_reply_to_actor VARCHAR(500)"""),
+    ("table: activitypub_interactions",
+     """CREATE TABLE IF NOT EXISTS activitypub_interactions (
+         id SERIAL PRIMARY KEY,
+         org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+         post_id INTEGER NOT NULL REFERENCES activitypub_posts(id) ON DELETE CASCADE,
+         kind VARCHAR(10) NOT NULL,
+         remote_actor_id VARCHAR(500) NOT NULL,
+         remote_actor_handle VARCHAR(200),
+         remote_actor_name VARCHAR(200),
+         remote_object_id VARCHAR(500) NOT NULL,
+         remote_inbox_url VARCHAR(500),
+         content_html TEXT,
+         received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+         liked_at TIMESTAMPTZ,
+         UNIQUE (kind, remote_object_id))"""),
 ]
 
 # ---------------------------------------------------------------------------

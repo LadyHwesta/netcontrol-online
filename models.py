@@ -170,17 +170,21 @@ class OrganizationMembership(Base):
     Role revamp (issue follow-up): `role` ('admin' | 'member') is now purely
     the org-MANAGEMENT tier (still managed via the "Make Admin"/"Remove
     Admin" action) — it no longer implies net_control_op automatically the
-    way it originally did. All three participant roles (Net Control Op,
-    Tactical Operator, Broadcaster) live symmetrically in the separate
-    `extra_roles` table below, independent of `role` and of each other, so a
-    membership can hold any combination (e.g. Net Control Op AND
-    Broadcaster) — something a single string column can't express. A
-    membership's full canonical role set is {"admin"} (if role=="admin") |
-    {extra_roles}. Approval defaults to granting net_control_op (see
-    admin_approve_user/approve_org_member/_create_invited_user) so a plain
-    "approve this person" still gets someone normal net access without the
-    approver having to think about it — it's just no longer the only option,
-    same as the other two."""
+    way it originally did. All four participant roles (Net Control Op,
+    Tactical Operator, Broadcaster, and — issue follow-up — Fediverse
+    Operator) live symmetrically in the separate `extra_roles` table below,
+    independent of `role` and of each other, so a membership can hold any
+    combination (e.g. Net Control Op AND Broadcaster) — something a single
+    string column can't express. A membership's full canonical role set is
+    {"admin"} (if role=="admin") | {extra_roles}. Approval defaults to
+    granting net_control_op (see admin_approve_user/approve_org_member/
+    _create_invited_user) so a plain "approve this person" still gets
+    someone normal net access without the approver having to think about
+    it — it's just no longer the only option, same as the other three.
+    Fediverse Operator, like Net Control Op, is org-wide with no NetShare
+    counterpart (there's one Fediverse actor per org, not per net) — unlike
+    Tactical Operator/Broadcaster, which only become active once also
+    shared onto a specific net."""
     __tablename__ = "organization_memberships"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -210,18 +214,23 @@ class OrganizationMembership(Base):
 class OrganizationMembershipRole(Base):
     """One participant role (issue follow-up) granted to an
     OrganizationMembership, independent of its base 'admin'/'member' role --
-    'net_control_op' | 'tactical_operator' | 'broadcaster'. Org-approved here
-    is what makes net_control_op/tactical_operator/broadcaster *offerable*
-    when a net is later shared with this user (routers/nets.py's
-    update_net_shares checks it for the latter two specifically --
-    net_control_op's net-level counterpart, NetShare.can_edit, is
-    deliberately NOT gated by this, see NetShare's docstring) -- holding a
-    role here alone grants no net access by itself."""
+    'net_control_op' | 'tactical_operator' | 'broadcaster' |
+    'fediverse_operator'. Org-approved here is what makes
+    net_control_op/tactical_operator/broadcaster *offerable* when a net is
+    later shared with this user (routers/nets.py's update_net_shares checks
+    it for the latter two specifically -- net_control_op's net-level
+    counterpart, NetShare.can_edit, is deliberately NOT gated by this, see
+    NetShare's docstring) -- holding a role here alone grants no net access
+    by itself. fediverse_operator (issue follow-up) is the one exception to
+    that "grants nothing by itself" rule -- it has no NetShare counterpart
+    at all (org-wide, like net_control_op), so holding it directly grants
+    access to routers/fediverse.py's client endpoints for this org, gated
+    via that router's own require_fediverse_access dependency."""
     __tablename__ = "organization_membership_roles"
 
     id = Column(Integer, primary_key=True, index=True)
     membership_id = Column(Integer, ForeignKey("organization_memberships.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False)  # 'net_control_op' | 'tactical_operator' | 'broadcaster'
+    role = Column(String(20), nullable=False)  # 'net_control_op' | 'tactical_operator' | 'broadcaster' | 'fediverse_operator'
 
     membership = relationship("OrganizationMembership", back_populates="extra_roles")
 
@@ -1098,13 +1107,17 @@ class ActivityPubFollower(Base):
 
 class ActivityPubPost(Base):
     """A Create/Note this org's actor has published (issue follow-up) --
-    "net starting now" / "net just ended" announcements. Stores just
-    enough (content_html, kind, published_at) to deterministically rebuild
-    the same Note/Create JSON on a later GET /ap/objects/notes/{uuid} --
-    every AP object id must stay dereferenceable indefinitely, so no full
-    JSON blob is persisted, just what's needed to regenerate it. net_id/
-    session_id are nullable with ON DELETE SET NULL so a later net or
-    session deletion never breaks an already-published post's permalink."""
+    "net starting now" / "net just ended" announcements, plus (issue
+    follow-up) an outgoing reply ('reply') to something a remote actor
+    left on one of our posts, or an ad-hoc operator-composed update
+    ('manual'). Stores just enough (content_html, kind, published_at,
+    in_reply_to*) to deterministically rebuild the same Note/Create JSON
+    on a later GET /ap/objects/notes/{uuid} -- every AP object id must
+    stay dereferenceable indefinitely, so no full JSON blob is persisted,
+    just what's needed to regenerate it. net_id/session_id are nullable
+    with ON DELETE SET NULL so a later net or session deletion never
+    breaks an already-published post's permalink -- both are always NULL
+    for 'reply'/'manual' posts, which aren't tied to any one net."""
     __tablename__ = "activitypub_posts"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -1112,9 +1125,66 @@ class ActivityPubPost(Base):
     net_id = Column(Integer, ForeignKey("nets.id", ondelete="SET NULL"), nullable=True)
     session_id = Column(Integer, ForeignKey("net_sessions.id", ondelete="SET NULL"), nullable=True)
     uuid = Column(String(36), unique=True, nullable=False, index=True)
-    kind = Column(String(10), nullable=False)   # 'start' | 'end'
+    kind = Column(String(10), nullable=False)   # 'start' | 'end' | 'reply' | 'manual'
     content_html = Column(Text, nullable=False)
     published_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    # Fediverse interaction client (issue follow-up) -- set only for
+    # kind='reply': the remote Note/actor URI this replies to, so
+    # build_note_object() can include AP's `inReplyTo` and address `cc`
+    # correctly. Both stay NULL for every other kind, which keeps
+    # build_note_object()'s existing start/end behavior byte-for-byte
+    # unchanged (see its own docstring).
+    in_reply_to = Column(String(500), nullable=True)
+    in_reply_to_actor = Column(String(500), nullable=True)
 
     def __repr__(self):
         return f"<ActivityPubPost org_id={self.org_id} kind={self.kind} uuid={self.uuid}>"
+
+
+class ActivityPubInteraction(Base):
+    """An incoming reply or Like a remote Fediverse actor left on one of
+    THIS org's own posts (issue follow-up) -- lets an org admin or a
+    fediverse_operator see and act on engagement without leaving the app.
+    Deliberately scoped to interactions on the org's own posts (post_id,
+    NOT NULL) -- this is not a general inbox/timeline of everything the
+    actor could ever see; anything the inbox handler receives that isn't
+    a reply/Like on one of our own Notes is still silently ignored, same
+    as before this feature existed (see routers/activitypub.py's
+    post_inbox). Caches the remote actor's handle/name/inbox at receipt
+    time (from the actor document already fetched for signature
+    verification) rather than refetching, same precedent as
+    ActivityPubFollower."""
+    __tablename__ = "activitypub_interactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    post_id = Column(Integer, ForeignKey("activitypub_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(10), nullable=False)   # 'reply' | 'like'
+    remote_actor_id = Column(String(500), nullable=False)
+    remote_actor_handle = Column(String(200), nullable=True)   # e.g. "alice@mastodon.social"
+    remote_actor_name = Column(String(200), nullable=True)
+    # The reply Note's or Like activity's own id -- globally unique per
+    # AP, so this doubles as the dedupe key below (Mastodon retries
+    # deliveries on a timeout/5xx; a repeat delivery of the same activity
+    # is then just a no-op instead of a duplicate row).
+    remote_object_id = Column(String(500), nullable=False)
+    remote_inbox_url = Column(String(500), nullable=True)   # resolved inbox to deliver a reply/Like-back to
+    # Reply text; NULL for a like. Despite the name (kept for symmetry with
+    # ActivityPubPost.content_html), this is PLAIN TEXT, not HTML -- the
+    # remote actor's Note `content` is untrusted third-party HTML, so
+    # routers/activitypub.py's post_inbox runs it through
+    # activitypub_delivery.sanitize_remote_content() before storing, and
+    # the frontend renders it as plain text (never raw innerHTML).
+    content_html = Column(Text, nullable=True)
+    received_at = Column(UTCDateTime, default=utcnow, nullable=False)
+    # Set when an operator Likes this interaction back (kind='reply' only
+    # in practice -- liking a Like isn't a thing) -- lets the UI show
+    # "already liked" and the endpoint no-op on a repeat click.
+    liked_at = Column(UTCDateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("kind", "remote_object_id", name="uq_ap_interaction_object"),
+    )
+
+    def __repr__(self):
+        return f"<ActivityPubInteraction org_id={self.org_id} kind={self.kind} post_id={self.post_id}>"

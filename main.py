@@ -33,7 +33,7 @@ from routers.helpers import STATIC_DIR, UPLOADS_DIR, _get_setting, _public_base_
 
 from routers import (
     activitypub, admin, aprs, assignments, auth, callsign_lookup, checkins, digital_voice, evac_zones,
-    expected_stations, history, incident_feed, incidents, maintenance, nets, orgs, public, push, schedules,
+    expected_stations, fediverse, history, incident_feed, incidents, maintenance, nets, orgs, public, push, schedules,
     sessions, support, tactical, traffic, translation,
 )
 
@@ -79,7 +79,7 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.55.0", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.56.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -116,6 +116,7 @@ app.include_router(support.router)
 app.include_router(translation.router)
 app.include_router(push.router)
 app.include_router(activitypub.router)
+app.include_router(fediverse.router)
 app.include_router(incidents.router)
 app.include_router(incident_feed.router)
 app.include_router(assignments.router)
@@ -184,6 +185,16 @@ def serve_assignments():
     Net Control Op keeps using the main My Nets page unchanged; this is
     additional, not a replacement (see assignments.html's own header comment)."""
     return _serve_html("assignments.html")
+
+
+@app.get("/fediverse", response_class=HTMLResponse, include_in_schema=False)
+def serve_fediverse():
+    """The Fediverse interaction client (issue follow-up) -- reply to/Like
+    replies received on the org's own posts, and compose ad-hoc posts.
+    Available to an org admin or a fediverse_operator; the page itself
+    (not this route) renders a friendly not-available state for anyone
+    else, same precedent as /assignments."""
+    return _serve_html("fediverse.html")
 
 
 @app.get("/manifest.json", include_in_schema=False)

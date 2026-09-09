@@ -3,11 +3,16 @@ Fediverse participation via ActivityPub (issue follow-up) — the public,
 unauthenticated protocol endpoints for each organization's own actor
 (@org-slug@host): WebFinger discovery, the actor document itself,
 followers/following/outbox stubs, dereferenceable post objects, and the
-inbox (Follow/Undo/Delete). Org-admin enable/disable + status lives in
-routers/orgs.py instead, alongside the aprs-key pattern it mirrors — this
-file is only the fediverse-facing side, all of which must be reachable
-with no auth of any kind (a remote Mastodon server fetching our actor
-document can't log in to this app).
+inbox (Follow/Undo/Delete, plus — issue follow-up — persisting a
+Create-reply/Like as an ActivityPubInteraction when it targets one of our
+own posts). Org-admin enable/disable + status lives in routers/orgs.py
+instead, alongside the aprs-key pattern it mirrors; the AUTHENTICATED
+client actions built on top of what this file's inbox persists (list
+interactions, reply/Like back, compose an ad-hoc post) live in
+routers/fediverse.py instead — this file stays only the fediverse-facing
+protocol side, all of which must be reachable with no auth of any kind (a
+remote Mastodon server fetching our actor document can't log in to this
+app).
 
 The actual "post an announcement" call sites are
 routers/sessions.py's start_session()/end_session(); see
@@ -24,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import activitypub_delivery
 import activitypub_signing
 from database import get_db
-from models import ActivityPubFollower, ActivityPubPost, Organization
+from models import ActivityPubFollower, ActivityPubInteraction, ActivityPubPost, Organization
 
 router = APIRouter()
 _log = logging.getLogger("ham_net_tracker.activitypub")
@@ -153,10 +158,12 @@ async def get_create_activity(post_uuid: str, db: AsyncSession = Depends(get_db)
 
 
 # ---------------------------------------------------------------------------
-# Inbox -- Follow / Undo(Follow) / Delete. Everything else is ignored.
-# Signature verification is mandatory (see activitypub_delivery.py's
-# fetch_remote_actor + activitypub_signing.verify_signature) -- without it,
-# anyone could forge a Follow/Undo/Delete and corrupt the follower list.
+# Inbox -- Follow / Undo(Follow) / Delete, plus (issue follow-up)
+# Create(reply)/Like when addressed to one of our own posts. Everything
+# else is still ignored. Signature verification is mandatory (see
+# activitypub_delivery.py's fetch_remote_actor + activitypub_signing.
+# verify_signature) -- without it, anyone could forge any of this and
+# corrupt the follower list or plant a fake interaction.
 # ---------------------------------------------------------------------------
 
 def _actor_field(value) -> str:
@@ -166,6 +173,20 @@ def _actor_field(value) -> str:
     if isinstance(value, dict):
         return value.get("id", "")
     return value or ""
+
+
+def _our_note_uuid(object_uri: str) -> str:
+    """Extracts the uuid from one of OUR OWN note object ids
+    (f"{APP_BASE_URL}/ap/objects/notes/{uuid}", see
+    activitypub_delivery.build_note_object) -- returns "" if object_uri
+    doesn't even look like one of ours, so a Create/Like referencing some
+    unrelated thread never gets treated as an interaction on our content
+    (see ActivityPubInteraction's own docstring: this is deliberately not
+    a general inbox)."""
+    prefix = f"{activitypub_delivery.APP_BASE_URL}/ap/objects/notes/"
+    if not object_uri or not object_uri.startswith(prefix):
+        return ""
+    return object_uri[len(prefix):]
 
 
 @router.post("/ap/orgs/{slug}/inbox", status_code=202)
@@ -239,9 +260,58 @@ async def post_inbox(slug: str, request: Request, background_tasks: BackgroundTa
             ))
             await db.commit()
 
+    elif activity_type == "Create":
+        # A reply to one of our own posts (issue follow-up, Fediverse
+        # interaction client) -- anything else (a reply to something
+        # else, a top-level post someone just happens to mention us in)
+        # is still silently ignored, matching this actor's pre-existing
+        # "not a general inbox" scope.
+        obj = activity.get("object")
+        note_uuid = _our_note_uuid(obj.get("inReplyTo") or "") if isinstance(obj, dict) else ""
+        if note_uuid and isinstance(obj, dict) and obj.get("type") == "Note":
+            post = (await db.execute(select(ActivityPubPost).filter(
+                ActivityPubPost.uuid == note_uuid, ActivityPubPost.org_id == org.id,
+            ))).scalar_one_or_none()
+            remote_object_id = obj.get("id")
+            if post and remote_object_id:
+                existing = (await db.execute(select(ActivityPubInteraction).filter(
+                    ActivityPubInteraction.kind == "reply", ActivityPubInteraction.remote_object_id == remote_object_id,
+                ))).scalar_one_or_none()
+                if not existing:
+                    handle, name = activitypub_delivery._actor_display(sender_actor)
+                    db.add(ActivityPubInteraction(
+                        org_id=org.id, post_id=post.id, kind="reply",
+                        remote_actor_id=actor_uri, remote_actor_handle=handle, remote_actor_name=name,
+                        remote_object_id=remote_object_id, remote_inbox_url=(sender_actor or {}).get("inbox") or actor_uri,
+                        content_html=activitypub_delivery.sanitize_remote_content(obj.get("content") or ""),
+                    ))
+                    await db.commit()
+
+    elif activity_type == "Like":
+        # A Like on one of our own posts -- same "only if it's ours" scope
+        # as Create(reply) above.
+        note_uuid = _our_note_uuid(_actor_field(activity.get("object")))
+        remote_object_id = activity.get("id")
+        if note_uuid and remote_object_id:
+            post = (await db.execute(select(ActivityPubPost).filter(
+                ActivityPubPost.uuid == note_uuid, ActivityPubPost.org_id == org.id,
+            ))).scalar_one_or_none()
+            if post:
+                existing = (await db.execute(select(ActivityPubInteraction).filter(
+                    ActivityPubInteraction.kind == "like", ActivityPubInteraction.remote_object_id == remote_object_id,
+                ))).scalar_one_or_none()
+                if not existing:
+                    handle, name = activitypub_delivery._actor_display(sender_actor)
+                    db.add(ActivityPubInteraction(
+                        org_id=org.id, post_id=post.id, kind="like",
+                        remote_actor_id=actor_uri, remote_actor_handle=handle, remote_actor_name=name,
+                        remote_object_id=remote_object_id, remote_inbox_url=(sender_actor or {}).get("inbox") or actor_uri,
+                    ))
+                    await db.commit()
+
     else:
-        # Like, Announce, Create (replies), etc. -- silently ignored, this
-        # actor is output-only and doesn't support replies/interactions.
+        # Announce (boosts), etc. -- silently ignored, out of this
+        # actor's scope (see ActivityPubInteraction's own docstring).
         _log.info("Ignored inbound %r activity from %s for org %s", activity_type, actor_uri, org.slug)
 
     return None

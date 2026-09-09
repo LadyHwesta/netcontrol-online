@@ -184,6 +184,9 @@
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
               <input type="checkbox" id="reg-role-broadcaster" value="broadcaster" style="width:auto"> <span data-i18n="Broadcaster — carry a broadcast segment during a net">Broadcaster — carry a broadcast segment during a net</span>
             </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
+              <input type="checkbox" id="reg-role-fediverse_operator" value="fediverse_operator" style="width:auto"> <span data-i18n="Fediverse Operator — reply to and Like comments on your organization's Fediverse posts">Fediverse Operator — reply to and Like comments on your organization's Fediverse posts</span>
+            </label>
           </div>
           <p style="margin:6px 0 0;font-size:11px;color:var(--text-muted)" data-i18n="Just a hint for your org admin — they decide what's actually granted, and you can ask for more later.">Just a hint for your org admin — they decide what's actually granted, and you can ask for more later.</p>
         </div>
@@ -311,6 +314,7 @@
       <button class="sidebar-btn" onclick="showView('history')" id="nav-history" style="display:none"><span class="sb-icon">📊</span><span class="sb-label" data-i18n="History">History</span></button>
       <a class="sidebar-btn" id="nav-admin" href="/admin" style="display:none"><span class="sb-icon">🔑</span><span class="sb-label" data-i18n="Admin">Admin</span></a>
       <a class="sidebar-btn" href="/assignments"><span class="sb-icon">🎯</span><span class="sb-label" data-i18n="My Assignments">My Assignments</span></a>
+      <a class="sidebar-btn" href="/fediverse"><span class="sb-icon">🐘</span><span class="sb-label" data-i18n="Fediverse">Fediverse</span></a>
       <a class="sidebar-btn" href="/incidents"><span class="sb-icon">🚨</span><span class="sb-label" data-i18n="Incidents">Incidents</span></a>
       <a class="sidebar-btn" href="/tokens"><span class="sb-icon">⚙️</span><span class="sb-label" data-i18n="Account">Account</span></a>
       <a class="sidebar-btn" href="/help"><span class="sb-icon">❓</span><span class="sb-label" data-i18n="Help">Help</span></a>
@@ -1631,7 +1635,7 @@
   <script src="/static/js/state.js?v=25"></script>
   <script src="/static/js/utils.js?v=24"></script>
   <script src="/static/js/offline-queue.js?v=2"></script>
-  <script src="/static/js/auth.js?v=39"></script>
+  <script src="/static/js/auth.js?v=40"></script>
   <script src="/static/js/theme.js?v=1"></script>
   <script src="/static/js/i18n.js?v=4"></script>
   <script src="/static/js/views.js?v=19"></script>
@@ -1641,7 +1645,7 @@
   <script src="/static/js/sessions.js?v=36"></script>
   <script src="/static/js/checkins.js?v=47"></script>
   <script src="/static/js/history.js?v=23"></script>
-  <script src="/static/js/admin.js?v=50"></script>
+  <script src="/static/js/admin.js?v=51"></script>
   <script src="/static/js/schedules.js?v=24"></script>
   <script src="/static/js/tokens.js?v=28"></script>
   <script src="/static/js/dmr.js?v=21"></script>

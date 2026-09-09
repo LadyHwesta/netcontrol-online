@@ -706,37 +706,44 @@ async def _net_has_prior_checkin_history(net_id: int, exclude_session_id: int, d
 # ---------------------------------------------------------------------------
 # Role revamp (issue follow-up) — org-level roles + net-level grants.
 #
-# Four canonical role names are used everywhere (frontend, API, net-level
-# grants): "admin", "net_control_op", "tactical_operator", "broadcaster".
-# OrganizationMembership.role keeps its original two DB values ('admin' |
-# 'member') for the org-management tier only (still managed via the
-# separate "Make Admin"/"Remove Admin" action); it no longer implies
-# net_control_op automatically (issue follow-up -- originally it did, but
-# that made net_control_op the only one of the three participant roles an
-# admin couldn't independently grant/revoke, unlike Tactical Operator/
-# Broadcaster). All three participant roles now live symmetrically in
-# OrganizationMembershipRole, independent of admin/member and of each
-# other -- a membership's full canonical role set is
-# {"admin"} (if role=="admin") | {its extra_roles}. Approval auto-grants
-# net_control_op by default (see admin_approve_user/approve_org_member/
-# _create_invited_user) so a plain "approve this person" still gets someone
-# normal net access without the approver having to think about it --  it's
-# just no longer the ONLY option, the same as the other two.
+# Five canonical role names are used everywhere (frontend, API, net-level
+# grants): "admin", "net_control_op", "tactical_operator", "broadcaster",
+# and (issue follow-up) "fediverse_operator". OrganizationMembership.role
+# keeps its original two DB values ('admin' | 'member') for the
+# org-management tier only (still managed via the separate "Make Admin"/
+# "Remove Admin" action); it no longer implies net_control_op automatically
+# (issue follow-up -- originally it did, but that made net_control_op the
+# only one of the participant roles an admin couldn't independently
+# grant/revoke, unlike Tactical Operator/Broadcaster). All four participant
+# roles now live symmetrically in OrganizationMembershipRole, independent
+# of admin/member and of each other -- a membership's full canonical role
+# set is {"admin"} (if role=="admin") | {its extra_roles}. Approval
+# auto-grants net_control_op by default (see admin_approve_user/
+# approve_org_member/_create_invited_user) so a plain "approve this person"
+# still gets someone normal net access without the approver having to
+# think about it -- it's just no longer the ONLY option, the same as the
+# other three.
 #
 # At the net level, "net_control_op" is still exactly NetShare.can_edit,
 # deliberately NOT gated by the org-level role (issue follow-up: unlike the
-# other two, granting edit rights on a net predates this whole role system
-# and has never required any org-level prerequisite -- changing that now
-# would be an unrelated, unrequested behavior change for existing
+# other roles, granting edit rights on a net predates this whole role
+# system and has never required any org-level prerequisite -- changing
+# that now would be an unrelated, unrequested behavior change for existing
 # deployments). "tactical_operator" and "broadcaster" are per-share grants
 # in NetShareRole, each only ever offerable for a role the target user's
 # org membership already holds (enforced in routers/nets.py's
 # update_net_shares, not by a DB constraint, since that check spans both
-# tables).
+# tables). "fediverse_operator" (issue follow-up) is org-wide with no
+# NetShare counterpart at all, like net_control_op -- there's one
+# Fediverse actor per org, not per net, so holding the role directly
+# grants access to routers/fediverse.py's client endpoints (see that
+# router's own require_fediverse_access dependency) rather than needing a
+# further per-net grant. Deliberately NOT in NET_EXTRA_ROLES below for
+# that reason.
 # ---------------------------------------------------------------------------
-SELF_REQUESTABLE_ROLES = ("net_control_op", "tactical_operator", "broadcaster")  # never "admin"
-NET_EXTRA_ROLES = ("tactical_operator", "broadcaster")  # NetShareRole values; net_control_op is can_edit, deliberately ungated
-ORG_EXTRA_ROLES = ("net_control_op", "tactical_operator", "broadcaster")  # OrganizationMembershipRole values
+SELF_REQUESTABLE_ROLES = ("net_control_op", "tactical_operator", "broadcaster", "fediverse_operator")  # never "admin"
+NET_EXTRA_ROLES = ("tactical_operator", "broadcaster")  # NetShareRole values; net_control_op/fediverse_operator are org-wide, deliberately excluded
+ORG_EXTRA_ROLES = ("net_control_op", "tactical_operator", "broadcaster", "fediverse_operator")  # OrganizationMembershipRole values
 
 
 async def _org_role_set(org_id: int, user_id: int, db: AsyncSession) -> set[str]:

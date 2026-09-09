@@ -18,12 +18,21 @@ plan for this feature for the full protocol rationale -- summarized here:
   - HTTP Signatures are Cavage-draft (activitypub_signing.py), which is
     what Mastodon and most of the fediverse actually require today.
 
-Async: record_and_get_targets() is the only async half (DB work,
-matching routers/sessions.py's request handler) -- everything past that
-(deliver_to_targets, deliver_accept, fetch_remote_actor) is plain sync
-httpx, matching net_repository.py's existing convention for external
-calls in this codebase, and runs inside a FastAPI background task so it
-never blocks a request.
+Async: record_and_get_targets()/record_manual_post() are the only async
+halves (DB work, matching the callers' own request handlers) --
+everything past that (deliver_to_targets, deliver_accept, deliver_like,
+fetch_remote_actor) is plain sync httpx, matching net_repository.py's
+existing convention for external calls in this codebase, and runs inside
+a FastAPI background task so it never blocks a request.
+
+Issue follow-up: a small Fediverse interaction client (routers/
+fediverse.py) closes the loop on the one-way broadcast above -- an org
+admin or fediverse_operator can see replies/Likes a post receives
+(persisted as ActivityPubInteraction rows by routers/activitypub.py's
+post_inbox, models.py has both), reply/Like back (deliver_to_targets/
+deliver_like, single-target rather than broadcast), and compose an
+ad-hoc post (record_manual_post). See render_user_content_html() for how
+an operator's own typed text becomes content_html.
 """
 
 import html
@@ -33,6 +42,7 @@ import mimetypes
 import os
 import re
 import uuid
+from html.parser import HTMLParser
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -122,7 +132,7 @@ def build_actor_document(org) -> dict:
 
 
 def build_note_object(org, post) -> dict:
-    return {
+    note = {
         "id": f"{APP_BASE_URL}/ap/objects/notes/{post.uuid}",
         "type": "Note",
         "attributedTo": build_actor_id(org),
@@ -136,6 +146,19 @@ def build_note_object(org, post) -> dict:
         "attachment": [],
         "tag": _hashtag_tag_objects(post.content_html),
     }
+    # Fediverse interaction client (issue follow-up): only set for an
+    # outgoing reply (kind='reply') -- NULL for every other kind, so this
+    # is a no-op for the existing start/end/manual shapes. Mastodon
+    # convention for a public reply: cc the person being replied to
+    # alongside our own followers, so it reaches them even if they don't
+    # follow us.
+    in_reply_to = getattr(post, "in_reply_to", None)
+    if in_reply_to:
+        note["inReplyTo"] = in_reply_to
+        in_reply_to_actor = getattr(post, "in_reply_to_actor", None)
+        if in_reply_to_actor:
+            note["cc"] = [in_reply_to_actor, f"{_org_base(org)}/followers"]
+    return note
 
 
 def build_create_activity(org, post) -> dict:
@@ -214,18 +237,27 @@ def _hashtags_for_net(net, org) -> list:
     return deduped[:MAX_HASHTAGS]
 
 
+def _hashtag_anchor(tag: str) -> str:
+    """The single Mastodon-style hashtag anchor template -- used both by
+    _hashtags_html() below (a trailing block of tags appended to an
+    automated post) and by render_user_content_html()'s inline auto-
+    linkify (issue follow-up, Fediverse interaction client) for `#word`
+    tokens an operator typed directly. Every hashtag anywhere in any
+    post's content_html goes through this one template, so
+    _hashtag_tag_objects()'s extraction below stays correct regardless of
+    which path rendered it."""
+    escaped = html.escape(tag)
+    return f'<a href="{APP_BASE_URL}/tags/{escaped}" class="mention hashtag" rel="tag">#<span>{escaped}</span></a>'
+
+
 def _hashtags_html(tags: list) -> str:
     if not tags:
         return ""
-    links = " ".join(
-        f'<a href="{APP_BASE_URL}/tags/{html.escape(tag)}" class="mention hashtag" rel="tag">'
-        f'#<span>{html.escape(tag)}</span></a>'
-        for tag in tags
-    )
-    return f"<p>{links}</p>"
+    return f"<p>{' '.join(_hashtag_anchor(tag) for tag in tags)}</p>"
 
 
 _HASHTAG_ANCHOR_RE = re.compile(r'rel="tag">#<span>([^<]+)</span></a>')
+_INLINE_HASHTAG_RE = re.compile(r'#(\w{1,50})')
 
 
 def _hashtag_tag_objects(content_html: str) -> list:
@@ -277,9 +309,99 @@ def end_content_html(net, org, session, checkin_count: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# User-composed content (issue follow-up, Fediverse interaction client) --
+# an operator's own typed text for a reply or an ad-hoc post, as opposed
+# to the two fixed announcement templates above.
+# ---------------------------------------------------------------------------
+
+def render_user_content_html(raw_text: str, extra_hashtags: Optional[list] = None) -> str:
+    """Escapes raw_text, wraps blank-line-separated paragraphs in <p>, and
+    auto-linkifies any inline `#word` the operator typed using the exact
+    same anchor markup _hashtags_html() produces (see _hashtag_anchor's
+    own docstring for why that matters) -- then appends _hashtags_html()
+    for any of extra_hashtags not already typed inline, deduped
+    case-insensitively same as _hashtags_for_net(). Returns "" for blank
+    input (callers should reject an empty post before calling this)."""
+    text = (raw_text or "").strip()
+    if not text:
+        return ""
+    escaped = html.escape(text)
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", escaped) if p.strip()]
+    body = "".join(f"<p>{p.replace(chr(10), '<br>')}</p>" for p in paragraphs)
+    inline_tags = {m.group(1).lower() for m in _INLINE_HASHTAG_RE.finditer(body)}
+    body = _INLINE_HASHTAG_RE.sub(lambda m: _hashtag_anchor(m.group(1)), body)
+
+    extra = [t for t in (extra_hashtags or []) if t.lower() not in inline_tags]
+    seen = set(inline_tags)
+    deduped_extra = []
+    for tag in extra:
+        key = tag.lower()
+        if key not in seen:
+            seen.add(key)
+            deduped_extra.append(tag)
+    return body + _hashtags_html(deduped_extra)
+
+
+class _TextExtractor(HTMLParser):
+    """Collects only the text content of an HTML fragment, treating
+    <p>/<br>/<div> as line breaks and discarding every tag itself
+    (attributes included). Used solely by sanitize_remote_content() below."""
+    def __init__(self):
+        super().__init__()
+        self._parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("p", "br", "div"):
+            self._parts.append("\n")
+
+    def handle_data(self, data):
+        self._parts.append(data)
+
+    def text(self) -> str:
+        return "".join(self._parts)
+
+
+def sanitize_remote_content(raw_html: str) -> str:
+    """Strips a remote actor's Note `content` (a reply left on one of our
+    posts) down to plain text (issue follow-up, Fediverse interaction
+    client). That HTML comes from an untrusted third-party Fediverse
+    server -- any AP-speaking server can send anything, regardless of
+    what a well-behaved client like Mastodon would actually produce -- so
+    it must never be stored/rendered verbatim; the interaction client
+    would otherwise be a stored-XSS vector against whoever views it.
+    <p>/<br>/<div> become newlines, every tag is discarded keeping only
+    its text, and the result is capped against a hostile giant payload.
+    Uses the stdlib html.parser -- no new dependency for what's a small,
+    contained parse. The RESULT is plain text, not HTML -- callers
+    display it escaped (e.g. via a CSS white-space:pre-wrap container),
+    same trust level as any other user-supplied plain-text field."""
+    if not raw_html:
+        return ""
+    parser = _TextExtractor()
+    try:
+        parser.feed(raw_html)
+        parser.close()
+    except Exception:
+        return ""
+    text = re.sub(r"\n{3,}", "\n\n", parser.text()).strip()
+    return text[:5000]
+
+
+# ---------------------------------------------------------------------------
 # Recording a post + resolving delivery targets -- the fast, DB-only half,
 # called synchronously from the request handler.
 # ---------------------------------------------------------------------------
+
+async def _resolve_follower_targets(org, db) -> list:
+    """Every follower's shared inbox (falling back to its own inbox),
+    deduped -- so a broadcast to N followers on the same remote server is
+    one HTTP request, not N. Shared by every "post to all followers" path
+    below (announcements and ad-hoc posts alike)."""
+    followers = (await db.execute(
+        select(ActivityPubFollower).filter(ActivityPubFollower.org_id == org.id)
+    )).scalars().all()
+    return list({(f.shared_inbox_url or f.inbox_url) for f in followers})
+
 
 async def record_and_get_targets(org, net, session, kind: str, content_html: str, db) -> Optional[tuple]:
     """Never raises; returns None if Fediverse posting isn't applicable
@@ -307,10 +429,7 @@ async def record_and_get_targets(org, net, session, kind: str, content_html: str
     await db.commit()
     await db.refresh(post)
 
-    followers = (await db.execute(
-        select(ActivityPubFollower).filter(ActivityPubFollower.org_id == org.id)
-    )).scalars().all()
-    dest_urls = list({(f.shared_inbox_url or f.inbox_url) for f in followers})
+    dest_urls = await _resolve_follower_targets(org, db)
     return post, dest_urls
 
 
@@ -320,6 +439,32 @@ async def announce_session_start(net, org, session, db) -> Optional[tuple]:
 
 async def announce_session_end(net, org, session, checkin_count: int, db) -> Optional[tuple]:
     return await record_and_get_targets(org, net, session, "end", end_content_html(net, org, session, checkin_count), db)
+
+
+async def record_manual_post(org, content_html: str, db) -> Optional[tuple]:
+    """The Fediverse interaction client's ad-hoc "New Post" (issue
+    follow-up) -- same shape/precondition checks as
+    record_and_get_targets() above minus the net/session-specific ones
+    (no net.activitypub_announce or session.is_offline to check; a manual
+    post isn't tied to either), so it's a separate function rather than
+    threading Optional[net]/Optional[session] through the existing one."""
+    if not activitypub_configured():
+        return None
+    if not org or not org.activitypub_enabled:
+        return None
+    if not org.activitypub_private_key or not org.activitypub_public_key:
+        return None
+
+    post = ActivityPubPost(
+        org_id=org.id, net_id=None, session_id=None,
+        uuid=str(uuid.uuid4()), kind="manual", content_html=content_html,
+    )
+    db.add(post)
+    await db.commit()
+    await db.refresh(post)
+
+    dest_urls = await _resolve_follower_targets(org, db)
+    return post, dest_urls
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +527,21 @@ def deliver_accept(org, follow_activity: dict, target_inbox_url: str) -> None:
     _deliver_signed(org, json.dumps(accept).encode(), target_inbox_url)
 
 
+def deliver_like(org, target_object_id: str, target_inbox_url: str) -> None:
+    """Delivers a signed Like back to whoever left an interaction our org
+    is Liking (issue follow-up, Fediverse interaction client) -- same
+    single-target shape as deliver_accept above, backgrounded by the
+    caller the same way."""
+    like = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": f"{APP_BASE_URL}/ap/activities/like/{uuid.uuid4()}",
+        "type": "Like",
+        "actor": build_actor_id(org),
+        "object": target_object_id,
+    }
+    _deliver_signed(org, json.dumps(like).encode(), target_inbox_url)
+
+
 def fetch_remote_actor(actor_id: str) -> Optional[dict]:
     """Fetches a remote actor's document -- used both to verify an inbound
     request's signature (publicKeyPem by keyId, #fragment stripped) and to
@@ -397,3 +557,19 @@ def fetch_remote_actor(actor_id: str) -> Optional[dict]:
     except Exception as exc:
         _log.warning("Failed to fetch remote actor %s: %s", url, exc)
         return None
+
+
+def _actor_display(actor_doc: Optional[dict]) -> tuple:
+    """(handle, name) for showing "who replied"/"who liked this" in the
+    Fediverse interaction client (issue follow-up) -- built from an actor
+    document already fetched by fetch_remote_actor() above (the inbox
+    handler fetches it anyway, for signature verification, so there's no
+    second HTTP call). Handle is derived the same way build_handle()
+    derives our own -- preferredUsername@<host from the actor id> -- name
+    falls back to the handle if the remote doc doesn't set one."""
+    doc = actor_doc or {}
+    username = doc.get("preferredUsername") or "?"
+    host = urlparse(doc.get("id", "")).netloc
+    handle = f"{username}@{host}" if host else username
+    name = doc.get("name") or handle
+    return handle, name

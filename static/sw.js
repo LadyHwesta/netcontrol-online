@@ -9,12 +9,13 @@
 //      (all API calls, every other page) passes straight to the network
 //      untouched. Never serve a stale cached API response.
 //
-//      The shell is five pages, not just '/': the SPA itself plus the four
+//      The shell is eight pages, not just '/': the SPA itself plus the
 //      standalone pages one click away in its sidebar nav (Admin, Account,
-//      Help, Report) — each precached as its own top-level document so
-//      opening any of them still works after the tab that installed the
-//      service worker goes offline, not only the page that happened to be
-//      open at the time. public.html/directory.html are deliberately left
+//      Help, Report, Incidents, My Assignments, Fediverse) — each
+//      precached as its own top-level document so opening any of them
+//      still works after the tab that installed the service worker goes
+//      offline, not only the page that happened to be open at the time.
+//      public.html/directory.html/incident-map.html are deliberately left
 //      out: they're reached fresh via an outside link/QR code, not from the
 //      installed app's own nav, and show live net data that's meaningless
 //      offline anyway.
@@ -56,7 +57,7 @@
 // silently ungated by app-shell caching and unavailable offline. Bumping a
 // shared file's version anywhere means bumping it in this list AND in every
 // one of the five precached pages' own tags, all to the same number.
-const CACHE_NAME = 'netcontrol-online-shell-v114';
+const CACHE_NAME = 'netcontrol-online-shell-v115';
 
 const PRECACHE_URLS = [
   '/',
@@ -66,6 +67,7 @@ const PRECACHE_URLS = [
   '/report',
   '/incidents',
   '/assignments',
+  '/fediverse',
   '/static/offline.html',
   '/static/app.css?v=38',
   '/static/vendor/leaflet/leaflet.css?v=1',
@@ -74,7 +76,7 @@ const PRECACHE_URLS = [
   '/static/js/state.js?v=25',
   '/static/js/i18n.js?v=4',
   '/static/js/utils.js?v=24',
-  '/static/js/auth.js?v=39',
+  '/static/js/auth.js?v=40',
   '/static/js/theme.js?v=1',
   '/static/js/views.js?v=19',
   '/static/js/branding.js?v=25',
@@ -83,7 +85,7 @@ const PRECACHE_URLS = [
   '/static/js/sessions.js?v=36',
   '/static/js/checkins.js?v=47',
   '/static/js/history.js?v=23',
-  '/static/js/admin.js?v=50',
+  '/static/js/admin.js?v=51',
   '/static/js/schedules.js?v=24',
   '/static/js/tokens.js?v=28',
   '/static/js/push.js?v=1',
@@ -93,6 +95,7 @@ const PRECACHE_URLS = [
   '/static/js/evac-zone-map.js?v=2',
   '/static/js/incidents.js?v=3',
   '/static/js/assignments.js?v=1',
+  '/static/js/fediverse.js?v=1',
   '/static/vendor/leaflet/leaflet.js?v=1',
   '/static/js/app.js?v=28',
   '/static/js/offline-queue.js?v=2',

@@ -339,7 +339,7 @@ async function doRegister(btn) {
     body.org_slug = orgSlug;
   }
   // Role revamp (issue follow-up) — informational hint only, see UserCreate.requested_roles
-  const requestedRoles = ['net_control_op', 'tactical_operator', 'broadcaster']
+  const requestedRoles = ['net_control_op', 'tactical_operator', 'broadcaster', 'fediverse_operator']
     .filter(r => document.getElementById(`reg-role-${r}`).checked);
   if (requestedRoles.length) body.requested_roles = requestedRoles;
   if (captchaProvider) body.captcha_token = getCaptchaToken('reg');

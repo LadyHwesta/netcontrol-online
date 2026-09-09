@@ -493,6 +493,10 @@ async function loadOrgOperators() {
             <input type="checkbox" id="pending-role-broadcaster-${m.user_id}" style="width:auto" ${m.requested_roles.includes('broadcaster') ? 'checked' : ''}>
             ${t('Broadcaster')}
           </label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:normal">
+            <input type="checkbox" id="pending-role-fediverse_operator-${m.user_id}" style="width:auto" ${m.requested_roles.includes('fediverse_operator') ? 'checked' : ''}>
+            ${t('Fediverse Operator')}
+          </label>
         </div>
       </div>
     `).join('');
@@ -519,16 +523,16 @@ async function loadOrgOperators() {
           : `<button class="btn btn-ghost btn-sm" onclick="orgSetMemberRole(${orgId}, ${m.user_id}, 'admin', '${esc(m.callsign)}')">${t('Make Admin')}</button>`);
     // Role revamp (issue follow-up): "Org Admin" stays a plain badge, managed
     // only via the Make/Remove Admin button (isMe-safe, org-management tier).
-    // All three participant roles -- Net Control Op, Tactical Operator,
-    // Broadcaster -- are symmetric, independently clickable badges below,
-    // for every member (an admin can hold them too, e.g. a founder who also
-    // runs nets).
+    // All four participant roles -- Net Control Op, Tactical Operator,
+    // Broadcaster, Fediverse Operator -- are symmetric, independently
+    // clickable badges below, for every member (an admin can hold them too,
+    // e.g. a founder who also runs nets).
+    const EXTRA_ROLE_LABELS = { net_control_op: t('Net Control Op'), tactical_operator: t('Tactical Op'), broadcaster: t('Broadcaster'), fediverse_operator: t('Fediverse Op') };
     const baseBadge = m.role === 'admin' ? `<span class="badge badge-blue">${t('Org Admin')}</span>` : '';
-    const extraBadges = ['net_control_op', 'tactical_operator', 'broadcaster'].map(r => {
+    const extraBadges = ['net_control_op', 'tactical_operator', 'broadcaster', 'fediverse_operator'].map(r => {
       const held = m.roles.includes(r);
-      const label = r === 'net_control_op' ? t('Net Control Op') : r === 'tactical_operator' ? t('Tactical Op') : t('Broadcaster');
       return `<span class="badge ${held ? 'badge-green' : 'badge-gray'}" style="cursor:pointer" title="${t('Click to toggle')}"
-        onclick="orgToggleExtraRole(${orgId}, ${m.user_id}, '${r}', ${held}, '${esc(m.callsign)}')">${held ? '✓ ' : ''}${label}</span>`;
+        onclick="orgToggleExtraRole(${orgId}, ${m.user_id}, '${r}', ${held}, '${esc(m.callsign)}')">${held ? '✓ ' : ''}${EXTRA_ROLE_LABELS[r]}</span>`;
     }).join(' ');
     // Notify toggle — only meaningful for an org admin (issue follow-up:
     // previously a hardcoded "—" here, with no way at all for an org-admin-
@@ -558,7 +562,7 @@ async function orgToggleExtraRole(orgId, userId, role, currentlyHeld, callsign) 
   // Full replace (issue follow-up) -- fetch the member's current extra roles
   // from the already-loaded table rather than a round trip, then flip just
   // this one and PUT the whole set back.
-  const EXTRA_ROLES = ['net_control_op', 'tactical_operator', 'broadcaster'];
+  const EXTRA_ROLES = ['net_control_op', 'tactical_operator', 'broadcaster', 'fediverse_operator'];
   const row = orgMembersCache.find(m => m.user_id === userId);
   const current = new Set(row ? row.roles.filter(r => EXTRA_ROLES.includes(r)) : []);
   if (currentlyHeld) current.delete(role); else current.add(role);
@@ -578,7 +582,7 @@ async function orgToggleNotify(orgId, userId) {
 
 async function orgApproveMember(orgId, userId, btn) {
   btnLoading(btn, true);
-  const roles = ['net_control_op', 'tactical_operator', 'broadcaster'].filter(r => {
+  const roles = ['net_control_op', 'tactical_operator', 'broadcaster', 'fediverse_operator'].filter(r => {
     const el = document.getElementById(`pending-role-${r}-${userId}`);
     return el && el.checked;
   });
