@@ -168,6 +168,12 @@
             <div><span class="text-muted" data-i18n="Handle">Handle</span>: <span class="mono" id="org-activitypub-handle"></span></div>
             <div style="margin-top:4px"><span class="text-muted" data-i18n="Followers">Followers</span>: <span id="org-activitypub-followers"></span></div>
           </div>
+          <div style="margin-top:12px">
+            <label style="font-size:12px;font-weight:700" data-i18n="Organization Hashtags">Organization Hashtags</label>
+            <input class="form-control" id="org-activitypub-hashtags" placeholder="SkywarnWA, PNWEmComm" style="font-size:13px;margin-top:4px" />
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px" data-i18n="Added to every net's posts from this organization, on top of each net's own stock and custom hashtags below. Space or comma separated; # optional.">Added to every net's posts from this organization, on top of each net's own stock and custom hashtags below. Space or comma separated; # optional.</div>
+            <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="saveOrgActivityPubHashtags()" data-i18n="Save Hashtags">Save Hashtags</button>
+          </div>
         </div>
 
       </div><!-- /admin-panel-org -->
@@ -597,7 +603,7 @@
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/js/branding.js?v=25"></script>
-<script src="/static/js/admin.js?v=49"></script>
+<script src="/static/js/admin.js?v=50"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {

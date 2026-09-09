@@ -165,6 +165,13 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-09 — Fediverse Posts Now Carry Hashtags (v2.55.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li>Every net session start/end announcement posted to the Fediverse now carries hashtags — a stock amateur-radio-centric set added automatically (<strong>#HamRadio #AmateurRadio</strong> for a ham net, <strong>#GMRS</strong> for a GMRS net, plus <strong>#EmComm</strong> when Activation &amp; Incident Response is on), an org-wide set an admin can add from <strong>Admin → Organization</strong>'s <strong>🐘 Fediverse</strong> card, and a per-net set a net owner can add on that net's own Edit form. All three combine, render as real clickable hashtag links, and are included in the post's federated tag metadata so it's discoverable from hashtag timelines/searches, not just by following the account.</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-08 — Fix: Net Control Override Fields Showed "Optional" as Sample Text (v2.54.1)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>The Net Control Override callsign/name fields (both the new-session form and Log a Past Net) showed "Optional" as their placeholder text, which didn't say what to actually type. Now shows "Callsign" and "Name (optional)", matching the Broadcaster Override fields right next to them.</li>

@@ -31,6 +31,7 @@ import json
 import logging
 import mimetypes
 import os
+import re
 import uuid
 from typing import Optional
 from urllib.parse import urlparse
@@ -133,7 +134,7 @@ def build_note_object(org, post) -> dict:
         "summary": None,
         "sensitive": False,
         "attachment": [],
-        "tag": [],
+        "tag": _hashtag_tag_objects(post.content_html),
     }
 
 
@@ -152,6 +153,94 @@ def build_create_activity(org, post) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Hashtags -- a stock amateur-radio-centric set (net_type/Activation-based)
+# plus whatever an org admin (Organization.activitypub_hashtags) and/or the
+# net's own owner (Net.activitypub_hashtags) have added on top. The
+# fediverse leans heavily on hashtags for discovery (hashtag timelines/
+# follows on Mastodon and similar), so posting with none at all would leave
+# these announcements far less discoverable than a hand-posted one.
+#
+# Rendered into content_html as real hashtag anchors (Mastodon's own
+# `class="mention hashtag" rel="tag"` shape) so they read as clickable tags
+# rather than plain text, and re-extracted from that same persisted HTML at
+# build_note_object() time to populate the Note's `tag` array -- no
+# separate column, keeping ActivityPubPost's "content_html is the only
+# thing that has to survive" shape (see its own docstring) intact; the tag
+# metadata is always exactly what the post itself displays.
+# ---------------------------------------------------------------------------
+
+STOCK_HASHTAGS_HAM = ("HamRadio", "AmateurRadio")
+STOCK_HASHTAGS_GMRS = ("GMRS",)
+STOCK_HASHTAG_ACTIVATION = "EmComm"   # net.is_ares, either net type
+
+MAX_HASHTAGS = 20   # generous ceiling against pathological input, not a UX limit
+HASHTAG_WORD_RE = re.compile(r"^\w{1,50}$", re.UNICODE)
+
+
+def _parse_hashtag_field(raw: Optional[str]) -> list:
+    """Splits an admin/owner-typed hashtag field (space and/or comma
+    separated, '#' optional) into clean tag names -- silently drops any
+    token that isn't a single bare word (no spaces/punctuation) rather than
+    rejecting the whole field, since this is free text with no save-time
+    validation."""
+    if not raw:
+        return []
+    tags = []
+    for token in re.split(r"[\s,]+", raw.strip()):
+        word = token.lstrip("#")
+        if word and HASHTAG_WORD_RE.match(word):
+            tags.append(word)
+    return tags
+
+
+def _hashtags_for_net(net, org) -> list:
+    """Stock tags first (net_type, then Activation & Incident Response if
+    on), then the org's own, then this net's own -- in that order, deduped
+    case-insensitively (first-seen casing wins, so an org's preferred
+    capitalization beats a net owner's later duplicate)."""
+    tags = list(STOCK_HASHTAGS_GMRS if net.net_type == "gmrs" else STOCK_HASHTAGS_HAM)
+    if net.is_ares:
+        tags.append(STOCK_HASHTAG_ACTIVATION)
+    tags += _parse_hashtag_field(getattr(org, "activitypub_hashtags", None))
+    tags += _parse_hashtag_field(getattr(net, "activitypub_hashtags", None))
+
+    seen = set()
+    deduped = []
+    for tag in tags:
+        key = tag.lower()
+        if key not in seen:
+            seen.add(key)
+            deduped.append(tag)
+    return deduped[:MAX_HASHTAGS]
+
+
+def _hashtags_html(tags: list) -> str:
+    if not tags:
+        return ""
+    links = " ".join(
+        f'<a href="{APP_BASE_URL}/tags/{html.escape(tag)}" class="mention hashtag" rel="tag">'
+        f'#<span>{html.escape(tag)}</span></a>'
+        for tag in tags
+    )
+    return f"<p>{links}</p>"
+
+
+_HASHTAG_ANCHOR_RE = re.compile(r'rel="tag">#<span>([^<]+)</span></a>')
+
+
+def _hashtag_tag_objects(content_html: str) -> list:
+    """Rebuilds the Note's `tag` array (Mastodon Hashtag objects, used for
+    hashtag-timeline/search federation) from the hashtag anchors already
+    embedded in content_html by _hashtags_html() above -- see this
+    section's own docstring for why that's the single source of truth
+    rather than a stored list."""
+    return [
+        {"type": "Hashtag", "href": f"{APP_BASE_URL}/tags/{name}", "name": f"#{name}"}
+        for name in _HASHTAG_ANCHOR_RE.findall(content_html)
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Post content -- the actual announcement text for the two occasions.
 # ---------------------------------------------------------------------------
 
@@ -162,7 +251,10 @@ def _live_link(org) -> str:
 
 def start_content_html(net, org) -> str:
     freq = f" on {html.escape(net.frequency)}" if net.frequency else ""
-    return f"<p>📡 {html.escape(net.name)} is starting now{freq}. Check in: {_live_link(org)}</p>"
+    return (
+        f"<p>📡 {html.escape(net.name)} is starting now{freq}. Check in: {_live_link(org)}</p>"
+        + _hashtags_html(_hashtags_for_net(net, org))
+    )
 
 
 def _duration_minutes(session) -> Optional[int]:
@@ -180,6 +272,7 @@ def end_content_html(net, org, session, checkin_count: int) -> str:
     return (
         f"<p>📡 {html.escape(net.name)} has ended. {checkin_count} check-in{plural}"
         f"{duration_txt}. Thanks everyone! {_live_link(org)}</p>"
+        + _hashtags_html(_hashtags_for_net(net, org))
     )
 
 

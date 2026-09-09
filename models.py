@@ -134,6 +134,14 @@ class Organization(Base):
     activitypub_enabled = Column(Boolean, default=False, nullable=False)
     activitypub_private_key = Column(Text, nullable=True)
     activitypub_public_key = Column(Text, nullable=True)
+    # Org-admin-set custom hashtags (issue follow-up), applied to EVERY net's
+    # Fediverse posts under this org, in addition to that net's own stock
+    # (net_type/Activation-based) and per-net custom hashtags -- see
+    # activitypub_delivery.py's _hashtags_for_net() for how all three are
+    # combined. Free-text, space/comma-separated, '#' optional; parsed and
+    # validated at post-composition time rather than here, same as
+    # aprs_fi_api_key's plain-string-column precedent above.
+    activitypub_hashtags = Column(String(300), nullable=True)
     # Org-admin-set (issue follow-up): False hides this org from the public
     # "join an existing organization" picker at registration (GET /orgs,
     # routers/orgs.py's list_orgs) AND blocks self-registration into it
@@ -248,6 +256,12 @@ class Net(Base):
     # configured" shape as reminder_enabled against SMTP-not-configured; has
     # no effect unless the parent Organization.activitypub_enabled is also on.
     activitypub_announce = Column(Boolean, default=False, nullable=False)
+    # Net-owner-set custom hashtags (issue follow-up) for this net's own
+    # posts specifically, layered on top of the org-wide ones above plus a
+    # stock set of amateur-radio-centric tags computed from net_type/is_ares
+    # (see activitypub_delivery.py's _hashtags_for_net()). Same free-text
+    # shape as Organization.activitypub_hashtags.
+    activitypub_hashtags = Column(String(200), nullable=True)
     aprs_map_enabled = Column(Boolean, default=False, nullable=False)  # shows an APRS station map on the public live page (issue #22)
     # Default APRS map viewport (issue follow-up) — where the station map opens
     # before any position has been reported yet, replacing the hardcoded

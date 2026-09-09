@@ -19,6 +19,7 @@ so test_enable_requires_app_base_url can exercise the unconfigured case.
 """
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -154,7 +155,7 @@ class TestOrgActivityPubAdmin:
     def test_get_disabled_by_default(self, client, admin_headers, net):
         resp = client.get(f"/orgs/{net['org_id']}/activitypub", headers=admin_headers)
         assert resp.status_code == 200
-        assert resp.json() == {"enabled": False, "handle": None, "actor_url": None, "follower_count": 0}
+        assert resp.json() == {"enabled": False, "handle": None, "actor_url": None, "follower_count": 0, "hashtags": None}
 
     def test_enable_requires_app_base_url(self, client, admin_headers, net, monkeypatch):
         # Force the unset state explicitly -- on a real deployment
@@ -192,6 +193,31 @@ class TestOrgActivityPubAdmin:
         client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": False}, headers=admin_headers)
         data = _enable_org_activitypub(client, net["org_id"], admin_headers)
         assert data["follower_count"] == 1
+
+    def test_hashtags_can_be_set_while_disabled(self, client, admin_headers, net):
+        resp = client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": False, "hashtags": "SkywarnWA, PNW"}, headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"enabled": False, "handle": None, "actor_url": None, "follower_count": 0, "hashtags": "SkywarnWA, PNW"}
+
+        get_resp = client.get(f"/orgs/{net['org_id']}/activitypub", headers=admin_headers)
+        assert get_resp.json()["hashtags"] == "SkywarnWA, PNW"
+
+    def test_a_partial_update_omitting_hashtags_clears_them(self, client, admin_headers, net, activitypub_app_base_url):
+        """Documents the endpoint's contract (see its own docstring): there's
+        no dedicated hashtags-only save, so every caller -- both the
+        checkbox's onchange handler and the "Save Hashtags" button in
+        admin.js -- must resend the hashtags input's current value on every
+        PUT, or this happens. Enabling via _enable_org_activitypub (which
+        only sends {"enabled": True}, the plain toggle-flip shape) wipes a
+        previously-set value rather than preserving it."""
+        client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": False, "hashtags": "SkywarnWA"}, headers=admin_headers)
+        data = _enable_org_activitypub(client, net["org_id"], admin_headers)
+        assert data["hashtags"] is None
+
+        # Sending both together (what admin.js's _saveOrgActivityPub actually
+        # does on every call, toggle included) round-trips correctly.
+        resp = client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": True, "hashtags": "SkywarnWA"}, headers=admin_headers)
+        assert resp.json()["hashtags"] == "SkywarnWA"
 
 
 # ---------------------------------------------------------------------------
@@ -345,10 +371,25 @@ class TestInbox:
 # ---------------------------------------------------------------------------
 
 class TestSessionAnnouncements:
-    def _ap_net(self, client, admin_headers, org_id, name="AP Net"):
-        resp = client.post("/nets", json={"name": name, "is_ares": False, "activitypub_announce": True}, headers=admin_headers)
+    def _ap_net(self, client, admin_headers, org_id, name="AP Net", **extra):
+        payload = {"name": name, "is_ares": False, "activitypub_announce": True, **extra}
+        resp = client.post("/nets", json=payload, headers=admin_headers)
         assert resp.status_code == 201, resp.text
         return resp.json()
+
+    def test_net_hashtags_field_round_trips_on_create_and_update(self, client, admin_headers, net):
+        ap_net = self._ap_net(client, admin_headers, net["org_id"], activitypub_hashtags="SnoCoARES, drills")
+        assert ap_net["activitypub_hashtags"] == "SnoCoARES, drills"
+        assert client.get(f"/nets/{ap_net['id']}", headers=admin_headers).json()["activitypub_hashtags"] == "SnoCoARES, drills"
+
+        # Empty string clears it back to None -- same "or None" convention as
+        # region/state/website/etc. in routers/nets.py's update_net (the
+        # frontend's own .trim() is what keeps whitespace-only input from
+        # reaching here at all, same as those other fields).
+        payload = {**ap_net, "activitypub_hashtags": ""}
+        resp = client.put(f"/nets/{ap_net['id']}", json=payload, headers=admin_headers)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["activitypub_hashtags"] is None
 
     async def test_start_session_posts_when_opted_in(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
         _enable_org_activitypub(client, net["org_id"], admin_headers)
@@ -445,3 +486,130 @@ class TestSessionAnnouncements:
         monkeypatch.setattr(httpx, "post", raising_post)
         resp = client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
         assert resp.status_code == 201
+
+    async def test_start_post_includes_stock_ham_hashtags(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
+        _enable_org_activitypub(client, net["org_id"], admin_headers)
+        ap_net = self._ap_net(client, admin_headers, net["org_id"])   # net_type defaults to "ham", is_ares=False
+
+        client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
+        post = (await db.execute(select(ActivityPubPost).filter(ActivityPubPost.net_id == ap_net["id"]))).scalar_one()
+        assert "#<span>HamRadio</span>" in post.content_html
+        assert "#<span>AmateurRadio</span>" in post.content_html
+        assert "GMRS" not in post.content_html
+        assert "EmComm" not in post.content_html
+
+    async def test_start_post_includes_stock_gmrs_hashtag_instead(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
+        _enable_org_activitypub(client, net["org_id"], admin_headers)
+        ap_net = self._ap_net(client, admin_headers, net["org_id"], net_type="gmrs")
+
+        client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
+        post = (await db.execute(select(ActivityPubPost).filter(ActivityPubPost.net_id == ap_net["id"]))).scalar_one()
+        assert "#<span>GMRS</span>" in post.content_html
+        assert "HamRadio" not in post.content_html
+
+    async def test_start_post_adds_emcomm_tag_for_activation_nets(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
+        _enable_org_activitypub(client, net["org_id"], admin_headers)
+        ap_net = self._ap_net(client, admin_headers, net["org_id"], is_ares=True)
+
+        client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
+        post = (await db.execute(select(ActivityPubPost).filter(ActivityPubPost.net_id == ap_net["id"]))).scalar_one()
+        assert "#<span>EmComm</span>" in post.content_html
+
+    async def test_start_post_includes_org_and_net_custom_hashtags(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
+        client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": True, "hashtags": "SkywarnWA"}, headers=admin_headers)
+        ap_net = self._ap_net(client, admin_headers, net["org_id"], activitypub_hashtags="#SnoCoARES, drills")
+
+        client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
+        post = (await db.execute(select(ActivityPubPost).filter(ActivityPubPost.net_id == ap_net["id"]))).scalar_one()
+        for tag in ("HamRadio", "AmateurRadio", "SkywarnWA", "SnoCoARES", "drills"):
+            assert f"#<span>{tag}</span>" in post.content_html
+
+    async def test_duplicate_hashtag_across_levels_appears_once(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
+        # Org sets "HamRadio" too, redundant with the stock tag already
+        # applied to a ham net -- should collapse to a single occurrence.
+        client.put(f"/orgs/{net['org_id']}/activitypub", json={"enabled": True, "hashtags": "HamRadio"}, headers=admin_headers)
+        ap_net = self._ap_net(client, admin_headers, net["org_id"])
+
+        client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
+        post = (await db.execute(select(ActivityPubPost).filter(ActivityPubPost.net_id == ap_net["id"]))).scalar_one()
+        assert post.content_html.count("#<span>HamRadio</span>") == 1
+
+    async def test_note_tag_array_matches_rendered_hashtags(self, client, admin_headers, net, activitypub_app_base_url, ap_deliveries, db):
+        _enable_org_activitypub(client, net["org_id"], admin_headers)
+        ap_net = self._ap_net(client, admin_headers, net["org_id"], is_ares=True)
+
+        client.post(f"/nets/{ap_net['id']}/sessions", json={}, headers=admin_headers)
+        post = (await db.execute(select(ActivityPubPost).filter(ActivityPubPost.net_id == ap_net["id"]))).scalar_one()
+
+        note_resp = client.get(f"/ap/objects/notes/{post.uuid}")
+        tags = note_resp.json()["tag"]
+        names = {t["name"] for t in tags}
+        assert names == {"#HamRadio", "#AmateurRadio", "#EmComm"}
+        assert all(t["type"] == "Hashtag" for t in tags)
+        assert all(t["href"].startswith("http") for t in tags)
+
+
+# ---------------------------------------------------------------------------
+# Hashtag composition (issue follow-up) -- pure functions, no DB/HTTP.
+# ---------------------------------------------------------------------------
+
+class TestHashtagComposition:
+    def _net(self, net_type="ham", is_ares=False, activitypub_hashtags=None):
+        return SimpleNamespace(net_type=net_type, is_ares=is_ares, activitypub_hashtags=activitypub_hashtags)
+
+    def _org(self, activitypub_hashtags=None):
+        return SimpleNamespace(activitypub_hashtags=activitypub_hashtags)
+
+    def test_parse_hashtag_field_splits_on_space_and_comma_strips_hash(self):
+        assert activitypub_delivery._parse_hashtag_field("#Skywarn, PNW  drills") == ["Skywarn", "PNW", "drills"]
+
+    def test_parse_hashtag_field_drops_multi_word_or_punctuated_tokens(self):
+        # A token containing punctuation beyond a leading '#' isn't a valid
+        # single hashtag word -- silently dropped rather than mangled.
+        assert activitypub_delivery._parse_hashtag_field("Ham-Radio, Ham/Radio, PlainWord") == ["PlainWord"]
+
+    def test_parse_hashtag_field_handles_none_and_blank(self):
+        assert activitypub_delivery._parse_hashtag_field(None) == []
+        assert activitypub_delivery._parse_hashtag_field("   ") == []
+
+    def test_hashtags_for_net_stock_ham(self):
+        assert activitypub_delivery._hashtags_for_net(self._net(), self._org()) == ["HamRadio", "AmateurRadio"]
+
+    def test_hashtags_for_net_stock_gmrs(self):
+        assert activitypub_delivery._hashtags_for_net(self._net(net_type="gmrs"), self._org()) == ["GMRS"]
+
+    def test_hashtags_for_net_activation_adds_emcomm(self):
+        assert activitypub_delivery._hashtags_for_net(self._net(is_ares=True), self._org()) == ["HamRadio", "AmateurRadio", "EmComm"]
+
+    def test_hashtags_for_net_layers_org_then_net(self):
+        net = self._net(activitypub_hashtags="NetOnly")
+        org = self._org(activitypub_hashtags="OrgWide")
+        assert activitypub_delivery._hashtags_for_net(net, org) == ["HamRadio", "AmateurRadio", "OrgWide", "NetOnly"]
+
+    def test_hashtags_for_net_dedupes_case_insensitively_keeping_first_casing(self):
+        net = self._net(activitypub_hashtags="hamradio")
+        assert activitypub_delivery._hashtags_for_net(net, self._org()) == ["HamRadio", "AmateurRadio"]
+
+    def test_hashtags_for_net_caps_at_max(self, monkeypatch):
+        monkeypatch.setattr(activitypub_delivery, "MAX_HASHTAGS", 3)
+        net = self._net(activitypub_hashtags="One Two Three Four")
+        assert len(activitypub_delivery._hashtags_for_net(net, self._org())) == 3
+
+    def test_hashtags_html_empty_for_no_tags(self):
+        assert activitypub_delivery._hashtags_html([]) == ""
+
+    def test_hashtags_html_renders_mastodon_style_anchors(self, activitypub_app_base_url):
+        rendered = activitypub_delivery._hashtags_html(["HamRadio"])
+        assert '<a href="http://testserver/tags/HamRadio" class="mention hashtag" rel="tag">#<span>HamRadio</span></a>' == \
+            rendered.removeprefix("<p>").removesuffix("</p>")
+
+    def test_hashtag_tag_objects_round_trips_from_rendered_html(self, activitypub_app_base_url):
+        rendered = activitypub_delivery._hashtags_html(["HamRadio", "GMRS"])
+        objects = activitypub_delivery._hashtag_tag_objects(rendered)
+        assert objects == [
+            {"type": "Hashtag", "href": "http://testserver/tags/HamRadio", "name": "#HamRadio"},
+            {"type": "Hashtag", "href": "http://testserver/tags/GMRS", "name": "#GMRS"},
+        ]
+
+    def test_hashtag_tag_objects_empty_for_content_with_no_hashtags(self):
+        assert activitypub_delivery._hashtag_tag_objects("<p>Net Alpha is starting now.</p>") == []

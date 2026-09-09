@@ -530,6 +530,8 @@ This is a real, native ActivityPub actor (`@orgslug@yourdomain`, not a bridge th
 
 **Requires `APP_BASE_URL`** to be set (see above) — actor and post URLs must be stable absolute HTTPS links, so this is the one feature that makes that setting mandatory rather than optional. With it set, an org admin turns Fediverse participation on from **Admin → Organization**'s **🐘 Fediverse** card, which generates the org's signing keypair the first time and shows its `@handle` and follower count. Turning it back off just stops posting — the keypair and follower list are kept, so turning it on again later resumes posting to the same followers rather than starting over.
 
+Every post carries **hashtags**, layered from three sources: a stock amateur-radio-centric set computed automatically (`#HamRadio #AmateurRadio` for a ham net, `#GMRS` for a GMRS net, plus `#EmComm` when Activation & Incident Response is on), an org-wide set an admin can add on that same **🐘 Fediverse** card (applies to every net under the org), and a per-net set a net owner can add on that net's own Edit form (Nets → Edit). All three are combined and de-duplicated, rendered as real clickable Mastodon-style hashtag links, and included in the post's federated hashtag metadata so it's reachable from hashtag timelines/searches on the follower's own server, not just from following the account directly.
+
 Delivery is **best-effort, single-attempt** — a follower whose server is briefly unreachable simply misses that one post; there's no retry queue. This never blocks or fails a session start/end either way.
 
 ## Digital Voice Integration

@@ -107,6 +107,7 @@ async function loadOrgActivityPubStatus() {
   try {
     const status = await apiFetch(`/orgs/${orgId}/activitypub`);
     document.getElementById('org-activitypub-enabled').checked = status.enabled;
+    document.getElementById('org-activitypub-hashtags').value = status.hashtags || '';
     const statusEl = document.getElementById('org-activitypub-status');
     if (status.enabled) {
       document.getElementById('org-activitypub-handle').textContent = '@' + status.handle;
@@ -118,17 +119,35 @@ async function loadOrgActivityPubStatus() {
   } catch { /* not an org admin for this org -- leave the toggle at its default (off) */ }
 }
 
-async function toggleOrgActivityPub(enabled) {
+// Both the enable toggle and the hashtags "Save" button hit this same PUT,
+// always sending both fields' current values -- a partial body would
+// otherwise silently clear whichever field this call site doesn't care
+// about (Pydantic defaults hashtags to None), so every caller reads the
+// hashtags input itself rather than each owning a slice of the state.
+async function _saveOrgActivityPub(enabled) {
   const orgId = document.getElementById('org-activitypub-enabled').dataset.orgId;
   if (!orgId) return;
+  const hashtags = document.getElementById('org-activitypub-hashtags').value;
+  await apiFetch(`/orgs/${orgId}/activitypub`, { method: 'PUT', body: JSON.stringify({ enabled, hashtags }) });
+}
+
+async function toggleOrgActivityPub(enabled) {
   try {
-    await apiFetch(`/orgs/${orgId}/activitypub`, { method: 'PUT', body: JSON.stringify({ enabled }) });
+    await _saveOrgActivityPub(enabled);
     toast(enabled ? t('Fediverse participation enabled') : t('Fediverse participation disabled'), 'success');
     await loadOrgActivityPubStatus();
   } catch (e) {
     document.getElementById('org-activitypub-enabled').checked = !enabled;
     toast(e.message, 'error');
   }
+}
+
+async function saveOrgActivityPubHashtags() {
+  try {
+    await _saveOrgActivityPub(document.getElementById('org-activitypub-enabled').checked);
+    toast(t('Hashtags saved'), 'success');
+    await loadOrgActivityPubStatus();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 // ============================================================

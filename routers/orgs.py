@@ -221,10 +221,16 @@ class OrgActivityPubOut(BaseModel):
     handle: Optional[str] = None
     actor_url: Optional[str] = None
     follower_count: int = 0
+    # Org-wide custom hashtags (issue follow-up), applied on top of the
+    # stock set to every net's posts under this org -- readable/settable
+    # regardless of `enabled`, so an admin can prepare them before turning
+    # Fediverse participation on.
+    hashtags: Optional[str] = None
 
 
 class OrgActivityPubUpdate(BaseModel):
     enabled: bool
+    hashtags: Optional[str] = None
 
 
 @router.get("/orgs/{org_id}/activitypub", response_model=OrgActivityPubOut)
@@ -233,7 +239,7 @@ async def get_org_activitypub(org_id: int, admin: User = Depends(require_org_adm
     if not org:
         raise HTTPException(404, "Organization not found")
     if not org.activitypub_enabled:
-        return OrgActivityPubOut(enabled=False)
+        return OrgActivityPubOut(enabled=False, hashtags=org.activitypub_hashtags)
     follower_count = (await db.execute(
         select(func.count(ActivityPubFollower.id)).filter(ActivityPubFollower.org_id == org.id)
     )).scalar()
@@ -242,6 +248,7 @@ async def get_org_activitypub(org_id: int, admin: User = Depends(require_org_adm
         handle=activitypub_delivery.build_handle(org),
         actor_url=activitypub_delivery.build_actor_id(org),
         follower_count=follower_count,
+        hashtags=org.activitypub_hashtags,
     )
 
 
@@ -252,7 +259,11 @@ async def update_org_activitypub(org_id: int, data: OrgActivityPubUpdate, admin:
     remote follower's cached publicKeyPem would silently break otherwise
     (see activitypub_delivery.py/the Organization model's own comment).
     Disabling just flips the flag; the keypair and follower list are kept,
-    so re-enabling resumes posting to the same followers."""
+    so re-enabling resumes posting to the same followers. `hashtags` is
+    always written from whatever the caller sends (the admin.js frontend
+    always includes the field's current value on every save, toggle
+    included) rather than only on a dedicated hashtags save, so there's a
+    single endpoint instead of two half-overlapping ones."""
     if data.enabled and not activitypub_delivery.activitypub_configured():
         raise HTTPException(400, "APP_BASE_URL must be configured on this instance before Fediverse participation can be enabled")
     org = (await db.execute(select(Organization).filter(Organization.id == org_id))).scalar_one_or_none()
@@ -261,6 +272,7 @@ async def update_org_activitypub(org_id: int, data: OrgActivityPubUpdate, admin:
     if data.enabled and not org.activitypub_private_key:
         org.activitypub_private_key, org.activitypub_public_key = activitypub_signing.generate_keypair()
     org.activitypub_enabled = data.enabled
+    org.activitypub_hashtags = (data.hashtags or "").strip() or None
     await db.commit()
     await db.refresh(org)
     return await get_org_activitypub(org_id, admin, db)

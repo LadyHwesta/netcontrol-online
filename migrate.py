@@ -765,6 +765,14 @@ MIGRATIONS = [
          incident_id INTEGER REFERENCES incidents(id) ON DELETE SET NULL,
          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
          UNIQUE (net_id, source, external_id))"""),
+
+    # ── Fediverse custom hashtags (issue follow-up) -- org-wide + per-net,
+    # layered on top of a stock amateur-radio-centric set computed at post
+    # time (see activitypub_delivery.py's _hashtags_for_net()). ──
+    ("organizations: activitypub_hashtags column",
+     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS activitypub_hashtags VARCHAR(300)"),
+    ("nets: activitypub_hashtags column",
+     "ALTER TABLE nets ADD COLUMN IF NOT EXISTS activitypub_hashtags VARCHAR(200)"),
 ]
 
 # ---------------------------------------------------------------------------
