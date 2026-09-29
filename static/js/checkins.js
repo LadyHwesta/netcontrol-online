@@ -663,6 +663,7 @@ async function toggleTraffic(checkinId) {
 // EXPECTED STATIONS
 // ============================================================
 let expectedStations = [];        // loaded from /nets/{id}/expected
+let almostExpectedStations = [];  // loaded from /nets/{id}/expected/almost
 let lastKnownCheckins = [];       // most recent checkin list for banner refresh
 const pendingTrafficCallsigns = new Set();  // traffic flagged in expected list before check-in
 
@@ -690,6 +691,12 @@ async function loadExpectedStations() {
   } catch (e) {
     listEl.innerHTML = `<p class="text-muted" style="font-size:12px;margin:0;color:var(--lc-red)">${esc(e.message)}</p>`;
   }
+  try {
+    almostExpectedStations = await apiFetch(`/nets/${currentNetId}/expected/almost?min_checkins=${minCheckins}&weeks=${weeks}`);
+  } catch (e) {
+    almostExpectedStations = [];
+  }
+  renderAlmostExpectedList();
 }
 
 // Get set of callsigns currently checked into the session (from the DOM)
@@ -705,6 +712,7 @@ function renderExpectedList() {
   // the unchanged code below.
   document.getElementById('expected-panel-title').textContent = currentSessionIsActivation ? t('🎯 TACTICAL ASSIGNMENTS') : t('📶 EXPECTED STATIONS');
   document.getElementById('expected-filter-row').style.display = currentSessionIsActivation ? 'none' : '';
+  renderAlmostExpectedList();
   if (currentSessionIsActivation) { renderTacticalAssignments(); return; }
 
   const listEl = document.getElementById('expected-list');
@@ -750,6 +758,32 @@ function renderExpectedList() {
           style="background:none;border:none;color:var(--lc-orange);cursor:pointer;font-size:11px;padding:0 2px;opacity:0.7">✏️</button>
       </span>
       ${zoneBadge}
+      <span style="font-size:11px;color:var(--lc-blue);white-space:nowrap" title="${t('Check-ins in window')}">${st.checkin_count}✓</span>
+    </div>`;
+  }).join('');
+}
+
+// "Almost There" — stations one check-in short of the Expected Stations
+// threshold within the same window: not on the list above yet, but
+// checking into this net once more (e.g. tonight) is what puts them on it
+// next time. Purely informational (no check-in controls of its own here —
+// use the check-in form above, or the main Expected list once they qualify).
+function renderAlmostExpectedList() {
+  const wrapper = document.getElementById('expected-almost-wrapper');
+  // Activation Mode replaces this whole panel with the tactical roster (see
+  // renderExpectedList's early return above) — nothing to show here then.
+  if (currentSessionIsActivation || !almostExpectedStations.length) {
+    wrapper.style.display = 'none';
+    return;
+  }
+  wrapper.style.display = '';
+  const alreadyIn = checkedInCallsigns();
+  document.getElementById('expected-almost-list').innerHTML = almostExpectedStations.map(st => {
+    const checked = alreadyIn.has(st.callsign);
+    return `<div class="exp-row" style="display:flex;align-items:center;gap:12px;padding:5px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;${checked ? 'opacity:.45' : ''}">
+      <span class="callsign" style="min-width:80px">${esc(st.callsign)}</span>
+      <span style="flex:1;color:var(--text-muted);font-size:12px;min-width:120px">${esc(st.name || '')}</span>
+      <span style="font-size:11px;color:var(--lc-orange);white-space:nowrap">${checked ? t('Checked in — will qualify next time') : t('1 more check-in needed')}</span>
       <span style="font-size:11px;color:var(--lc-blue);white-space:nowrap" title="${t('Check-ins in window')}">${st.checkin_count}✓</span>
     </div>`;
   }).join('');
