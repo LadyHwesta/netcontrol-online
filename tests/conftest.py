@@ -59,6 +59,16 @@ os.environ["SUPPORT_EMAIL"] = ""
 os.environ["NET_REPOSITORY_URL"] = ""
 os.environ["NET_REPOSITORY_API_KEY"] = ""
 
+# Default admin seeding (issue follow-up, bootstrap.py) is a *production*
+# bootstrap concern -- disabled for the whole suite so every existing test's
+# "register() as the first user in this test's fresh DB -> instantly
+# active/admin" convenience (100+ call sites across ~14 files, including
+# test_roles.py's own shared _bootstrap_super_admin()/_org_owner() helpers)
+# keeps working completely unchanged. Real coverage of the seeded-admin
+# behavior lives in tests/test_default_admin.py instead, which explicitly
+# re-enables this via monkeypatch for just those tests.
+os.environ["SEED_DEFAULT_ADMIN"] = "false"
+
 # ── Now safe to import the app ───────────────────────────────────────────────
 # database.py builds its own async engine/session factory from DATABASE_URL
 # at import time (with the postgresql/sqlite -> +asyncpg/+aiosqlite rewrite

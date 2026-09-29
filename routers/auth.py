@@ -212,7 +212,14 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
         raise HTTPException(400, "Email already registered")
 
     # First registered user becomes (super) admin and is immediately active,
-    # independent of org — is_admin bypasses org scoping entirely.
+    # independent of org — is_admin bypasses org scoping entirely. Issue
+    # follow-up: this is now a dormant fallback, not the primary bootstrap
+    # path — bootstrap.py's ensure_default_admin() seeds a reserved admin
+    # account (with a generated, logged-once password) before the app ever
+    # accepts a request, so this branch is only ever reachable in practice
+    # if that seeding is explicitly disabled (SEED_DEFAULT_ADMIN=false).
+    # Left as a real fallback rather than removed, on purpose: an instance
+    # that opts out of seeding still needs SOME way to get its first admin.
     is_first_user = (await db.execute(select(func.count()).select_from(User))).scalar() == 0
     # The bootstrap admin is trusted implicitly (they had server access to deploy this at
     # all) and skips verification so a first-run SMTP misconfiguration can't lock them out.

@@ -122,7 +122,20 @@ async def list_orgs(registration_open: Optional[bool] = None, db: AsyncSession =
 @router.get("/orgs/mine", response_model=list[MyOrgOut])
 async def list_my_orgs(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """The current user's own approved organizations, with their role in each
-    — powers the org switcher and the org-admin panel visibility check."""
+    — powers the org switcher and the org-admin panel visibility check.
+
+    Super admin redefinition (issue follow-up): a super admin gets EVERY
+    organization on the instance here, not just ones they happen to hold a
+    real membership in — is_admin already grants admin-equivalent access to
+    any org via require_org_admin's bypass (routers/orgs.py), so `role` is
+    synthesized as "admin" rather than lied about; this was the one place
+    that access wasn't actually reachable, since every org-detail view
+    (Organization tab, per-org Fediverse/Languages) is driven off whatever
+    /orgs/mine returns into the switcher."""
+    if current_user.is_admin:
+        orgs = (await db.execute(select(Organization).order_by(Organization.name))).scalars().all()
+        return [_org_to_out(org, cls=MyOrgOut, role="admin", roles=["admin"]) for org in orgs]
+
     rows = (await db.execute(
         select(Organization, OrganizationMembership)
         .join(OrganizationMembership, OrganizationMembership.org_id == Organization.id)

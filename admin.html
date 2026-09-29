@@ -99,6 +99,7 @@
         <button class="tab-btn" id="admin-tab-dbstats"    onclick="switchAdminTab('dbstats')" data-i18n="🗄️ DB Stats">🗄️ DB Stats</button>
         <button class="tab-btn" id="admin-tab-languages"  onclick="switchAdminTab('languages')" data-i18n="🌐 Languages">🌐 Languages</button>
         <button class="tab-btn" id="admin-tab-announce"   onclick="switchAdminTab('announce')" data-i18n="📢 Announcements">📢 Announcements</button>
+        <button class="tab-btn" id="admin-tab-orgs-all"   onclick="switchAdminTab('orgs-all')" data-i18n="🏛️ All Organizations">🏛️ All Organizations</button>
         <button class="tab-btn" id="admin-tab-reassign"   onclick="switchAdminTab('reassign')" data-i18n="🔀 Reassign">🔀 Reassign</button>
       </div>
 
@@ -493,6 +494,32 @@
       </div><!-- /admin-panel-announce -->
 
       <!-- ── Reassign panel (super admin only, issue #1 follow-up) ─── -->
+      <div id="admin-panel-orgs-all" style="display:none">
+        <!-- Super admin role redefinition (issue follow-up) -- the missing
+             bird's-eye view: every org on the instance at a glance, with a
+             one-click way to switch into any of them and manage it using
+             the same Organization/Fediverse/Languages tooling an org's own
+             admin already has (routers/orgs.py's org-scoped endpoints
+             already accept any org_id from a super admin; GET /orgs/mine
+             now returns every org for one too — this tab is the missing
+             browse/discover surface on top of that). -->
+        <div class="card">
+          <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="ALL ORGANIZATIONS">ALL ORGANIZATIONS</h3>
+          <p class="text-muted" style="font-size:12px;margin:0 0 12px" data-i18n="Every organization on this instance, including one with no admin left to approve anyone into it — GET /orgs (used elsewhere) hides those; this doesn't.">
+            Every organization on this instance, including one with no admin left to approve anyone into it — GET /orgs (used elsewhere) hides those; this doesn't.
+          </p>
+          <div style="overflow-x:auto">
+            <table class="tbl" id="admin-orgs-all-table">
+              <thead>
+                <tr><th data-i18n="Name">Name</th><th data-i18n="Slug">Slug</th><th data-i18n="Members">Members</th><th data-i18n="Pending">Pending</th><th data-i18n="Nets">Nets</th><th data-i18n="Registration">Registration</th><th data-i18n="Created">Created</th><th data-i18n="Actions">Actions</th></tr>
+              </thead>
+              <tbody id="admin-orgs-all-tbody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="admin-orgs-all-empty" style="display:none"><p data-i18n="No organizations found.">No organizations found.</p></div>
+        </div>
+      </div><!-- /admin-panel-orgs-all -->
+
       <div id="admin-panel-reassign" style="display:none">
         <div class="card" style="margin-bottom:16px">
           <h3 style="margin:0 0 8px;font-size:14px;color:var(--text-muted)" data-i18n="MOVE A USER">MOVE A USER</h3>
@@ -604,11 +631,11 @@
 <script src="/static/js/theme.js?v=1"></script>
 <script src="/static/js/i18n.js?v=4"></script>
 <script src="/static/js/branding.js?v=25"></script>
-<script src="/static/js/admin.js?v=51"></script>
+<script src="/static/js/admin.js?v=52"></script>
 <script src="/static/js/pwa.js?v=2"></script>
 <script>
   function switchAdminTab(tab) {
-    ['org', 'people', 'branding', 'email', 'netrepo', 'dbstats', 'languages', 'announce', 'reassign'].forEach(t => {
+    ['org', 'people', 'branding', 'email', 'netrepo', 'dbstats', 'languages', 'announce', 'orgs-all', 'reassign'].forEach(t => {
       document.getElementById('admin-panel-' + t).style.display = t === tab ? '' : 'none';
       document.getElementById('admin-tab-' + t).classList.toggle('active', t === tab);
     });
@@ -617,6 +644,7 @@
     if (tab === 'dbstats') loadDbStats();
     if (tab === 'languages') loadLanguages();
     if (tab === 'announce') loadAnnouncements();
+    if (tab === 'orgs-all') loadAllOrganizations();
     if (tab === 'reassign') loadReassignTab();
   }
 
@@ -653,10 +681,11 @@
     loadOrgActivityPubStatus();   // fire-and-forget; non-blocking
 
     if (orgAdminOnly) {
-      // Branding/Email/Net Repository/DB Stats/Announcements/Reassign are super-admin-only, instance-wide concerns.
-      // Languages is NOT in this list -- it's org-scoped (multi-tenancy follow-up): any org admin
-      // manages their own org's enabled languages independently, without needing a super admin.
-      ['branding', 'email', 'netrepo', 'dbstats', 'announce', 'reassign'].forEach(t => {
+      // Branding/Email/Net Repository/DB Stats/Announcements/All Organizations/Reassign are
+      // super-admin-only, instance-wide concerns. Languages is NOT in this list -- it's
+      // org-scoped (multi-tenancy follow-up): any org admin manages their own org's enabled
+      // languages independently, without needing a super admin.
+      ['branding', 'email', 'netrepo', 'dbstats', 'announce', 'orgs-all', 'reassign'].forEach(t => {
         document.getElementById('admin-tab-' + t).style.display = 'none';
       });
       document.querySelector('#content h2.section-title').textContent = t('Organization Admin');
@@ -667,6 +696,13 @@
       loadAdminUsers();
       loadAdminBranding();
       loadAddOperatorOrgPicker();   // fire-and-forget; non-blocking
+      // Super admin role redefinition (issue follow-up): the seeded default
+      // admin account (bootstrap.py) has no org at all -- current_org_id is
+      // null -- so the Organization tab (the default active tab in the
+      // markup) would have nothing of its own to show. Land on the new
+      // cross-org overview instead; anyone with a current org keeps landing
+      // on Organization as before.
+      if (!currentUser.current_org_id) switchAdminTab('orgs-all');
     }
   }
   initPage();

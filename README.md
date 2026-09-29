@@ -331,7 +331,17 @@ sudo certbot --apache -d yourdomain.example.com
 
 ## First Run
 
-The first user to register is automatically granted admin privileges. Subsequent registrations require admin approval before login is permitted.
+On first startup, the app seeds a reserved **default admin account** (callsign `ADMIN`) with a randomly generated password, printed once to the server's own log/journal in a bordered block — check there (`journalctl -u <your-service>` under systemd, or wherever `LOG_FILE` points if you've set it) right after the first start. Log in with that callsign/password, then change the password (and email) under Account.
+
+This replaces the old "the first person to register becomes admin" behavior, which was a real race on an internet-reachable install — whoever registered first, not necessarily the installer, ended up as the permanent super admin. Every self-registration now requires admin approval, including the very first one.
+
+Seeding runs automatically every startup but only ever creates the account once (it's a no-op once any admin exists). To customize it, set in `.env` before first start:
+
+```bash
+DEFAULT_ADMIN_CALLSIGN=ADMIN        # reserved callsign, default "ADMIN"
+DEFAULT_ADMIN_PASSWORD=             # set to pin a known password instead of generating one
+SEED_DEFAULT_ADMIN=true             # set to "false" to opt out entirely and fall back to the old first-registrant behavior
+```
 
 ## Public Live Page
 

@@ -15,6 +15,12 @@ from helpers import register, login, auth
 
 class TestRegistration:
     def test_first_user_becomes_admin_and_active(self, client):
+        """This is register()'s own is_first_user fallback path -- the
+        whole suite runs with SEED_DEFAULT_ADMIN=false (see conftest.py),
+        so it's the only bootstrap path exercised here. In production this
+        is dormant (bootstrap.py's ensure_default_admin() seeds a reserved
+        admin before the app ever serves a request); see
+        tests/test_default_admin.py for that path's own coverage."""
         resp = register(client)
         assert resp.status_code == 201
         data = resp.json()

@@ -804,8 +804,17 @@ class TestOrgSwitching:
         assert mine[0]["slug"] == "default"
 
     def test_join_second_org_then_switch(self, client):
-        register(client, "W1OWN", "Owner", "owner@example.com")  # first-ever user -> also super admin
-        token = login(client, "W1OWN")
+        # Deliberately NOT the instance's first-ever user (a super admin) --
+        # super admin redefinition (issue follow-up) means GET /orgs/mine
+        # returns every org on the instance for one of those regardless of
+        # membership/approval, which is exactly what this test wants to
+        # exercise the ABSENCE of: an ordinary org admin's own view staying
+        # scoped to orgs they actually hold an approved membership in. See
+        # TestOrgsMineForSuperAdmin in test_admin_organizations.py for the
+        # super-admin-sees-everything behavior itself.
+        super_token = _bootstrap_super_admin(client)
+        token = _org_owner(client, super_token, "W1OWN", "first-org", "First Org")
+
         resp = client.post("/orgs/join", json={
             "org_slug": "second-org", "org_name": "Second Org", "org_website_url": "https://second.example.org",
         }, headers=auth(token))
@@ -814,18 +823,14 @@ class TestOrgSwitching:
 
         # Founding a second org via /orgs/join is pending too -- not auto-approved
         # just because the caller is already active elsewhere (issue #1 follow-up).
-        # (Not asserting a 403 on switching to it here: W1OWN is themselves a
-        # super admin -- first-ever user -- so they can switch to ANY org
-        # regardless of approval status, same bypass /nets etc. already have.
-        # test_cannot_switch_to_an_unapproved_org below covers the non-admin case.)
         mine_before = client.get("/orgs/mine", headers=auth(token)).json()
         assert len(mine_before) == 1
 
-        # W1OWN is a super admin (first-ever user) so can self-approve via the
-        # existing global escape hatch.
         me = client.get("/auth/me", headers=auth(token)).json()
-        approve = client.patch(f"/admin/users/{me['id']}/approve", headers=auth(token))
-        assert approve.status_code == 200
+        approve = client.patch(
+            f"/orgs/{second_org_id}/members/{me['id']}/approve", headers=auth(super_token),
+        )
+        assert approve.status_code == 204
 
         mine = client.get("/orgs/mine", headers=auth(token)).json()
         assert len(mine) == 2

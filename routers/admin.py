@@ -3,6 +3,7 @@ Admin routes + Net Repository self-service API key requests.
 """
 
 import os
+from datetime import datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import net_repository
 from database import engine, get_db
-from models import EnabledLanguage, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, User
+from models import EnabledLanguage, Net, Organization, OrganizationMembership, OrganizationMembershipRole, OrgEnabledLanguage, User
 from routers import helpers
 from routers.deps import get_current_user
 from routers.helpers import _create_invited_user, _delete_orphaned_orgs, _get_or_create_org, _grant_default_net_control_op
@@ -48,6 +49,53 @@ async def admin_list_users(admin: User = Depends(require_admin), db: AsyncSessio
             org_website_url=org.website_url if org else None,
         )
         for u, org in rows
+    ]
+
+
+class AdminOrgOut(BaseModel):
+    """One row in the super-admin "All Organizations" control-panel tab
+    (issue follow-up -- redefining the super admin role as genuine
+    cross-org oversight). Unlike GET /orgs (routers/orgs.py), deliberately
+    NOT filtered to orgs with an approved admin -- an orphaned org (no
+    approved admin left, e.g. its founder was rejected/deleted before
+    anyone else joined) is exactly what a super admin needs to see and act
+    on here (via Reassign), not have hidden from them."""
+    id: int
+    name: str
+    slug: str
+    registration_open: bool
+    created_at: datetime
+    member_count: int = 0
+    pending_count: int = 0
+    net_count: int = 0
+    activitypub_enabled: bool = False
+
+
+@router.get("/admin/organizations", response_model=list[AdminOrgOut])
+async def admin_list_organizations(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Every organization on the instance with summary counts -- the
+    aggregate view GET /orgs/mine and GET /orgs don't provide (both are
+    scoped to "orgs I have some claim to," never "every org, at a
+    glance"). Same grouped-count-map pattern admin_list_languages below
+    already uses for its own per-language org_count."""
+    member_counts = dict((await db.execute(
+        select(OrganizationMembership.org_id, func.count()).filter(OrganizationMembership.approved == True)
+        .group_by(OrganizationMembership.org_id)
+    )).all())
+    pending_counts = dict((await db.execute(
+        select(OrganizationMembership.org_id, func.count()).filter(OrganizationMembership.approved == False)
+        .group_by(OrganizationMembership.org_id)
+    )).all())
+    net_counts = dict((await db.execute(select(Net.org_id, func.count()).group_by(Net.org_id))).all())
+
+    orgs = (await db.execute(select(Organization).order_by(Organization.name))).scalars().all()
+    return [
+        AdminOrgOut(
+            id=o.id, name=o.name, slug=o.slug, registration_open=o.registration_open, created_at=o.created_at,
+            member_count=member_counts.get(o.id, 0), pending_count=pending_counts.get(o.id, 0),
+            net_count=net_counts.get(o.id, 0), activitypub_enabled=o.activitypub_enabled,
+        )
+        for o in orgs
     ]
 
 

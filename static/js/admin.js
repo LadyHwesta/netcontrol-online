@@ -656,6 +656,41 @@ async function submitOrgNetOwner(btn) {
 }
 
 // ============================================================
+// ALL ORGANIZATIONS — every org on the instance at a glance (super admin
+// role redefinition, issue follow-up). Unlike Reassign below (which moves
+// users/nets between orgs), this is a pure browse/discover view: pick any
+// org's "Manage" button to switch into it (GET /orgs/mine now returns
+// every org for a super admin -- see routers/orgs.py) and land on the
+// Organization tab already scoped to it, reusing all of that tab's
+// existing tooling as-is.
+// ============================================================
+async function loadAllOrganizations() {
+  let orgs = [];
+  try { orgs = await apiFetch('/admin/organizations'); }
+  catch (e) { toast(e.message, 'error'); return; }
+
+  const tbody = document.getElementById('admin-orgs-all-tbody');
+  const empty = document.getElementById('admin-orgs-all-empty');
+  if (!orgs.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = orgs.map(o => `
+    <tr>
+      <td>${esc(o.name)}</td>
+      <td class="mono">${esc(o.slug)}</td>
+      <td>${o.member_count}</td>
+      <td>${o.pending_count}</td>
+      <td>${o.net_count}</td>
+      <td><span class="badge ${o.registration_open ? 'badge-green' : 'badge-gray'}">${o.registration_open ? t('Open') : t('Invite-Only')}</span></td>
+      <td class="text-muted" style="font-size:12px">${fmt(o.created_at)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="switchCurrentOrg(${o.id})" data-i18n="Manage">${t('Manage')}</button></td>
+    </tr>`).join('');
+}
+
+// ============================================================
 // REASSIGN — move a user or net into a different org (super admin only).
 // Lets a deployment that started single-tenant split into per-region orgs
 // after the fact, without users re-registering or nets losing history

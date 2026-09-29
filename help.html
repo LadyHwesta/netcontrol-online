@@ -166,6 +166,14 @@
           <h3 style="margin:0 0 12px;font-size:14px;color:var(--lc-orange);letter-spacing:.08em" data-i18n="CHANGELOG">CHANGELOG</h3>
 
           <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-28 — Security Fix: Seeded Default Admin + a Real Cross-Org Super Admin (v2.57.0)</div>
+            <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
+              <li><strong>Security fix:</strong> previously, the first person to register on a freshly deployed instance automatically became its super admin — active immediately, no approval. On an internet-reachable install, that's whoever gets there first, not necessarily the installer. A fresh install now instead seeds a reserved <strong>ADMIN</strong> account with a randomly generated password, printed once to the server's startup log — log in with that, then change the password (and email) under Account. Self-registration is unaffected otherwise; this only closes who gets to become the very first admin.</li>
+              <li>The super admin role is now a genuine cross-org control panel instead of being limited to whichever org the account happened to belong to. The organization switcher shows <strong>every</strong> organization on the instance for a super admin, and a new <strong>🏛️ All Organizations</strong> tab (Admin) lists every org at a glance — member/pending/net counts, registration status — with a one-click "Manage" into any of them, including one that's lost its last admin (hidden from every other org list, on purpose, so it doesn't show up as joinable — this tab is where a super admin finds and fixes exactly that).</li>
+            </ul>
+          </div>
+
+          <div style="border-left:3px solid var(--lc-orange);padding-left:12px;margin-bottom:14px">
             <div style="font-size:12px;font-weight:700;color:var(--lc-orange);margin-bottom:4px">2026-09-09 — Fix: Every Page Now Stays Usable Offline, Not Just My Nets (v2.56.2)</div>
             <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7">
               <li>Admin, Account, Help, Report, Incidents, My Assignments, and Fediverse previously bounced straight to the login screen if opened (or reloaded) with no connection, even for an already-signed-in operator — the login screen also can't work offline, so this was a dead end. They now reuse the same "stay signed in with the last-verified identity" fallback the main My Nets page has always used, matching it exactly.</li>

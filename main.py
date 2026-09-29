@@ -25,7 +25,8 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db, init_db
+from bootstrap import ensure_default_admin
+from database import SessionLocal, get_db, init_db
 from models import Net, Organization
 
 from routers.deps import limiter
@@ -76,10 +77,16 @@ LOGO_PATH = UPLOADS_DIR / "logo"
 async def lifespan(_app):
     await init_db()
     UPLOADS_DIR.mkdir(exist_ok=True)
+    # Default admin seeding (issue follow-up) -- see bootstrap.py's own
+    # docstring for why this replaces "the first registrant becomes admin"
+    # as the primary bootstrap path. Uses its own short-lived session
+    # (get_db() is a FastAPI request dependency, not callable directly here).
+    async with SessionLocal() as db:
+        await ensure_default_admin(db)
     yield
 
 
-app = FastAPI(title="NetControl Online", version="2.56.2", lifespan=lifespan)
+app = FastAPI(title="NetControl Online", version="2.57.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
